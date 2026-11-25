@@ -47,6 +47,7 @@ Flickable {
             bar: verticalBar
         }
     }
+
     ScrollBar.horizontal: Basic.ScrollBar {
         id: horizontalBar
 
