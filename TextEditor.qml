@@ -36,6 +36,8 @@ Flickable {
     contentHeight: Math.max(height, view.contentHeight)
     clip: true
     boundsBehavior: Flickable.StopAtBounds
+    // Scrolls by wheel and trackpad only: a mouse drag selects text.
+    acceptedButtons: Qt.NoButton
 
     // Basic's scroll bars: no track, only a handle that shows while
     // scrolling (the macOS style draws a track and is not meant to be

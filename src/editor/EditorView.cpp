@@ -1845,6 +1845,8 @@ QVariant EditorView::inputMethodQuery(Qt::InputMethodQuery query) const
 void EditorView::mousePressEvent(QMouseEvent *event)
 {
     forceActiveFocus(Qt::MouseFocusReason);
+    // A drag selects (or moves the selection): the Flickable must not take it to scroll.
+    setKeepMouseGrab(true);
     const qsizetype position{positionAt(event->position())};
     // A press right after a double click: the third click selects the line.
     const qint32 interval{QGuiApplication::styleHints()->mouseDoubleClickInterval()};
@@ -1885,6 +1887,7 @@ void EditorView::mouseMoveEvent(QMouseEvent *event)
 
 void EditorView::mouseReleaseEvent(QMouseEvent *event)
 {
+    setKeepMouseGrab(false);
     // A click on the selection that did not become a drag places the caret.
     if ((m_flags & DragPending) != 0U) {
         m_flags &= ~DragPending;
