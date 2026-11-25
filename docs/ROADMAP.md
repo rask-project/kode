@@ -104,7 +104,7 @@ holds the library's rules), consumed by the apps as a **git submodule**
 | Module (URI) | Contents | Source |
 |---|---|---|
 | **`Rask.Platform`** | `Appearance` (light/dark), `SystemColors` (semantic `NSColor`s), `AppInfo` (versions, `nativeMenuBar`) | metronom, notes |
-| **`Rask.Window`** | `NativeWindow` (translucency, blur, content under the title bar, `leadingInset`, movable, title-bar double click, `representedFile`, `documentEdited`), `GlassEffect`, `WindowState` (geometry/screen/restoration) | konsoll + metronom + notes, unified |
+| **`Rask.Window`** | `NativeWindow` (translucency, blur, content under the title bar, `leadingInset`, movable, title-bar double click, `representedFile`, `documentEdited`), `GlassEffect` + `GlassSurface.qml` (native Liquid Glass and its QML fallback), `WindowState` (geometry/screen/restoration) | konsoll + metronom + notes, unified |
 | **`Rask.Dialogs`** | `AboutDialog` (system About panel), `AboutQtDialog`, `Alert` (`NSAlert`, sheet when given a window — e.g. Save / Don't Save / Cancel); later a text prompt for Konsoll | konsoll |
 | **`Rask.Application`** | `QuitGuard` (the app asks before quitting), configurable `DockMenu`, `RecentDocuments` (`NSDocumentController` → native "Open Recent" menu), `FileOpenHandler` (`QFileOpenEvent`, Finder's "Open With") | konsoll + new |
 | **`Rask.Updater`** | `Updater` singleton (Sparkle, beta channel, "Check for Updates…") + `RaskSparkle.cmake` + `rask_sparkle_plist_keys()`; later `update-appcast.py` | konsoll |
@@ -121,7 +121,8 @@ section 3), not all at once.
   export macros, hidden symbols, `SOVERSION`, install/export,
   `rask_embed_libraries()`), **`Rask.Platform`** (`Appearance`) and
   **`Rask.Window`** (`NativeWindow`, unifying Konsoll's `WindowTranslucency`
-  and Metronom's `NativeWindow`), **`Rask.Dialogs`** (`AboutDialog`,
+  and Metronom's `NativeWindow`; `GlassEffect`/`GlassSurface` from Konsoll's
+  tab strip), **`Rask.Dialogs`** (`AboutDialog`,
   `AboutQtDialog`, `Alert`) and **`Rask.Updater`** (`Updater`, Sparkle
   embedded by `rask_embed_libraries()`), with example apps, tests and CI.
 - **Next:** `SystemColors` in `Rask.Platform` (Stage 2), then the rest as the
@@ -301,7 +302,8 @@ useful.
   (Developer ID signing and notarization, as in `konsoll/docs/RELEASE.md`;
   every embedded `Rask.*` dylib and QML plugin signed with the hardened
   runtime).
-- Liquid Glass (`GlassEffect`) on the tab strip/status bar on macOS 26.
+- Liquid Glass (`Rask.Window`'s `GlassEffect`, `GlassSurface` as fallback) on
+  the tab strip/status bar on macOS 26.
 - **`Rask.Style`** extracted from Metronom and adopted by Tekst.
 - Website (GitHub Pages) following the Konsoll/Metronom pattern.
 
