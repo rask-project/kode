@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
@@ -20,6 +21,8 @@ ApplicationWindow {
     // Run once the unsaved changes are saved or discarded.
     property var pendingAction: null
     property bool closeApproved: false
+    // The editor's font size, zoomed with ⌘+ / ⌘- (⌘0: the default).
+    readonly property int defaultFontSize: editorFont.pointSize
     // The editing surface, for the menus and the document.
     readonly property EditorView editor: textEditor.editor
 
@@ -85,6 +88,14 @@ ApplicationWindow {
         color: Appearance.dark ? "#1e1e1e" : "#fbfbfb"
         alpha: 0.96
         unifiedToolbar: root.visibility !== Window.FullScreen
+    }
+
+    Settings {
+        id: viewSettings
+
+        category: "view"
+
+        property int fontSize: root.defaultFontSize
     }
 
     Document {
@@ -250,6 +261,34 @@ ApplicationWindow {
                 }
             }
         }
+        Menu {
+            title: qsTr("View")
+
+            MenuItem {
+                action: Action {
+                    text: qsTr("Bigger")
+                    shortcut: StandardKey.ZoomIn
+                    enabled: viewSettings.fontSize < 72
+                    onTriggered: viewSettings.fontSize += 1
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Smaller")
+                    shortcut: StandardKey.ZoomOut
+                    enabled: viewSettings.fontSize > 6
+                    onTriggered: viewSettings.fontSize -= 1
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Actual Size")
+                    shortcut: "Ctrl+0"
+                    enabled: viewSettings.fontSize !== root.defaultFontSize
+                    onTriggered: viewSettings.fontSize = root.defaultFontSize
+                }
+            }
+        }
         // English on purpose: Qt moves these into the app menu by matching "About".
         Menu {
             title: qsTr("Help")
@@ -411,7 +450,10 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
-        editor.font: root.editorFont
+        editor.font: Qt.font({
+            family: root.editorFont.family,
+            pointSize: viewSettings.fontSize
+        })
     }
 
     StatusBar {

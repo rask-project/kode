@@ -83,7 +83,7 @@ public:
     QList<QSGRectangleNode *> words;
     QList<QSGRectangleNode *> matches;
     QHash<quint64, Shown> rows;
-    QHash<qsizetype, Shown> numbers;
+    QHash<quint64, Shown> numbers;
 };
 
 std::unique_ptr<QSGClipNode> makeClip()
@@ -1030,7 +1030,7 @@ EditorView::Number EditorView::takeNumber(qsizetype line)
     if (number != m_numbers.end()) {
         return std::move(*number);
     }
-    Number laidOut{.line = line, .layout = layoutNumber(line), .width = 0.0};
+    Number laidOut{.id = m_nextRowId++, .line = line, .layout = layoutNumber(line), .width = 0.0};
     laidOut.width = laidOut.layout->lineAt(0).naturalTextWidth();
     return laidOut;
 }
@@ -1245,7 +1245,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
 
     const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
     const QColor numberColor{lineNumberColor()};
-    QHash<qsizetype, Shown> numbers;
+    QHash<quint64, Shown> numbers;
     for (const Number &number : m_numbers) {
         const qreal y{static_cast<qreal>(number.line - m_baseLine) * m_lineHeight};
         const QColor color{number.line == cursorLine ? text : numberColor};
@@ -1254,7 +1254,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
             node->gutter,
             node->numbers,
             numbers,
-            number.line,
+            number.id,
             number.layout.get(),
             color,
             {gutter - padding - number.width, y}

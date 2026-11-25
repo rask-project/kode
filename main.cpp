@@ -7,7 +7,8 @@
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication::setOrganizationDomain(QStringLiteral("com.github.rask-project"));
+    // In domain order: QSettings reverses it (com.github.rask-project.Tekst).
+    QCoreApplication::setOrganizationDomain(QStringLiteral("rask-project.github.com"));
     QCoreApplication::setOrganizationName(QStringLiteral("rask-project"));
     QCoreApplication::setApplicationName(QStringLiteral("Tekst"));
     QCoreApplication::setApplicationVersion(

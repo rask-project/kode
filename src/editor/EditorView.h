@@ -245,8 +245,11 @@ private:
     static constexpr quint64 Plain{0U};
     static constexpr quint64 Highlighted{1U};
 
-    // A laid out line number in view, found again by its line.
+    // A laid out line number in view, found again by its line; its scene
+    // graph node is matched by `id` (a new layout, e.g. in another font,
+    // gets a new one).
     struct Number {
+        quint64 id{0};
         qsizetype line{-1};
         std::unique_ptr<QTextLayout> layout;
         qreal width{0.0};

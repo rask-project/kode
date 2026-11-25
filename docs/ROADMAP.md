@@ -319,7 +319,8 @@ title bar, ⌘F, ⌥⌘F, ⌘G/⇧⌘G, ⌘E; `TextSearch` searches line by line
 3 ms slices (matches within a line, at most 100 000 stored), the matches
 in view marked in `findHighlightColor`; Replace All is one undo; with a
 regular expression, $0…$9 in the replacement. Go to line (⌘L): "line" or
-"line:column", centered in the view.
+"line:column", centered in the view. Font zoom (View > Bigger/Smaller/Actual Size,
+⌘+ / ⌘- / ⌘0), saved in the settings.
 
 - Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌥⌘F, regex,
   case sensitivity, matches highlighted by the `EditorView` (search runs on
