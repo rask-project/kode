@@ -24,7 +24,7 @@ const QString windowOpacityKey{QStringLiteral("window/opacity")};
 
 constexpr qint32 defaultIndentWidth{4};
 constexpr qint32 largestIndentWidth{16};
-constexpr qreal defaultWindowOpacity{0.96};
+constexpr qreal defaultWindowOpacity{1.0};
 constexpr qreal leastWindowOpacity{0.5};
 
 } // namespace
