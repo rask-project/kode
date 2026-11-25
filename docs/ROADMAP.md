@@ -108,7 +108,7 @@ holds the library's rules), consumed by the apps as a **git submodule**
 | **`Rask.Dialogs`** | `AboutDialog` (system About panel), `AboutQtDialog`, `Alert` (`NSAlert`, sheet when given a window — e.g. Save / Don't Save / Cancel); later a text prompt for Konsoll | konsoll |
 | **`Rask.Application`** | `QuitGuard` (the app asks before quitting), configurable `DockMenu`, `RecentDocuments` (`NSDocumentController` → native "Open Recent" menu), `FileOpenHandler` (`QFileOpenEvent`, Finder's "Open With") | konsoll + new |
 | **`Rask.Updater`** | `Updater` singleton (Sparkle, beta channel, "Check for Updates…") + `RaskSparkle.cmake` + `rask_sparkle_plist_keys()`; later `update-appcast.py` | konsoll |
-| **`Rask.Controls`** | `TabStrip`, `TabButton`, `GlassSurface`, `ToolButton`, `SearchBar`, `Menu`, `MenuItem`, `FormGroup`, `FormRow`, `SidebarItem` | konsoll (generalized) |
+| **`Rask.Controls`** | `SidebarLayout`, `SidebarItem`, `FormGroup`, `FormRow`, badge icons (done); `TabStrip`, `TabButton`, `ToolButton`, `SearchBar`, `Menu`, `MenuItem` (later) | konsoll (generalized) |
 | **`Rask.Style`** | Qt Quick Controls style for macOS (extends `QtQuick.Controls.macOS`) | metronom `MacStyle` |
 | `cmake/RaskApp.cmake` | `rask_version_from_git()`, `rask_bundle_version()`, `rask_macos_bundle()` (Info.plist, embedding and signing the `Rask.*` libraries, prune, icons) | konsoll + metronom |
 
@@ -124,7 +124,9 @@ section 3), not all at once.
   and Metronom's `NativeWindow`; `GlassEffect`/`GlassSurface` from Konsoll's
   tab strip), **`Rask.Dialogs`** (`AboutDialog`,
   `AboutQtDialog`, `Alert`) and **`Rask.Updater`** (`Updater`, Sparkle
-  embedded by `rask_embed_libraries()`), with example apps, tests and CI.
+  embedded by `rask_embed_libraries()`) and **`Rask.Controls`** (the
+  System Settings controls: `SidebarLayout`, `SidebarItem`, `FormGroup`,
+  `FormRow`), with example apps, tests and CI.
 - **Next:** `SystemColors` in `Rask.Platform` (Stage 2), then the rest as the
   stages below need them.
 
@@ -265,7 +267,8 @@ libraries.
   language.
 - Font zoom (⌘+ / ⌘- / ⌘0).
 - Encodings beyond UTF-8 (detection + "Reopen with Encoding").
-- Settings window (⌘,) with `FormGroup`/`FormRow`; `QSettings`.
+- Settings window (⌘,) with `Rask.Controls`' `SidebarLayout`, `FormGroup`
+  and `FormRow` (as in `rask/examples/settings`); `QSettings`.
 
 ---
 
