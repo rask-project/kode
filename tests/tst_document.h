@@ -21,6 +21,9 @@ private slots:
     void refusesCharactersTheEncodingLacks();
     void tracksModified();
     void clearsToUntitled();
+    void reloadsAChangeOnDisk();
+    void reportsAChangeOnDiskWhenModified();
+    void ignoresItsOwnSaves();
 
 private:
     [[nodiscard]] QString path(const QString &name) const;

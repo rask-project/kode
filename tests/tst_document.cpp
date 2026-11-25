@@ -205,4 +205,52 @@ void TestDocument::clearsToUntitled()
     QCOMPARE(errors.count(), 1);
 }
 
+void TestDocument::reloadsAChangeOnDisk()
+{
+    const QString file{path(QStringLiteral("watched.txt"))};
+    writeFile(file, QByteArray{"first\nsecond\n"});
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(file)));
+    editor.setCursorPosition(6);
+    writeFile(file, QByteArray{"first\nchanged elsewhere\n"});
+    QVERIFY(QTest::qWaitFor([&editor] { return editor.text().contains(QStringLiteral("elsewhere")); }));
+    QVERIFY(!document.modified());
+    QCOMPARE(editor.cursorPosition(), 6);
+}
+
+void TestDocument::reportsAChangeOnDiskWhenModified()
+{
+    const QString file{path(QStringLiteral("conflict.txt"))};
+    writeFile(file, QByteArray{"mine\n"});
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(file)));
+    editor.insert(QStringLiteral("typed "));
+    QSignalSpy changed{&document, &tekst::Document::changedOnDisk};
+    writeFile(file, QByteArray{"theirs, longer\n"});
+    QVERIFY(changed.wait());
+    QCOMPARE(editor.text(), QStringLiteral("typed mine\n"));
+    QVERIFY(document.reload());
+    QCOMPARE(editor.text(), QStringLiteral("theirs, longer\n"));
+}
+
+void TestDocument::ignoresItsOwnSaves()
+{
+    const QString file{path(QStringLiteral("own.txt"))};
+    writeFile(file, QByteArray{"text\n"});
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(file)));
+    editor.insert(QStringLiteral("more "));
+    QSignalSpy changed{&document, &tekst::Document::changedOnDisk};
+    QVERIFY(document.save());
+    editor.insert(QStringLiteral("again "));
+    QVERIFY(!changed.wait(500));
+    QCOMPARE(editor.text(), QStringLiteral("more again text\n"));
+}
+
 QTEST_MAIN(TestDocument)

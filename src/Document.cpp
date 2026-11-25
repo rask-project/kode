@@ -14,7 +14,16 @@ const QString crlfText{QStringLiteral("\r\n")};
 
 } // namespace
 
-Document::Document(QObject *parent) : QObject(parent) {}
+Document::Document(QObject *parent) : QObject(parent)
+{
+    // Writers replace files in steps (rename, write): look once they settle.
+    constexpr qint32 settleMilliseconds{100};
+    m_checkTimer.setSingleShot(true);
+    m_checkTimer.setInterval(settleMilliseconds);
+    connect(&m_checkTimer, &QTimer::timeout, this, &Document::checkFile);
+    connect(&m_watcher, &QFileSystemWatcher::fileChanged, &m_checkTimer, qOverload<>(&QTimer::start));
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, &m_checkTimer, qOverload<>(&QTimer::start));
+}
 
 void Document::setEditor(EditorView *editor)
 {
@@ -82,6 +91,71 @@ bool Document::reopen(const QString &encoding)
     return !m_fileUrl.isEmpty() && read(m_fileUrl, encoding);
 }
 
+bool Document::reload()
+{
+    if (m_fileUrl.isEmpty() || m_editor == nullptr) {
+        return false;
+    }
+    const qint64 cursor{m_editor->cursorPosition()};
+    if (!read(m_fileUrl, m_format.encoding)) {
+        return false;
+    }
+    m_editor->setCursorPosition(std::min(cursor, m_editor->length()));
+    return true;
+}
+
+void Document::watch()
+{
+    const QString path{m_fileUrl.toLocalFile()};
+    const QFileInfo info{path};
+    // The folder too: a file replaced by another one comes back there.
+    const QStringList directories{path.isEmpty() ? QStringList{} : QStringList{info.absolutePath()}};
+    if (m_watcher.directories() != directories) {
+        if (!m_watcher.directories().isEmpty()) {
+            m_watcher.removePaths(m_watcher.directories());
+        }
+        if (!directories.isEmpty()) {
+            m_watcher.addPaths(directories);
+        }
+    }
+    if (!m_watcher.files().isEmpty() && m_watcher.files() != QStringList{path}) {
+        m_watcher.removePaths(m_watcher.files());
+    }
+    if (path.isEmpty()) {
+        m_fileSize = -1;
+        return;
+    }
+    m_fileModified = info.lastModified();
+    m_fileSize = info.size();
+    if (m_watcher.files().isEmpty()) {
+        m_watcher.addPath(path);
+    }
+}
+
+void Document::checkFile()
+{
+    const QString path{m_fileUrl.toLocalFile()};
+    const QFileInfo info{path};
+    // Gone (deleted or moved away): keep the text; watch it again if it returns.
+    if (path.isEmpty() || !info.exists()) {
+        return;
+    }
+    // A replaced file (saved by renaming a new one over it) is no longer watched.
+    if (m_watcher.files().isEmpty()) {
+        m_watcher.addPath(path);
+    }
+    if (info.lastModified() == m_fileModified && info.size() == m_fileSize) {
+        return;
+    }
+    m_fileModified = info.lastModified();
+    m_fileSize = info.size();
+    if (modified()) {
+        emit changedOnDisk();
+        return;
+    }
+    reload();
+}
+
 bool Document::read(const QUrl &fileUrl, const QString &encoding)
 {
     if (m_editor == nullptr) {
@@ -113,6 +187,7 @@ bool Document::read(const QUrl &fileUrl, const QString &encoding)
     m_editor->detectSyntax(fileUrl.fileName());
     m_editor->detectIndentation();
     setFileUrl(fileUrl);
+    watch();
     emit formatChanged();
     emit modifiedChanged();
     return true;
@@ -142,6 +217,7 @@ bool Document::saveAs(const QUrl &fileUrl)
         m_editor->detectSyntax(fileUrl.fileName());
     }
     setFileUrl(fileUrl);
+    watch();
     return true;
 }
 
@@ -157,6 +233,7 @@ void Document::clear()
     emit formatChanged();
     emit modifiedChanged();
     setFileUrl({});
+    watch();
 }
 
 std::expected<void, QString> Document::write(const QUrl &fileUrl) const

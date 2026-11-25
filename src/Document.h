@@ -3,9 +3,12 @@
 #include "EditorView.h"
 #include "TextCodec.h"
 
+#include <QDateTime>
+#include <QFileSystemWatcher>
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QTimer>
 #include <QUrl>
 #include <QtQmlIntegration/qqmlintegration.h>
 
@@ -17,7 +20,9 @@ namespace tekst
 // The file behind an editor's text: loads it into an EditorView and saves it
 // back. The file's encoding (detected, or chosen with reopen()), byte order
 // mark and line ending (LF or CRLF) are kept unless changed; saving goes
-// through QSaveFile, so a failed write leaves the file as it was.
+// through QSaveFile, so a failed write leaves the file as it was. A change
+// to the file by another program reloads it when there are no unsaved
+// changes, else emits changedOnDisk().
 class Document : public QObject
 {
     Q_OBJECT
@@ -54,6 +59,8 @@ public:
     Q_INVOKABLE bool load(const QUrl &fileUrl);
     // Reads the file again as `encoding` (unsaved changes are lost).
     Q_INVOKABLE bool reopen(const QString &encoding);
+    // Reads the file again (unsaved changes are lost), keeping the caret.
+    Q_INVOKABLE bool reload();
     Q_INVOKABLE bool save();
     Q_INVOKABLE bool saveAs(const QUrl &fileUrl);
     // An empty, untitled document.
@@ -65,6 +72,8 @@ signals:
     void modifiedChanged();
     void formatChanged();
     void errorOccurred(const QString &message);
+    // Another program changed the file while it has unsaved changes here.
+    void changedOnDisk();
 
 private:
     static constexpr quint64 Crlf{1U << 0U};
@@ -76,10 +85,18 @@ private:
     [[nodiscard]] std::expected<void, QString> write(const QUrl &fileUrl) const;
     void setFileUrl(const QUrl &fileUrl);
     void setFormatChanged(bool changed);
+    // Watches the file, remembering the version read or written.
+    void watch();
+    void checkFile();
 
     QPointer<EditorView> m_editor;
     QUrl m_fileUrl;
     codec::Format m_format;
+    QFileSystemWatcher m_watcher;
+    QTimer m_checkTimer;
+    // The file's version last read or written here.
+    QDateTime m_fileModified;
+    qint64 m_fileSize{-1};
     quint64 m_flags{0U};
 };
 
