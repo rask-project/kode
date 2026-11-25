@@ -3,6 +3,8 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 # The sources under test are compiled into each test: the app is an
 # executable, not a library.
 set(editor_sources
+    ../src/editor/EditorAccessible.h
+    ../src/editor/EditorAccessible.cpp
     ../src/editor/EditorView.h
     ../src/editor/EditorView.cpp
     ../src/editor/TextBuffer.h

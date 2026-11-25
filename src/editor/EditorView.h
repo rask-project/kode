@@ -18,6 +18,8 @@ class QTextLayout;
 namespace tekst
 {
 
+class EditorAccessible;
+
 // The editing surface: a TextBuffer drawn by laying out and rendering only
 // the lines in view (one QSGTextNode per line and per line number), with
 // caret, selection, undo, the clipboard and input methods. Monospaced
@@ -138,6 +140,8 @@ protected:
     void focusOutEvent(QFocusEvent *event) override;
 
 private:
+    friend class EditorAccessible;
+
     // One undoable change: at `position`, `removed` was replaced by
     // `inserted`; the caret and anchor before and the caret after.
     struct Edit {
@@ -210,6 +214,11 @@ private:
     [[nodiscard]] qreal xForPosition(qsizetype position) const;
     [[nodiscard]] qsizetype positionAt(const QPointF &point) const;
     [[nodiscard]] qreal textLeft() const;
+    // The top of `line`, in content coordinates.
+    [[nodiscard]] qreal lineTop(qsizetype line) const;
+    // Tells assistive technologies about a change of text, caret or selection.
+    void notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted);
+    void notifyCursorChanged();
     void setColor(QRgb &field, const QColor &color);
 
     TextBuffer m_buffer;

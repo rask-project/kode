@@ -2,6 +2,7 @@
 
 #include "EditorView.h"
 
+#include <QAccessible>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QSignalSpy>
@@ -202,6 +203,64 @@ void TestEditorView::inputMethodCommitAndReplacement()
     commit.setCommitString(QStringLiteral(" au lait"));
     QCoreApplication::sendEvent(&editor, &commit);
     QCOMPARE(editor.text(), QStringLiteral("café au lait"));
+}
+
+void TestEditorView::accessibleText()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("first line\nsecond words here"));
+    QAccessibleInterface *const accessible{QAccessible::queryAccessibleInterface(&editor)};
+    QVERIFY(accessible != nullptr);
+    QCOMPARE(accessible->role(), QAccessible::EditableText);
+    QVERIFY(accessible->state().multiLine);
+    QAccessibleTextInterface *const text{accessible->textInterface()};
+    QVERIFY(text != nullptr);
+    QCOMPARE(text->characterCount(), 28);
+    QCOMPARE(text->text(0, 5), QStringLiteral("first"));
+}
+
+void TestEditorView::accessibleSelection()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("first line\nsecond words here"));
+    QAccessibleTextInterface *const text{QAccessible::queryAccessibleInterface(&editor)->textInterface()};
+    text->setSelection(0, 0, 5);
+    QCOMPARE(editor.selectedText(), QStringLiteral("first"));
+    QCOMPARE(text->selectionCount(), 1);
+    text->setCursorPosition(4);
+    QCOMPARE(editor.cursorPosition(), 4);
+    QCOMPARE(text->selectionCount(), 0);
+}
+
+void TestEditorView::accessibleBoundaries()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("first line\nsecond words here"));
+    QAccessibleTextInterface *const text{QAccessible::queryAccessibleInterface(&editor)->textInterface()};
+    int start{-1};
+    int end{-1};
+    QCOMPARE(text->textAtOffset(13, QAccessible::WordBoundary, &start, &end), QStringLiteral("second"));
+    QCOMPARE(start, 11);
+    QCOMPARE(end, 17);
+    QCOMPARE(text->textAtOffset(3, QAccessible::LineBoundary, &start, &end), QStringLiteral("first line\n"));
+    QCOMPARE(text->textAfterOffset(3, QAccessible::LineBoundary, &start, &end), QStringLiteral("second words here"));
+    QCOMPARE(text->textBeforeOffset(13, QAccessible::LineBoundary, &start, &end), QStringLiteral("first line\n"));
+}
+
+void TestEditorView::accessibleEditingIsUndoable()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("hello"));
+    QAccessibleEditableTextInterface *const editable{
+        QAccessible::queryAccessibleInterface(&editor)->editableTextInterface()
+    };
+    QVERIFY(editable != nullptr);
+    editable->insertText(5, QStringLiteral(" world"));
+    editable->replaceText(0, 5, QStringLiteral("HELLO"));
+    QCOMPARE(editor.text(), QStringLiteral("HELLO world"));
+    editor.undo();
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("hello"));
 }
 
 QTEST_MAIN(TestEditorView)

@@ -11,6 +11,8 @@ qt_add_qml_module(tekst_editor_bench
         TextEditCase.qml
         EditorViewCase.qml
     SOURCES
+        ../../src/editor/EditorAccessible.h
+        ../../src/editor/EditorAccessible.cpp
         ../../src/editor/EditorView.h
         ../../src/editor/EditorView.cpp
 )

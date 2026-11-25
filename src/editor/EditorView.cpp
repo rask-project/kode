@@ -1,5 +1,7 @@
 #include "EditorView.h"
 
+#include "EditorAccessible.h"
+
 #include <QClipboard>
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -158,6 +160,7 @@ EditorView::EditorView(QQuickItem *parent) : QQuickItem(parent), m_font(QStringL
     setAcceptedMouseButtons(Qt::LeftButton);
     setActiveFocusOnTab(true);
     setCursor(Qt::IBeamCursor);
+    EditorAccessible::installFactory();
     updateMetrics();
     connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &EditorView::canPasteChanged);
 }
@@ -251,6 +254,35 @@ qreal EditorView::gutterWidth() const
 qreal EditorView::textLeft() const
 {
     return gutterWidth() + padding;
+}
+
+qreal EditorView::lineTop(qsizetype line) const
+{
+    return topPadding + (static_cast<qreal>(line) * m_lineHeight);
+}
+
+void EditorView::notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted)
+{
+    if (!QAccessible::isActive()) {
+        return;
+    }
+    QAccessibleTextUpdateEvent event{this, static_cast<int>(position), removed, inserted};
+    QAccessible::updateAccessibility(&event);
+}
+
+void EditorView::notifyCursorChanged()
+{
+    if (!QAccessible::isActive()) {
+        return;
+    }
+    if (hasSelection()) {
+        QAccessibleTextSelectionEvent event{this, static_cast<int>(selectionStart()), static_cast<int>(selectionEnd())};
+        event.setCursorPosition(static_cast<int>(m_cursor));
+        QAccessible::updateAccessibility(&event);
+        return;
+    }
+    QAccessibleTextCursorEvent event{this, static_cast<int>(m_cursor)};
+    QAccessible::updateAccessibility(&event);
 }
 
 qreal EditorView::contentWidth() const
@@ -373,6 +405,7 @@ void EditorView::replace(qsizetype position, qsizetype count, const QString &tex
 
     m_buffer.remove(position, count);
     m_buffer.insert(position, text);
+    notifyTextChanged(position, edit.removed, text);
     m_cursor = edit.cursorAfter;
     m_anchor = m_cursor;
     m_preferredX = -1.0;
@@ -405,6 +438,7 @@ void EditorView::applyEdit(const Edit &edit, bool forward)
     const QString &to{forward ? edit.inserted : edit.removed};
     m_buffer.remove(edit.position, from.size());
     m_buffer.insert(edit.position, to);
+    notifyTextChanged(edit.position, from, to);
     m_cursor = forward ? edit.cursorAfter : edit.cursorBefore;
     m_anchor = forward ? edit.cursorAfter : edit.anchorBefore;
 }
@@ -522,6 +556,7 @@ void EditorView::moveCaret(qsizetype position, Select select)
     if (selectionWasVisible || hasSelection()) {
         emit selectionChanged();
     }
+    notifyCursorChanged();
     polish();
 }
 

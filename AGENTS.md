@@ -55,6 +55,12 @@ Guidance for AI agents working in this repository.
     the selection is `QSGRectangleNode`s behind the text. Scrolling within
     the lines laid out does not polish at all. Nothing per frame scales with
     the file size; a keystroke lays out one line.
+  - `EditorAccessible` — the view's `QAccessibleInterface` (text, editable
+    text), installed as a factory by the first `EditorView` (after Qt
+    Quick's, so it is asked first); a friend of `EditorView`. The view
+    reports text, caret and selection changes to it while accessibility is
+    active; `TextEditor.qml` gives it its `Accessible.role`/`name` so it
+    joins the tree.
   - Keep scene coordinates small: positions are relative to the first line
     laid out, never `line × lineHeight` (float vertices lose precision past
     a few million pixels).

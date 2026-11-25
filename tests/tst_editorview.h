@@ -19,4 +19,8 @@ private slots:
     void wordNavigationAndDeletion();
     void verticalMovesKeepColumn();
     void inputMethodCommitAndReplacement();
+    void accessibleText();
+    void accessibleSelection();
+    void accessibleBoundaries();
+    void accessibleEditingIsUndoable();
 };

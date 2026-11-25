@@ -46,6 +46,8 @@ Flickable {
         contentX: root.contentX
         contentY: root.contentY
         focus: true
+        Accessible.role: Accessible.EditableText
+        Accessible.name: qsTr("Editor")
         textColor: systemPalette.text
         selectionColor: systemPalette.highlight
         caretColor: systemPalette.accent

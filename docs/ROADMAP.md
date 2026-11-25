@@ -267,9 +267,12 @@ accents. `Document` loads and saves through the `TextBuffer`.
 `tst_editorview` covers the editing model.
 
 **4b:**
-- Accessibility: a `QAccessibleInterface` with the text and caret for
-  VoiceOver.
-- Drag and drop of text; highlight selected line ends and empty lines.
+- Done: the scene graph synced incrementally (`docs/editor-bench.md`), the
+  selection drawn as rectangles (line ends and empty lines included), and
+  accessibility: `EditorAccessible` exposes the text, caret, selection and
+  character/word/line boundaries and accepts edits; macOS sees an
+  `AXTextArea` with its character count, selection and insertion line.
+- Drag and drop of text.
 - Light/dark colors from `SystemColors` (Stage 2).
 
 Soft wrap moves to Stage 6 ("toggle line wrapping"): code is not wrapped by
