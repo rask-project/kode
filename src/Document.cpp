@@ -75,6 +75,7 @@ bool Document::load(const QUrl &fileUrl)
     // Also clears the undo history and the modified state.
     m_editor->setText(lines);
     m_editor->detectSyntax(fileUrl.fileName());
+    m_editor->detectIndentation();
     setFileUrl(fileUrl);
     return true;
 }

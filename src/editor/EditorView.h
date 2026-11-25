@@ -26,6 +26,11 @@ namespace tekst
 {
 
 class EditorAccessible;
+
+namespace indentation
+{
+struct Style;
+} // namespace indentation
 class SyntaxHighlighter;
 class TextSearch;
 
@@ -86,6 +91,9 @@ class EditorView : public QQuickItem
     // The count is final: the search is done (and not capped).
     Q_PROPERTY(bool searchComplete READ searchComplete NOTIFY searchChanged)
     Q_PROPERTY(QString searchError READ searchError NOTIFY searchChanged)
+    // Indent with tabs (else spaces), `indentWidth` columns per level.
+    Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY indentationChanged)
+    Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY indentationChanged)
     // Highlight with the dark theme (else the light one).
     Q_PROPERTY(bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged)
 public:
@@ -121,6 +129,10 @@ public:
     [[nodiscard]] qint32 searchCurrent() const;
     [[nodiscard]] bool searchComplete() const;
     [[nodiscard]] QString searchError() const;
+    [[nodiscard]] bool indentWithTabs() const noexcept { return (m_flags & IndentWithTabs) != 0U; }
+    void setIndentWithTabs(bool tabs);
+    [[nodiscard]] qint32 indentWidth() const noexcept { return static_cast<qint32>(m_indentWidth); }
+    void setIndentWidth(qint32 width);
     [[nodiscard]] qreal contentX() const noexcept { return m_contentX; }
     void setContentX(qreal contentX);
     [[nodiscard]] qreal contentY() const noexcept { return m_contentY; }
@@ -165,6 +177,11 @@ public:
     Q_INVOKABLE void markSaved();
     // Picks the syntax for a file named `fileName` (or by its shebang).
     Q_INVOKABLE void detectSyntax(const QString &fileName);
+    // The selected lines (or the caret's) one level in or out, as one edit.
+    Q_INVOKABLE void indent();
+    Q_INVOKABLE void outdent();
+    // Takes the indentation style from the text (see indentation::detect()).
+    Q_INVOKABLE void detectIndentation();
     // Moves the caret to "line" or "line:column" (from 1, clamped); false
     // when `target` is neither.
     Q_INVOKABLE bool goToLine(const QString &target);
@@ -193,6 +210,7 @@ signals:
     void syntaxChanged();
     void darkThemeChanged();
     void searchChanged();
+    void indentationChanged();
 
 protected:
     void updatePolish() override;
@@ -280,6 +298,8 @@ private:
     static constexpr quint64 DroppedHere{1U << 2U};
     // Highlighting uses the dark theme.
     static constexpr quint64 DarkTheme{1U << 3U};
+    // Indent with tabs.
+    static constexpr quint64 IndentWithTabs{1U << 4U};
 
     void updateMetrics();
     void textEdited();
@@ -310,6 +330,13 @@ private:
     // Searches a slice, then again from the event loop until done.
     void searchAhead();
     void selectMatch(qsizetype index);
+    // Replaces the lines the selection (or caret) touches with
+    // `change(their text)` and selects them.
+    void changeSelectedLines(bool outdenting);
+    // Return: a newline and the current line's indentation.
+    void insertNewline();
+    void insertTab();
+    [[nodiscard]] indentation::Style indentStyle() const;
     // The rectangle of [start, end) on `row` (relative to m_baseLine).
     [[nodiscard]] QRectF rangeRect(const Row &row, qsizetype start, qsizetype end) const;
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
@@ -372,6 +399,7 @@ private:
     qsizetype m_baseLine{0};
     // Where dragged text would be dropped (shown as the caret); -1: no drag.
     qsizetype m_dropPosition{-1};
+    qsizetype m_indentWidth{4};
     quint64 m_nextRowId{1};
     // Bumped when the composition changes, so its line is laid out again
     // (above Plain and Highlighted).

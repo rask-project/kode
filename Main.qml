@@ -213,6 +213,21 @@ ApplicationWindow {
             MenuSeparator {}
             MenuItem {
                 action: Action {
+                    text: qsTr("Shift Right")
+                    shortcut: "Ctrl+]"
+                    onTriggered: root.editor.indent()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Shift Left")
+                    shortcut: "Ctrl+["
+                    onTriggered: root.editor.outdent()
+                }
+            }
+            MenuSeparator {}
+            MenuItem {
+                action: Action {
                     text: qsTr("Go to Line…")
                     shortcut: "Ctrl+L"
                     onTriggered: goToLine.open()

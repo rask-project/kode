@@ -27,4 +27,6 @@ private slots:
     void findWraps();
     void replaceAllIsOneUndo();
     void goesToLineAndColumn();
+    void returnKeepsIndentation();
+    void tabIndentsSelectedLines();
 };

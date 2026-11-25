@@ -7,6 +7,8 @@ set(editor_sources
     ../src/editor/EditorAccessible.cpp
     ../src/editor/EditorView.h
     ../src/editor/EditorView.cpp
+    ../src/editor/Indentation.h
+    ../src/editor/Indentation.cpp
     ../src/editor/Matching.h
     ../src/editor/Matching.cpp
     ../src/editor/SyntaxHighlighter.h
@@ -85,3 +87,15 @@ qt_add_executable(tst_textsearch
 target_include_directories(tst_textsearch PRIVATE ../src/editor)
 target_link_libraries(tst_textsearch PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME tst_textsearch COMMAND tst_textsearch)
+
+qt_add_executable(tst_indentation
+    tst_indentation.h
+    tst_indentation.cpp
+    ../src/editor/Indentation.h
+    ../src/editor/Indentation.cpp
+    ../src/editor/TextBuffer.h
+    ../src/editor/TextBuffer.cpp
+)
+target_include_directories(tst_indentation PRIVATE ../src/editor)
+target_link_libraries(tst_indentation PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME tst_indentation COMMAND tst_indentation)

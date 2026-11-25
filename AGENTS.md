@@ -85,6 +85,10 @@ Guidance for AI agents working in this repository.
     `searchCaseSensitive`/`searchRegularExpression`, marks the matches in
     view and offers `findNext()`/`findPrevious()`/`replaceCurrent()`/
     `replaceAll()` (one edit over the matches' span: one undo).
+  - `Indentation` — free functions: the style (tabs/spaces, width),
+    what Tab inserts, block indent/outdent and detecting the style from
+    the first lines; `EditorView` applies them (`indent()`, `outdent()`,
+    auto-indent on Return) as single edits.
   - `Matching` — free functions for the marks drawn behind the text: the
     bracket pairing with the one at the caret (bounded line scan), the
     word at the caret and its whole-word occurrences in the rows in view.
@@ -96,7 +100,7 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`), run offscreen with
+  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).

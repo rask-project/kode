@@ -319,4 +319,34 @@ void TestEditorView::goesToLineAndColumn()
     QVERIFY(!editor.goToLine(QStringLiteral("1:2:3")));
 }
 
+void TestEditorView::returnKeepsIndentation()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("    if (x) {"));
+    editor.setCursorPosition(editor.length());
+    QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
+    QCoreApplication::sendEvent(&editor, &enter);
+    QCOMPARE(editor.text(), QStringLiteral("    if (x) {\n    "));
+    QKeyEvent tab{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, QStringLiteral("\t")};
+    QCoreApplication::sendEvent(&editor, &tab);
+    QCOMPARE(editor.text(), QStringLiteral("    if (x) {\n        "));
+}
+
+void TestEditorView::tabIndentsSelectedLines()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("a\nb\nc"));
+    editor.setIndentWidth(2);
+    editor.select(0, 3);
+    QKeyEvent tab{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, QStringLiteral("\t")};
+    QCoreApplication::sendEvent(&editor, &tab);
+    QCOMPARE(editor.text(), QStringLiteral("  a\n  b\nc"));
+    QCOMPARE(editor.selectedText(), QStringLiteral("  a\n  b"));
+    editor.outdent();
+    QCOMPARE(editor.text(), QStringLiteral("a\nb\nc"));
+    editor.undo();
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("a\nb\nc"));
+}
+
 QTEST_MAIN(TestEditorView)

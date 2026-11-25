@@ -1,6 +1,7 @@
 #include "EditorView.h"
 
 #include "EditorAccessible.h"
+#include "Indentation.h"
 #include "Matching.h"
 #include "SyntaxHighlighter.h"
 #include "TextSearch.h"
@@ -450,7 +451,7 @@ void EditorView::setText(const QString &text)
     m_preedit.clear();
     m_preferredX = -1.0;
     m_widestLine = 0.0;
-    m_flags &= DarkTheme;
+    m_flags &= DarkTheme | IndentWithTabs;
     m_contentY = 0.0;
     m_contentX = 0.0;
     emit contentXChanged();
@@ -716,6 +717,108 @@ qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
     return lineStart + column;
 }
 
+// --- indentation --------------------------------------------------------------
+
+void EditorView::setIndentWithTabs(bool tabs)
+{
+    if (indentWithTabs() == tabs) {
+        return;
+    }
+    m_flags = tabs ? (m_flags | IndentWithTabs) : (m_flags & ~IndentWithTabs);
+    emit indentationChanged();
+}
+
+void EditorView::setIndentWidth(qint32 width)
+{
+    width = std::clamp(width, 1, 16);
+    if (m_indentWidth == width) {
+        return;
+    }
+    m_indentWidth = width;
+    // Tab stops move.
+    m_rows.clear();
+    m_widestLine = 0.0;
+    emit indentationChanged();
+    emit contentSizeChanged();
+    emit cursorChanged();
+    polish();
+}
+
+indentation::Style EditorView::indentStyle() const
+{
+    return {
+        .width = static_cast<quint8>(m_indentWidth),
+        .kind = indentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
+    };
+}
+
+void EditorView::detectIndentation()
+{
+    constexpr qsizetype linesToRead{1000};
+    const indentation::Style style{indentation::detect(m_buffer, linesToRead, indentStyle())};
+    setIndentWithTabs(style.kind == indentation::Kind::Tabs);
+    setIndentWidth(style.width);
+}
+
+void EditorView::insertNewline()
+{
+    const qsizetype line{m_buffer.lineAt(selectionStart())};
+    const qsizetype lineStart{m_buffer.lineStart(line)};
+    const QString text{m_buffer.text(lineStart, selectionStart() - lineStart)};
+    insert(QStringLiteral("\n") + indentation::leadingWhitespace(text));
+}
+
+void EditorView::insertTab()
+{
+    if (hasSelection() && m_buffer.lineAt(selectionStart()) != m_buffer.lineAt(selectionEnd())) {
+        indent();
+        return;
+    }
+    const qsizetype column{selectionStart() - m_buffer.lineStart(m_buffer.lineAt(selectionStart()))};
+    insert(indentation::tabAt(indentStyle(), column));
+}
+
+void EditorView::indent()
+{
+    changeSelectedLines(false);
+}
+
+void EditorView::outdent()
+{
+    changeSelectedLines(true);
+}
+
+void EditorView::changeSelectedLines(bool outdenting)
+{
+    const qsizetype firstLine{m_buffer.lineAt(selectionStart())};
+    qsizetype lastLine{m_buffer.lineAt(selectionEnd())};
+    // A selection ending at the start of a line leaves that line out.
+    if (hasSelection() && lastLine > firstLine && selectionEnd() == m_buffer.lineStart(lastLine)) {
+        --lastLine;
+    }
+    const qsizetype start{m_buffer.lineStart(firstLine)};
+    const qsizetype end{m_buffer.lineStart(lastLine) + m_buffer.lineLength(lastLine)};
+    const QString before{m_buffer.text(start, end - start)};
+    const indentation::Style style{
+        .width = static_cast<quint8>(m_indentWidth),
+        .kind = indentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
+    };
+    const QString after{outdenting ? indentation::outdented(before, style) : indentation::indented(before, style)};
+    if (after == before) {
+        return;
+    }
+    const bool selected{hasSelection()};
+    const qsizetype caretColumn{m_cursor - m_buffer.lineStart(m_buffer.lineAt(m_cursor))};
+    replace(start, end - start, after, false);
+    if (selected) {
+        select(start, start + after.size());
+        return;
+    }
+    // One line, no selection: the caret keeps its place in the text.
+    const qsizetype delta{after.size() - before.size()};
+    moveCaret(start + std::max(caretColumn + delta, qsizetype{0}), Select::Collapse);
+}
+
 bool EditorView::goToLine(const QString &target)
 {
     const QStringList parts{target.trimmed().split(QLatin1Char(':'))};
@@ -935,7 +1038,7 @@ EditorView::layoutText(const QString &text, qsizetype preeditColumn, const QList
     auto layout{std::make_unique<QTextLayout>(text, m_font)};
     QTextOption option;
     option.setWrapMode(QTextOption::NoWrap);
-    option.setTabStopDistance(4 * m_charWidth);
+    option.setTabStopDistance(static_cast<qreal>(m_indentWidth) * m_charWidth);
     layout->setTextOption(option);
     // The input method's composition, shown in the text, underlined.
     if (preeditColumn >= 0) {
@@ -1392,10 +1495,13 @@ void EditorView::keyPressEvent(QKeyEvent *event)
     switch (event->key()) {
     case Qt::Key_Return:
     case Qt::Key_Enter:
-        insert(QStringLiteral("\n"));
+        insertNewline();
         return;
     case Qt::Key_Tab:
-        insert(QStringLiteral("\t"));
+        insertTab();
+        return;
+    case Qt::Key_Backtab:
+        outdent();
         return;
     default:
         break;

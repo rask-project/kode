@@ -320,7 +320,10 @@ title bar, ⌘F, ⌥⌘F, ⌘G/⇧⌘G, ⌘E; `TextSearch` searches line by line
 in view marked in `findHighlightColor`; Replace All is one undo; with a
 regular expression, $0…$9 in the replacement. Go to line (⌘L): "line" or
 "line:column", centered in the view. Font zoom (View > Bigger/Smaller/Actual Size,
-⌘+ / ⌘- / ⌘0), saved in the settings.
+⌘+ / ⌘- / ⌘0), saved in the settings. Indentation: tabs or spaces and
+the width, detected when a file opens and shown (and changed) in the
+status bar; Return keeps the line's indentation, Tab goes to the next
+stop or indents the selected lines, ⇧Tab and ⌘[ / ⌘] shift them.
 
 - Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌥⌘F, regex,
   case sensitivity, matches highlighted by the `EditorView` (search runs on

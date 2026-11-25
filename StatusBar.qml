@@ -33,6 +33,62 @@ Item {
     }
 
     Label {
+        id: indentationLabel
+
+        anchors.right: syntaxLabel.left
+        anchors.rightMargin: 20
+        anchors.verticalCenter: parent.verticalCenter
+        text: (root.editor.indentWithTabs ? qsTr("Tabs: %1") : qsTr("Spaces: %1")).arg(root.editor.indentWidth)
+        color: indentationArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
+        font.pixelSize: 11
+
+        MouseArea {
+            id: indentationArea
+
+            anchors.fill: parent
+            anchors.margins: -6
+            hoverEnabled: true
+            onClicked: indentationMenu.popup(indentationLabel, 0, indentationLabel.height)
+        }
+    }
+
+    Menu {
+        id: indentationMenu
+
+        popupType: Popup.Native
+
+        MenuItem {
+            text: qsTr("Indent Using Spaces")
+            checkable: true
+            checked: !root.editor.indentWithTabs
+            onTriggered: root.editor.indentWithTabs = false
+        }
+        MenuItem {
+            text: qsTr("Indent Using Tabs")
+            checkable: true
+            checked: root.editor.indentWithTabs
+            onTriggered: root.editor.indentWithTabs = true
+        }
+        MenuSeparator {}
+
+        Instantiator {
+            model: [2, 3, 4, 8]
+
+            delegate: MenuItem {
+                required property int modelData
+
+                text: qsTr("Width: %1").arg(modelData)
+                checkable: true
+                checked: root.editor.indentWidth === modelData
+                onTriggered: root.editor.indentWidth = modelData
+            }
+
+            onObjectAdded: (index, object) => indentationMenu.insertItem(index + 3, object)
+            onObjectRemoved: (index, object) => indentationMenu.removeItem(object)
+        }
+    }
+
+    Label {
         id: syntaxLabel
 
         anchors.right: parent.right
