@@ -12,7 +12,8 @@ Guidance for AI agents working in this repository.
   (`../metronom`): same toolchain, rules and look. Native features those apps
   already have (translucent/blurred window, Liquid Glass, tab strip, native
   dialogs, Sparkle) are reused, not rewritten — they are being moved to the
-  shared `rask-qml` library (QML modules `Rask.*`).
+  shared `rask` library (`../rask`, QML modules `Rask.*`; its `AGENTS.md`
+  has the library's rules).
 - **`docs/ROADMAP.md` is the plan**: the stages in order and what each one
   delivers. Work on the current stage; don't pull features from later ones.
 
@@ -131,7 +132,7 @@ Qt Creator opens the project directly with the matching kit.
 
 - Native AppKit behaviour is written in **Objective-C++** (`src/*.mm`,
   compiled with ARC; `CMakeLists.txt` sets `LANGUAGES CXX OBJCXX`). Anything
-  another rask-project app could use goes to `rask-qml`, not here.
+  another rask-project app could use goes to `rask`, not here.
 - The `.mm` file exposes plain C++ functions in a C++-only header; the QML
   type calls them.
 - On macOS `QWindow::winId()` is the window's `contentView` (`NSView *`), not

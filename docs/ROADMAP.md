@@ -17,7 +17,7 @@ app that builds, launches and is usable; no stage depends on a later one.
 | Platform | macOS 14.4+, arm64 | Same as Konsoll/Metronom |
 | Bundle id | `com.github.rask-project.tekst` (`.debug` in Debug) | Same pattern as Konsoll |
 | App QML module | URI `Tekst` | |
-| Shared library | new repository **`rask-project/rask-qml`**, modules `Rask.*`, built as **shared (dynamic) libraries** | See section 2 |
+| Shared library | repository **`rask-project/rask`** (`../rask`), modules `Rask.*`, built as **shared (dynamic) libraries** | See section 2 |
 | License | MIT (Rask Project) | Same as the other repositories |
 
 ---
@@ -46,10 +46,11 @@ Survey of the sibling repositories (`../konsoll`, `../metronom`, `../notes`):
 
 ---
 
-## 2. Shared library: `rask-qml`
+## 2. Shared library: `rask`
 
-New repository `rask-project/rask-qml`, consumed by the apps as a **git
-submodule** (`external/rask-qml`) with `add_subdirectory`. Alternative:
+Repository `rask-project/rask` (local checkout `../rask`; its `AGENTS.md`
+holds the library's rules), consumed by the apps as a **git submodule**
+(`external/rask`) with `add_subdirectory`. Alternative:
 `FetchContent` pinned to a tag (later, once the API stabilizes).
 
 ### Rules
@@ -60,17 +61,18 @@ submodule** (`external/rask-qml`) with `add_subdirectory`. Alternative:
   plugin. Apps link the alias target `Rask::Window`, etc. Why shared: the
   apps load one copy of each module per process (one `NSApplication`
   delegate, one Sparkle updater, one set of QML type registrations), a fix in
-  `rask-qml` reaches every app without relinking its code, and the library
+  `rask` reaches every app without relinking its code, and the library
   has a real public API boundary instead of being a pile of sources compiled
   into each app.
 - **Public API and symbols:** default visibility hidden
   (`CXX_VISIBILITY_PRESET hidden`, `VISIBILITY_INLINES_HIDDEN ON`); exported
   classes and functions carry an export macro generated per module
-  (`generate_export_header` → `RASK_WINDOW_EXPORT`). Public headers live in
-  `include/Rask/<Module>/`; private ones (`*_p.h`, the `.mm` bridges) stay in
-  `src/` and are never installed.
+  (`generate_export_header` → `RASK_WINDOW_EXPORT`). Public headers sit next to the sources in
+  `src/Rask/<Module>/`, are included as `<Rask/<Module>/Header.h>` and are
+  installed to `include/Rask/<Module>/`; private ones (`*_p.h`, the `.mm`
+  bridges) are never installed.
 - **Versioning:** every library has `VERSION`/`SOVERSION` from the
-  `rask-qml` project version (`libRaskWindow.1.dylib`); the QML module
+  `rask` project version (`libRaskWindow.0.dylib`); the QML module
   version follows the same major. Breaking the C++ or QML API bumps the major.
 - **QML layout:** `QT_QML_OUTPUT_DIRECTORY` is `${CMAKE_BINARY_DIR}/qml`, so
   every module ends up in `qml/Rask/<Module>/` (qmldir, plugin, `.qmltypes`)
@@ -87,7 +89,7 @@ submodule** (`external/rask-qml`) with `add_subdirectory`. Alternative:
   files and QML plugins into the APK — Metronom's build is the check.
 - **Consumption:** git submodule + `add_subdirectory` (builds from source with
   the app's Qt kit — no ABI mismatch). The project also has `install(EXPORT)`
-  with a `RaskQmlConfig.cmake`, so `find_package(RaskQml)` works against an
+  with a `RaskConfig.cmake`, so `find_package(Rask)` works against an
   installed copy later.
 - C++ namespace `rask`. Types registered with `QML_ELEMENT` / `QML_SINGLETON`.
 - **Cross-platform by contract**: Metronom runs on Android and Linux. Every
@@ -112,6 +114,16 @@ submodule** (`external/rask-qml`) with `add_subdirectory`. Alternative:
 
 Modules are created **on demand**, in the Tekst stage that needs them (see
 section 3), not all at once.
+
+### Status
+
+- **Done** (`rask` 0.1.0): the shared-library plumbing (`rask_add_qml_module()`,
+  export macros, hidden symbols, `SOVERSION`, install/export,
+  `rask_embed_libraries()`), **`Rask.Platform`** (`Appearance`) and
+  **`Rask.Window`** (`NativeWindow`, unifying Konsoll's `WindowTranslucency`
+  and Metronom's `NativeWindow`), with an example app, tests and CI.
+- **Next:** `SystemColors` in `Rask.Platform` and `Rask.Dialogs` (Stage 2),
+  then the rest as the stages below need them.
 
 ### Migrating the existing apps
 
@@ -177,19 +189,20 @@ without losing data, with no native code.
 
 ---
 
-### Stage 2 — Create `rask-qml` and give it a Mac look
+### Stage 2 — Adopt `rask` and give it a Mac look
 
-First stage that produces shared code.
+First stage where Tekst uses shared code. Already in `rask` (section 2,
+*Status*): the shared-library plumbing, **`Rask.Platform`** (`Appearance`) and
+**`Rask.Window`** (`NativeWindow`).
 
-- Create the `rask-qml` repository with `cmake/RaskApp.cmake`,
-  **`Rask.Platform`** and **`Rask.Window`** (unifying Konsoll's
-  `WindowTranslucency`, Metronom's `NativeWindow` and notes' `MacOSWindow`).
-- Set up the shared-library plumbing once, with the first module: export
-  macros, visibility, `SOVERSION`, the `qml/` output layout, embedding and
-  signing in `rask_macos_bundle()`, and the import path in `main.cpp` for the
-  build tree. Check `otool -L` / `codesign --verify --deep --strict` on the
-  built `Tekst.app`.
-- Tekst: add it as a submodule; window with content under the title bar
+- Tekst: add `rask` as a submodule (`external/rask`), link `Rask::Platform` /
+  `Rask::Window` and call `rask_embed_libraries()` before the bundle's ad hoc
+  signing. Check `otool -L` / `codesign --verify --deep --strict` on the
+  built `Tekst.app`. No import path is needed: the modules' `qmldir` is in
+  the libraries' resources.
+- **`SystemColors`** in `Rask.Platform` (semantic `NSColor`s, from notes'
+  `UIKit`).
+- Tekst: window with content under the title bar
   (`Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint`), translucent
   blurred background (optional), text/selection/caret colors from
   `SystemColors`, follows light/dark.
@@ -200,7 +213,7 @@ First stage that produces shared code.
 
 **Done when:** Tekst has translucency/blur and native dialogs, the installed
 (`package-macos`) bundle runs on a machine without the build tree, and
-Metronom builds and runs on all three platforms using the shared `rask-qml`
+Metronom builds and runs on all three platforms using the shared `rask`
 libraries.
 
 ---
@@ -299,7 +312,6 @@ integration, AppleScript/Shortcuts support.
 
 ## 5. Open decisions
 
-- Shared repository name: `rask-qml` (proposed) vs. `rask-kit` / `rask`.
 - Git submodule vs. `FetchContent` with a tag.
 - Whether `Rask.Style` becomes a standalone style selectable via
   `QQuickStyle::setStyle("Rask.Style")` or stays an extension of the `macOS`
