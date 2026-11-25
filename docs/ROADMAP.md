@@ -125,7 +125,7 @@ section 3), not all at once.
   embedded by `rask_embed_libraries()`) and **`Rask.Controls`** (the
   System Settings controls: `SidebarLayout`, `SidebarItem`, `FormGroup`,
   `FormRow`), with example apps, tests and CI.
-- **Next:** `SystemColors` in `Rask.Platform` (Stage 2), then the rest as the
+- `SystemColors` in `Rask.Platform` is done (Stage 2); the rest come as the
   stages below need them.
 
 ### Migrating the existing apps
@@ -207,8 +207,9 @@ embedded and signed in the bundle, the window with its content under the
 title bar and the blur, the native "Save changes?" sheet and About panels.
 What is left:
 
-- **`SystemColors`** in `Rask.Platform` (semantic `NSColor`s, from notes'
-  `UIKit`): text, selection and caret colors (today Qt's `SystemPalette`).
+- Done: **`SystemColors`** in `Rask.Platform` (semantic `NSColor`s): the
+  editor's text, selection (unemphasized in an inactive window), caret and
+  line-number colors, following light/dark and the accent live.
 - Window settings: blur on/off and opacity (later in the Settings window).
 - The installed bundle (`cmake --install`, `qt_generate_deploy_qml_app_script`)
   runs without the build tree: Qt, the `rask` dylibs.
@@ -275,7 +276,7 @@ accents. `Document` loads and saves through the `TextBuffer`.
 - Done: drag and drop of text — the selection moves within the view (⌥
   copies) or leaves for another app; text dropped from elsewhere is
   inserted; the caret shows where it would go.
-- Light/dark colors from `SystemColors` (Stage 2).
+- Done: light/dark colors from `SystemColors` (Stage 2).
 
 Soft wrap moves to Stage 6 ("toggle line wrapping"): code is not wrapped by
 default, and wrapping needs a visual-line index of its own.

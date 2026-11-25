@@ -1,8 +1,9 @@
 import QtQuick
 import QtQuick.Controls
+import Rask.Platform
 
 // The editing area: an EditorView filling a Flickable's viewport, with
-// scroll bars, keeping the caret in view and colored from the system palette.
+// scroll bars, keeping the caret in view and colored with the system colors.
 Flickable {
     id: root
 
@@ -30,12 +31,6 @@ Flickable {
     ScrollBar.vertical: ScrollBar {}
     ScrollBar.horizontal: ScrollBar {}
 
-    SystemPalette {
-        id: systemPalette
-
-        colorGroup: SystemPalette.Active
-    }
-
     EditorView {
         id: view
 
@@ -48,11 +43,11 @@ Flickable {
         focus: true
         Accessible.role: Accessible.EditableText
         Accessible.name: qsTr("Editor")
-        textColor: systemPalette.text
-        selectionColor: systemPalette.highlight
-        caretColor: systemPalette.accent
-        currentLineColor: Qt.rgba(systemPalette.text.r, systemPalette.text.g, systemPalette.text.b, 0.05)
-        lineNumberColor: Qt.rgba(systemPalette.text.r, systemPalette.text.g, systemPalette.text.b, 0.35)
+        textColor: SystemColors.text
+        selectionColor: Window.active ? SystemColors.selectedTextBackground : SystemColors.unemphasizedSelectedTextBackground
+        caretColor: SystemColors.textInsertionPoint
+        currentLineColor: Qt.alpha(SystemColors.text, 0.05)
+        lineNumberColor: SystemColors.tertiaryLabel
         onCursorRectangleChanged: root.ensureVisible(cursorRectangle)
     }
 }

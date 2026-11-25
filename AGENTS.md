@@ -24,7 +24,7 @@ Guidance for AI agents working in this repository.
   (`rask_embed_libraries()`) and ad hoc signing after the build.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
-  `Rask.Platform` (`Appearance`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
+  `Rask.Platform` (`Appearance`, `SystemColors`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
   `AboutQtDialog`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
@@ -38,7 +38,7 @@ Guidance for AI agents working in this repository.
   editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
   kept, written through `QSaveFile`.
 - `TextEditor.qml` — the editing area: a `Flickable` around the
-  `EditorView`, scroll bars, caret kept in view, system palette colors.
+  `EditorView`, scroll bars, caret kept in view, colors from `SystemColors`.
 - `src/editor/` — the editing surface:
   - `TextBuffer` — piece table: original + append-only added buffer, each
     with a newline index; pieces carry their newline count; consecutive
