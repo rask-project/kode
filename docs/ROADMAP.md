@@ -272,7 +272,9 @@ accents. `Document` loads and saves through the `TextBuffer`.
   accessibility: `EditorAccessible` exposes the text, caret, selection and
   character/word/line boundaries and accepts edits; macOS sees an
   `AXTextArea` with its character count, selection and insertion line.
-- Drag and drop of text.
+- Done: drag and drop of text — the selection moves within the view (⌥
+  copies) or leaves for another app; text dropped from elsewhere is
+  inserted; the caret shows where it would go.
 - Light/dark colors from `SystemColors` (Stage 2).
 
 Soft wrap moves to Stage 6 ("toggle line wrapping"): code is not wrapped by

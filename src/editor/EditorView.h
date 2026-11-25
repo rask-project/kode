@@ -135,7 +135,12 @@ protected:
     [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
 
@@ -189,6 +194,10 @@ private:
 
     // The next typing may merge into the last edit.
     static constexpr quint32 MergeOpen{1U << 0U};
+    // The press was on the selection: a drag may start from it.
+    static constexpr quint32 DragPending{1U << 1U};
+    // A drag from this view was dropped back into it (and moved there).
+    static constexpr quint32 DroppedHere{1U << 2U};
 
     void updateMetrics();
     void textEdited();
@@ -219,6 +228,8 @@ private:
     // Tells assistive technologies about a change of text, caret or selection.
     void notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted);
     void notifyCursorChanged();
+    void startDrag();
+    void setDropPosition(qsizetype position);
     void setColor(QRgb &field, const QColor &color);
 
     TextBuffer m_buffer;
@@ -234,6 +245,8 @@ private:
     QString m_preedit;
     QFont m_font;
     QElapsedTimer m_lastDoubleClick;
+    // Where a press on the selection happened, for starting a drag.
+    QPointF m_pressPoint;
     qreal m_contentX{0.0};
     qreal m_contentY{0.0};
     qreal m_lineHeight{16.0};
@@ -251,6 +264,8 @@ private:
     qsizetype m_preeditCursor{0};
     // The first line laid out; the scene is placed relative to it.
     qsizetype m_baseLine{0};
+    // Where dragged text would be dropped (shown as the caret); -1: no drag.
+    qsizetype m_dropPosition{-1};
     quint64 m_nextRowId{1};
     // Bumped when the composition changes, so its line is laid out again.
     quint64 m_preeditGeneration{1};

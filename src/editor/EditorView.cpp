@@ -3,11 +3,13 @@
 #include "EditorAccessible.h"
 
 #include <QClipboard>
+#include <QDrag>
 #include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QInputMethodEvent>
 #include <QKeyEvent>
 #include <QMatrix4x4>
+#include <QMimeData>
 #include <QQuickWindow>
 #include <QSGClipNode>
 #include <QSGRectangleNode>
@@ -158,6 +160,7 @@ EditorView::EditorView(QQuickItem *parent) : QQuickItem(parent), m_font(QStringL
     setFlag(ItemAcceptsInputMethod);
     setFlag(ItemIsFocusScope);
     setAcceptedMouseButtons(Qt::LeftButton);
+    setFlag(ItemAcceptsDrops);
     setActiveFocusOnTab(true);
     setCursor(Qt::IBeamCursor);
     EditorAccessible::installFactory();
@@ -749,15 +752,17 @@ void EditorView::layoutDecorations()
     // line's end is selected too; and the caret.
     m_selectionRects.clear();
     m_caretRect = {};
-    const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
+    // While text is dragged over the view, the caret shows where it would go.
+    const qsizetype caret{m_dropPosition >= 0 ? m_dropPosition : m_cursor};
+    const qsizetype cursorLine{m_buffer.lineAt(caret)};
     for (const Row &row : m_rows) {
         const qreal y{static_cast<qreal>(row.line - m_baseLine) * m_lineHeight};
         const qsizetype lineStart{m_buffer.lineStart(row.line)};
         const qsizetype lineEnd{lineStart + m_buffer.lineLength(row.line)};
         const QTextLine textLine{row.layout->lineAt(0)};
         if (row.line == cursorLine) {
-            qsizetype column{m_cursor - lineStart};
-            if (!m_preedit.isEmpty()) {
+            qsizetype column{caret - lineStart};
+            if (!m_preedit.isEmpty() && m_dropPosition < 0) {
                 column += m_preeditCursor;
             }
             m_caretRect = {textLine.cursorToX(static_cast<int>(column)), y, caretWidth, m_lineHeight};
@@ -861,7 +866,10 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     }
 
     const bool caretShown{m_caretRect.isValid()};
-    node->caret->setRect(caretShown && hasActiveFocus() && m_preedit.isEmpty() ? m_caretRect : QRectF{});
+    const bool dropping{m_dropPosition >= 0};
+    node->caret->setRect(
+        caretShown && (dropping || (hasActiveFocus() && m_preedit.isEmpty())) ? m_caretRect : QRectF{}
+    );
     node->caret->setColor(caretColor());
     node->currentLine->setRect(
         caretShown && !hasSelection() ? QRectF{0.0, baseY + m_caretRect.y(), width(), m_lineHeight} : QRectF{}
@@ -1082,14 +1090,123 @@ void EditorView::mousePressEvent(QMouseEvent *event)
         return;
     }
     const bool extend{event->modifiers().testFlag(Qt::ShiftModifier)};
+    // A press on the selection may start dragging it: decide on move or release.
+    if (!extend && hasSelection() && position >= selectionStart() && position < selectionEnd()) {
+        m_flags |= DragPending;
+        m_pressPoint = event->position();
+        event->accept();
+        return;
+    }
     moveCaret(position, extend ? Select::Extend : Select::Collapse);
     event->accept();
 }
 
 void EditorView::mouseMoveEvent(QMouseEvent *event)
 {
+    if ((m_flags & DragPending) != 0U) {
+        const qreal distance{(event->position() - m_pressPoint).manhattanLength()};
+        if (distance >= QGuiApplication::styleHints()->startDragDistance()) {
+            m_flags &= ~DragPending;
+            startDrag();
+        }
+        event->accept();
+        return;
+    }
     moveCaret(positionAt(event->position()), Select::Extend);
     event->accept();
+}
+
+void EditorView::mouseReleaseEvent(QMouseEvent *event)
+{
+    // A click on the selection that did not become a drag places the caret.
+    if ((m_flags & DragPending) != 0U) {
+        m_flags &= ~DragPending;
+        moveCaret(positionAt(event->position()), Select::Collapse);
+    }
+    event->accept();
+}
+
+void EditorView::startDrag()
+{
+    // Owned here; QDrag::exec returns once the drop is done.
+    const auto drag{std::make_unique<QDrag>(this)};
+    auto mimeData{std::make_unique<QMimeData>()};
+    mimeData->setText(selectedText());
+    drag->setMimeData(mimeData.release());
+    m_flags &= ~DroppedHere;
+    const Qt::DropAction action{drag->exec(Qt::CopyAction | Qt::MoveAction, Qt::MoveAction)};
+    // Moved to another app: the text leaves this view. Moved within it,
+    // dropEvent() already did the move.
+    if (action == Qt::MoveAction && (m_flags & DroppedHere) == 0U) {
+        deleteSelection();
+    }
+    m_flags &= ~DroppedHere;
+}
+
+void EditorView::setDropPosition(qsizetype position)
+{
+    if (m_dropPosition == position) {
+        return;
+    }
+    m_dropPosition = position;
+    polish();
+}
+
+void EditorView::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (!event->mimeData()->hasText()) {
+        event->ignore();
+        return;
+    }
+    setDropPosition(positionAt(event->position()));
+    event->acceptProposedAction();
+}
+
+void EditorView::dragMoveEvent(QDragMoveEvent *event)
+{
+    const qsizetype position{positionAt(event->position())};
+    // Not onto the dragged selection itself.
+    const bool ontoItself{event->source() == this && position > selectionStart() && position < selectionEnd()};
+    setDropPosition(ontoItself ? -1 : position);
+    if (ontoItself) {
+        event->ignore();
+        return;
+    }
+    event->acceptProposedAction();
+}
+
+void EditorView::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    setDropPosition(-1);
+    event->accept();
+}
+
+void EditorView::dropEvent(QDropEvent *event)
+{
+    qsizetype position{positionAt(event->position())};
+    setDropPosition(-1);
+    QString text{event->mimeData()->text()};
+    text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+    const bool fromHere{event->source() == this};
+    const bool move{fromHere && event->dropAction() == Qt::MoveAction};
+    if (move) {
+        // Take the text out first; past it, the drop position shifts back.
+        const qsizetype start{selectionStart()};
+        const qsizetype length{selectionEnd() - start};
+        if (position >= start && position <= start + length) {
+            event->ignore();
+            return;
+        }
+        replace(start, length, {}, false);
+        if (position > start) {
+            position -= length;
+        }
+        m_flags |= DroppedHere;
+    }
+    replace(position, 0, text, false);
+    select(position, position + text.size());
+    forceActiveFocus(Qt::OtherFocusReason);
+    event->acceptProposedAction();
 }
 
 void EditorView::mouseDoubleClickEvent(QMouseEvent *event)
