@@ -99,6 +99,11 @@ class EditorView : public QQuickItem
     // Indent with tabs (else spaces), `indentWidth` columns per level.
     Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY indentationChanged)
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY indentationChanged)
+    // The indentation new text starts with, and detection falls back to.
+    Q_PROPERTY(bool defaultIndentWithTabs READ defaultIndentWithTabs WRITE setDefaultIndentWithTabs NOTIFY
+                   defaultIndentationChanged)
+    Q_PROPERTY(qint32 defaultIndentWidth READ defaultIndentWidth WRITE setDefaultIndentWidth NOTIFY
+                   defaultIndentationChanged)
     // The highlighting theme's name (see Syntaxes.themes); plain text keeps
     // textColor.
     Q_PROPERTY(QString syntaxTheme READ syntaxTheme WRITE setSyntaxTheme NOTIFY syntaxThemeChanged)
@@ -143,6 +148,10 @@ public:
     void setIndentWithTabs(bool tabs);
     [[nodiscard]] qint32 indentWidth() const noexcept { return static_cast<qint32>(m_indentWidth); }
     void setIndentWidth(qint32 width);
+    [[nodiscard]] bool defaultIndentWithTabs() const noexcept { return (m_flags & DefaultIndentWithTabs) != 0U; }
+    void setDefaultIndentWithTabs(bool tabs);
+    [[nodiscard]] qint32 defaultIndentWidth() const noexcept { return static_cast<qint32>(m_defaultIndentWidth); }
+    void setDefaultIndentWidth(qint32 width);
     [[nodiscard]] qreal contentX() const noexcept { return m_contentX; }
     void setContentX(qreal contentX);
     [[nodiscard]] qreal contentY() const noexcept { return m_contentY; }
@@ -227,6 +236,7 @@ signals:
     void syntaxThemeChanged();
     void searchChanged();
     void indentationChanged();
+    void defaultIndentationChanged();
     void layoutOptionsChanged();
 
 protected:
@@ -321,6 +331,7 @@ private:
     static constexpr quint64 ShowInvisibles{1U << 5U};
     // m_invisibleRects changed since the scene last took them.
     static constexpr quint64 InvisiblesChanged{1U << 6U};
+    static constexpr quint64 DefaultIndentWithTabs{1U << 7U};
 
     void updateMetrics();
     void textEdited();
@@ -446,6 +457,7 @@ private:
     // Where dragged text would be dropped (shown as the caret); -1: no drag.
     qsizetype m_dropPosition{-1};
     qsizetype m_indentWidth{4};
+    qsizetype m_defaultIndentWidth{4};
     quint64 m_nextRowId{1};
     // Bumped when the composition changes, so its line is laid out again
     // (above Plain and Highlighted).

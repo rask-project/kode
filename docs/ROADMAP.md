@@ -210,7 +210,7 @@ What is left:
 - Done: **`SystemColors`** in `Rask.Platform` (semantic `NSColor`s): the
   editor's text, selection (unemphasized in an inactive window), caret and
   line-number colors, following light/dark and the accent live.
-- Window settings: blur on/off and opacity (later in the Settings window).
+- Done: window settings — blur on/off and opacity, in the Settings window.
 - The installed bundle (`cmake --install`, `qt_generate_deploy_qml_app_script`)
   runs without the build tree: Qt, the `rask` dylibs.
 - Migrate **Metronom**'s macOS build to `Rask.Window` + `Rask.Platform`
@@ -342,7 +342,10 @@ being monospaced, and corrected when a line is laid out), so scrolling,
 the caret and edits never walk every line; estimating 100 MB again
 (open, resize) takes 17 ms. View > Show Invisibles: dots and dashes for
 spaces and tabs, one geometry node (Qt's ShowTabsAndSpaces only draws
-through QPainter).
+through QPainter). Settings window (⌘,): Appearance (light/dark/system,
+background blur and opacity) and Editor (font family and size, theme,
+wrapping, invisibles, the indentation for new documents), bound to the
+`Preferences` singleton (QSettings) that every window shares.
 
 - Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌘R, regex,
   case sensitivity, matches highlighted by the `EditorView` (search runs on

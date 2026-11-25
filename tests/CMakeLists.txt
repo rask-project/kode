@@ -122,3 +122,14 @@ qt_add_executable(tst_wrapindex
 target_include_directories(tst_wrapindex PRIVATE ../src/editor)
 target_link_libraries(tst_wrapindex PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME tst_wrapindex COMMAND tst_wrapindex)
+
+qt_add_executable(tst_preferences
+    tst_preferences.h
+    tst_preferences.cpp
+    ../src/Preferences.h
+    ../src/Preferences.cpp
+)
+target_include_directories(tst_preferences PRIVATE ../src)
+target_link_libraries(tst_preferences PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)
+add_test(NAME tst_preferences COMMAND tst_preferences)
+set_tests_properties(tst_preferences PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

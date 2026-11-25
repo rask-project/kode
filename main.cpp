@@ -1,6 +1,5 @@
 #include <QCommandLineParser>
 #include <QFileInfo>
-#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QUrl>
@@ -25,9 +24,6 @@ int main(int argc, char *argv[])
     const QStringList files{parser.positionalArguments()};
     const QUrl initialFile{files.isEmpty() ? QUrl{} : QUrl::fromLocalFile(QFileInfo{files.first()}.absoluteFilePath())};
 
-    QFont editorFont{QFontDatabase::systemFont(QFontDatabase::FixedFont)};
-    editorFont.setPointSize(13);
-
     QQmlApplicationEngine engine;
     QObject::connect(
         &engine,
@@ -38,7 +34,6 @@ int main(int argc, char *argv[])
     );
     engine.setInitialProperties({
         {QStringLiteral("initialFile"), initialFile},
-        {QStringLiteral("editorFont"), editorFont},
     });
     engine.loadFromModule("Tekst", "Main");
 

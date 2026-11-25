@@ -32,4 +32,5 @@ private slots:
     void wrappedLinesAddRowsAndMoveByRow();
     void wrappingFollowsEditsAndNewText();
     void relayoutKeepsTheTopLine();
+    void newTextStartsWithTheDefaultIndentation();
 };

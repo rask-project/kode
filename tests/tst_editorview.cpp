@@ -411,4 +411,21 @@ void TestEditorView::relayoutKeepsTheTopLine()
     QCOMPARE(caretMoves.count(), 0);
 }
 
+void TestEditorView::newTextStartsWithTheDefaultIndentation()
+{
+    tekst::EditorView editor;
+    editor.setDefaultIndentWithTabs(true);
+    editor.setDefaultIndentWidth(8);
+    editor.setIndentWithTabs(false);
+    editor.setIndentWidth(2);
+    editor.setText(QStringLiteral("no indentation here"));
+    QVERIFY(editor.indentWithTabs());
+    QCOMPARE(editor.indentWidth(), 8);
+    // A file's own indentation wins over the default.
+    editor.setText(QStringLiteral("a {\n  b\n}\n"));
+    editor.detectIndentation();
+    QVERIFY(!editor.indentWithTabs());
+    QCOMPARE(editor.indentWidth(), 2);
+}
+
 QTEST_MAIN(TestEditorView)

@@ -1,6 +1,5 @@
 pragma ComponentBehavior: Bound
 
-import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
@@ -17,12 +16,9 @@ ApplicationWindow {
 
     // A file given on the command line, opened at start.
     required property url initialFile
-    required property font editorFont
     // Run once the unsaved changes are saved or discarded.
     property var pendingAction: null
     property bool closeApproved: false
-    // The editor's font size, zoomed with ⌘+ / ⌘- (⌘0: the default).
-    readonly property int defaultFontSize: editorFont.pointSize
     // The editing surface, for the menus and the fileDocument.
     readonly property EditorView editor: textEditor.editor
 
@@ -86,21 +82,13 @@ ApplicationWindow {
 
         window: root
         color: Appearance.dark ? "#1e1e1e" : "#fbfbfb"
-        alpha: 0.96
+        alpha: Preferences.windowOpacity
+        blur: Preferences.windowBlur
         unifiedToolbar: root.visibility !== Window.FullScreen
     }
 
-    Settings {
-        id: viewSettings
-
-        category: "view"
-
-        property int fontSize: root.defaultFontSize
-        property bool wrap: false
-        property bool showInvisibles: false
-        // The editor's theme, whatever the appearance; until one is chosen,
-        // Tekst Light or Tekst Dark to match it.
-        property string theme
+    SettingsWindow {
+        id: settingsWindow
     }
 
     Document {
@@ -288,16 +276,16 @@ ApplicationWindow {
                 action: Action {
                     text: qsTr("Wrap Lines")
                     checkable: true
-                    checked: viewSettings.wrap
-                    onTriggered: viewSettings.wrap = checked
+                    checked: Preferences.wrap
+                    onTriggered: Preferences.wrap = checked
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Show Invisibles")
                     checkable: true
-                    checked: viewSettings.showInvisibles
-                    onTriggered: viewSettings.showInvisibles = checked
+                    checked: Preferences.showInvisibles
+                    onTriggered: Preferences.showInvisibles = checked
                 }
             }
             MenuSeparator {}
@@ -315,7 +303,7 @@ ApplicationWindow {
                         text: modelData
                         checkable: true
                         checked: root.editor.syntaxTheme === modelData
-                        onTriggered: viewSettings.theme = modelData
+                        onTriggered: Preferences.theme = modelData
                     }
 
                     onObjectAdded: (index, object) => themeMenu.insertItem(index, object)
@@ -327,31 +315,43 @@ ApplicationWindow {
                 action: Action {
                     text: qsTr("Bigger")
                     shortcut: StandardKey.ZoomIn
-                    enabled: viewSettings.fontSize < 72
-                    onTriggered: viewSettings.fontSize += 1
+                    enabled: Preferences.fontSize < Preferences.largestFontSize
+                    onTriggered: Preferences.fontSize += 1
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Smaller")
                     shortcut: StandardKey.ZoomOut
-                    enabled: viewSettings.fontSize > 6
-                    onTriggered: viewSettings.fontSize -= 1
+                    enabled: Preferences.fontSize > Preferences.smallestFontSize
+                    onTriggered: Preferences.fontSize -= 1
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Actual Size")
                     shortcut: "Ctrl+0"
-                    enabled: viewSettings.fontSize !== root.defaultFontSize
-                    onTriggered: viewSettings.fontSize = root.defaultFontSize
+                    enabled: Preferences.fontSize !== Preferences.defaultFontSize
+                    onTriggered: Preferences.fontSize = Preferences.defaultFontSize
                 }
             }
         }
-        // English on purpose: Qt moves these into the app menu by matching "About".
+        // English on purpose: Qt moves these into the app menu by matching
+        // "Settings" and "About".
         Menu {
             title: qsTr("Help")
 
+            MenuItem {
+                action: Action {
+                    text: "Settings…"
+                    shortcut: StandardKey.Preferences
+                    onTriggered: {
+                        settingsWindow.show();
+                        settingsWindow.raise();
+                        settingsWindow.requestActivate();
+                    }
+                }
+            }
             MenuItem {
                 text: "About Tekst"
                 onTriggered: aboutDialog.open()
@@ -509,13 +509,12 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
-        editor.syntaxTheme: viewSettings.theme !== "" ? viewSettings.theme : (Appearance.dark ? "Tekst Dark" : "Tekst Light")
-        editor.wrap: viewSettings.wrap
-        editor.showInvisibles: viewSettings.showInvisibles
-        editor.font: Qt.font({
-            family: root.editorFont.family,
-            pointSize: viewSettings.fontSize
-        })
+        editor.syntaxTheme: Preferences.theme !== "" ? Preferences.theme : (Appearance.dark ? "Tekst Dark" : "Tekst Light")
+        editor.wrap: Preferences.wrap
+        editor.showInvisibles: Preferences.showInvisibles
+        editor.font: Preferences.font
+        editor.defaultIndentWithTabs: Preferences.indentWithTabs
+        editor.defaultIndentWidth: Preferences.indentWidth
     }
 
     StatusBar {

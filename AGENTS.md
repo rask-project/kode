@@ -34,8 +34,7 @@ Guidance for AI agents working in this repository.
   `AboutQtDialog`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
-  from the command line (`initialFile`) and the system's monospaced font
-  (`editorFont`) to `Tekst.Main`.
+  from the command line (`initialFile`) to `Tekst.Main`.
 - `Main.qml` — the editor window: title bar drawn under the transparent
   AppKit one, a `TextEdit` in a `Flickable` (not `TextArea`: the macOS style
   draws it as a bordered field), the menu bar, file dialogs and the
@@ -49,6 +48,13 @@ Guidance for AI agents working in this repository.
   (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest.
 - `GoToLine.qml` — the ⌘L popup ("line" or "line:column", parsed by
   `EditorView::goToLine()`).
+- `SettingsWindow.qml` — the Settings window (⌘,): `Rask.Controls`'
+  `SidebarLayout`, `FormGroup`, `FormRow`, bound to `Preferences`; section
+  icons in `assets/settings/`.
+- `src/Preferences.{h,cpp}` — `Preferences` (QML singleton): the user's
+  preferences in QSettings (the only copy), shared by every window; the
+  editor binds its font, theme, wrapping, invisibles and default
+  indentation to it.
 - `StatusBar.qml` — line and column, and the syntax with a native menu
   (`Popup.Native`) of `Syntaxes` (C++ singleton, `src/Syntaxes.*`: the
   definitions by section).

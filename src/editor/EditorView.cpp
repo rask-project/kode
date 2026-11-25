@@ -606,7 +606,14 @@ void EditorView::setText(const QString &text)
     m_preferredX = -1.0;
     m_widestLine = 0.0;
     // Only the edit state goes; the view's options stay.
-    m_flags &= IndentWithTabs | Wrap | ShowInvisibles;
+    m_flags &= DefaultIndentWithTabs | Wrap | ShowInvisibles;
+    // New text starts with the default indentation (a file's is detected).
+    if (defaultIndentWithTabs()) {
+        m_flags |= IndentWithTabs;
+    }
+    m_indentWidth = m_defaultIndentWidth;
+    m_rows.clear();
+    emit indentationChanged();
     m_contentY = 0.0;
     m_contentX = 0.0;
     emit contentXChanged();
@@ -909,10 +916,33 @@ indentation::Style EditorView::indentStyle() const
     };
 }
 
+void EditorView::setDefaultIndentWithTabs(bool tabs)
+{
+    if (defaultIndentWithTabs() == tabs) {
+        return;
+    }
+    m_flags = tabs ? (m_flags | DefaultIndentWithTabs) : (m_flags & ~DefaultIndentWithTabs);
+    emit defaultIndentationChanged();
+}
+
+void EditorView::setDefaultIndentWidth(qint32 width)
+{
+    width = std::clamp(width, 1, 16);
+    if (m_defaultIndentWidth == width) {
+        return;
+    }
+    m_defaultIndentWidth = width;
+    emit defaultIndentationChanged();
+}
+
 void EditorView::detectIndentation()
 {
     constexpr qsizetype linesToRead{1000};
-    const indentation::Style style{indentation::detect(m_buffer, linesToRead, indentStyle())};
+    const indentation::Style fallback{
+        .width = static_cast<quint8>(m_defaultIndentWidth),
+        .kind = defaultIndentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
+    };
+    const indentation::Style style{indentation::detect(m_buffer, linesToRead, fallback)};
     setIndentWithTabs(style.kind == indentation::Kind::Tabs);
     setIndentWidth(style.width);
 }
