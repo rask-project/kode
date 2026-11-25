@@ -246,7 +246,7 @@ ApplicationWindow {
                 MenuItem {
                     action: Action {
                         text: qsTr("Find and Replace…")
-                        shortcut: "Alt+Ctrl+F"
+                        shortcut: "Ctrl+R"
                         onTriggered: root.showSearch(true)
                     }
                 }

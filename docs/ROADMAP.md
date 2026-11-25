@@ -315,7 +315,7 @@ comments (today matched like any other).
 ### Stage 6 — Editor features
 
 Done: find and replace — `SearchBar` (added to `Rask.Controls`) under the
-title bar, ⌘F, ⌥⌘F, ⌘G/⇧⌘G, ⌘E; `TextSearch` searches line by line in
+title bar, ⌘F, ⌘R, ⌘G/⇧⌘G, ⌘E; `TextSearch` searches line by line in
 3 ms slices (matches within a line, at most 100 000 stored), the matches
 in view marked in `findHighlightColor`; Replace All is one undo; with a
 regular expression, $0…$9 in the replacement. Go to line (⌘L): "line" or
@@ -325,7 +325,7 @@ the width, detected when a file opens and shown (and changed) in the
 status bar; Return keeps the line's indentation, Tab goes to the next
 stop or indents the selected lines, ⇧Tab and ⌘[ / ⌘] shift them.
 
-- Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌥⌘F, regex,
+- Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌘R, regex,
   case sensitivity, matches highlighted by the `EditorView` (search runs on
   the text buffer, off the GUI thread for large files).
 - Go to line (⌘L).
