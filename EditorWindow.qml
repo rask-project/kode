@@ -3,62 +3,72 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
-import QtQuick.Layouts
 
 import Rask.Application
-import Rask.Controls
 import Rask.Dialogs
 import Rask.Platform
 import Rask.Window
 
 import Tekst
 
-// An editor window: tabs in the title bar (Rask.Controls' TabStrip), each a
-// tree of split panes (TabManager, PaneLayout), the menus, and the file
-// dialogs and "Save changes?" sheet for its panes. Main.qml keeps the
-// window list and moves tabs and panes between windows.
+// An editor window: the active document's name in the title bar, the
+// editor splits (Splits, PaneLayout) each showing one of the open
+// documents, the menus, and the file dialogs and "Save changes?" sheet.
+// Main.qml keeps the window list and the documents shared by all windows.
 ApplicationWindow {
     id: root
 
     required property Main app
     // Unsaved changes were reviewed: the window closes without asking.
     property bool closeApproved: false
-    // Panes left to review before `reviewDone` runs (see review()).
-    property list<EditorPane> reviewQueue: []
+    // Documents left to review before `reviewDone` runs (see review()).
+    property list<Document> reviewQueue: []
     property var reviewDone: null
 
-    readonly property TabManager tabs: tabManager
-    readonly property EditorPane activePane: tabManager.activePane as EditorPane
-    readonly property EditorView editor: activePane ? activePane.editor : null
+    readonly property Splits splits: windowSplits
+    readonly property EditorPane activeView: windowSplits.activeView as EditorPane
+    readonly property Document activeDocument: activeView ? activeView.document : null
+    readonly property EditorView editor: activeView ? activeView.editor : null
 
-    // The pane header dragged from this window, drawn under the pointer.
-    property EditorPane paneDragPane: null
-    property real paneDragGrabX: 0
-    property real paneDragGrabY: 0
-    property real paneDragWidth: 0
-    property real paneDragGlobalX: 0
-    property real paneDragGlobalY: 0
+    // Shows `document` in `view` (the active split); an untouched new
+    // document it replaces is closed when no other split shows it.
+    function showDocument(document: Document, view: EditorPane) {
+        const target = view ?? root.activeView;
+        if (!target || !document)
+            return;
+        const replaced = target.untouched && target.document !== document ? target.document : null;
+        target.document = document;
+        OpenDocuments.touch(document);
+        windowSplits.activate(target);
+        target.focusEditor();
+        if (replaced && !root.app.isShown(replaced))
+            OpenDocuments.close(replaced);
+    }
 
-    // Saves `pane`, asking for a file when it has none, then runs `then`.
-    function save(pane: EditorPane, then) {
-        if (pane.fileUrl.toString() === "") {
-            root.saveAs(pane, then);
-        } else if (pane.document.save() && then) {
+    function newDocument() {
+        root.showDocument(OpenDocuments.create(), null);
+    }
+
+    // Saves `document`, asking for a file when it has none, then runs `then`.
+    function save(document: Document, then) {
+        if (document.fileUrl.toString() === "") {
+            root.saveAs(document, then);
+        } else if (document.save() && then) {
             then();
         }
     }
 
-    function saveAs(pane: EditorPane, then) {
-        saveDialog.pane = pane;
+    function saveAs(document: Document, then) {
+        saveDialog.document = document;
         saveDialog.then = then;
-        saveDialog.selectedFile = pane.fileUrl;
+        saveDialog.selectedFile = document.fileUrl;
         saveDialog.open();
     }
 
-    // Runs `then` once every modified pane of `panes` is saved or its
-    // changes discarded, asking about each in turn; Cancel stops.
-    function review(panes: list<EditorPane>, then) {
-        root.reviewQueue = panes.filter(pane => pane.modified);
+    // Runs `then` once every modified document of `documents` is saved or
+    // its changes discarded, asking about each in turn; Cancel stops.
+    function review(documents: list<Document>, then) {
+        root.reviewQueue = documents.filter(document => document.modified);
         root.reviewDone = then;
         root.reviewNext();
     }
@@ -71,32 +81,24 @@ ApplicationWindow {
                 done();
             return;
         }
-        const pane = root.reviewQueue[0];
-        tabManager.activatePane(pane);
-        saveAlert.pane = pane;
+        const document = root.reviewQueue[0];
+        // The sheet is about the document in view.
+        if (root.activeDocument !== document)
+            root.showDocument(document, null);
+        saveAlert.document = document;
         saveAlert.open();
     }
 
-    function allPanes(): list<EditorPane> {
-        return tabManager.panes.map(pane => pane as EditorPane);
+    function cancelReview() {
+        root.reviewQueue = [];
+        root.reviewDone = null;
     }
 
-    function closePane(pane: EditorPane) {
-        root.review([pane], () => tabManager.closePane(pane));
+    function closeDocument(document: Document) {
+        root.review([document], () => OpenDocuments.close(document));
     }
 
-    function closeTab(index: int) {
-        const tab = tabManager.tabs[index];
-        const panes = tabManager.tabPanes(index).map(pane => pane as EditorPane);
-        // Found again afterwards: the tabs may move while the sheets show.
-        root.review(panes, () => tabManager.closeTab(tabManager.tabs.indexOf(tab)));
-    }
-
-    function newTab(): EditorPane {
-        return tabManager.addTab({}) as EditorPane;
-    }
-
-    // The saved geometry, tabs and files, for the next launch.
+    // The saved geometry and splits, for the next launch.
     function state(): var {
         return {
             x: root.x,
@@ -104,85 +106,29 @@ ApplicationWindow {
             width: root.width,
             height: root.height,
             visibility: root.visibility === Window.FullScreen ? "fullscreen" : (root.visibility === Window.Maximized ? "maximized" : "normal"),
-            tabs: tabManager.state()
+            splits: windowSplits.state()
         };
-    }
-
-    function tabInsertionIndexAtGlobal(globalX: real, globalY: real): int {
-        return tabStrip.insertionIndexAtGlobal(globalX, globalY);
-    }
-
-    // What a pane dragged to a global point lands on here: the tab strip (a
-    // tab of its own at `index`) or a pane, split on the edge nearest the
-    // pointer. Null over the dragged pane or elsewhere.
-    function paneDropTarget(globalX: real, globalY: real, pane: EditorPane): var {
-        const point = content.mapFromGlobal(globalX, globalY);
-        if (point.x < 0 || point.y < 0 || point.x >= content.width || point.y >= content.height)
-            return null;
-        if (point.y < tabStrip.height) {
-            const index = tabStrip.insertionIndexAtGlobal(globalX, globalY);
-            return {
-                kind: "tab",
-                index: index,
-                rect: tabStrip.insertionMarkerRect(index)
-            };
-        }
-        const page = pages.itemAt(tabManager.currentIndex) as PaneLayout;
-        const leaf = page ? page.leafAtGlobal(globalX, globalY) : null;
-        const target = leaf ? leaf.pane : null;
-        if (!target || target === pane)
-            return null;
-        const local = leaf.mapFromGlobal(globalX, globalY);
-        const dx = local.x / leaf.width - 0.5;
-        const dy = local.y / leaf.height - 0.5;
-        const edge = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? TabManager.EdgeLeft : TabManager.EdgeRight) : (dy < 0 ? TabManager.EdgeTop : TabManager.EdgeBottom);
-        const area = leaf.mapToItem(content, 0, 0, leaf.width, leaf.height);
-        let rect;
-        switch (edge) {
-        case TabManager.EdgeLeft:
-            rect = Qt.rect(area.x, area.y, area.width / 2, area.height);
-            break;
-        case TabManager.EdgeRight:
-            rect = Qt.rect(area.x + area.width / 2, area.y, area.width / 2, area.height);
-            break;
-        case TabManager.EdgeTop:
-            rect = Qt.rect(area.x, area.y, area.width, area.height / 2);
-            break;
-        default:
-            rect = Qt.rect(area.x, area.y + area.height / 2, area.width, area.height / 2);
-            break;
-        }
-        return {
-            kind: "pane",
-            pane: target,
-            edge: edge,
-            rect: rect
-        };
-    }
-
-    // Highlights where a dragged pane lands (null hides it).
-    function showPaneDrop(drop) {
-        paneDropIndicator.drop = drop;
     }
 
     width: 900
     height: 640
     minimumWidth: 400
     minimumHeight: 240
-    // Feeds the Window menu and the window switcher; the tabs show in the title bar.
-    title: activePane ? activePane.title : "Tekst"
+    // Feeds the Window menu and the window switcher; the title bar is drawn below.
+    title: activeDocument ? activeDocument.fileName : "Tekst"
     flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     color: "transparent"
-    // ApplicationWindow pads its content by the safe area; the tab strip draws there itself.
+    // ApplicationWindow pads its content by the safe area; the title bar draws there itself.
     topPadding: 0
 
     onClosing: close => {
-        if (root.closeApproved || QuitGuard.quitting || !root.allPanes().some(pane => pane.modified)) {
+        // Other windows keep the documents open; the last one ends the app.
+        if (root.closeApproved || QuitGuard.quitting || root.app.windows.length > 1 || OpenDocuments.modifiedDocuments().length === 0) {
             root.app.windowClosed(root);
             return;
         }
         close.accepted = false;
-        root.review(root.allPanes(), () => {
+        root.review(OpenDocuments.modifiedDocuments(), () => {
             root.closeApproved = true;
             root.close();
         });
@@ -201,25 +147,28 @@ ApplicationWindow {
         alpha: Preferences.windowOpacity
         blur: Preferences.windowBlur
         unifiedToolbar: root.visibility !== Window.FullScreen
-        representedFile: root.activePane ? root.activePane.fileUrl : ""
-        documentEdited: root.activePane ? root.activePane.modified : false
+        representedFile: root.activeDocument ? root.activeDocument.fileUrl : ""
+        documentEdited: root.activeDocument ? root.activeDocument.modified : false
     }
 
-    TabManager {
-        id: tabManager
+    Splits {
+        id: windowSplits
 
-        // The last tab went: everything in it was reviewed already.
-        onEmptied: {
-            root.closeApproved = true;
-            root.close();
+        // The splits' own, not root.activeView: that binding may not have followed yet.
+        onActiveViewChanged: {
+            const view = windowSplits.activeView as EditorPane;
+            if (!view)
+                return;
+            view.focusEditor();
+            if (view.document)
+                OpenDocuments.touch(view.document);
         }
-        // The manager's pane, not root.activePane: that binding may not
-        // have followed yet.
-        onActivePaneChanged: {
-            const pane = tabManager.activePane as EditorPane;
-            if (pane)
-                pane.focusEditor();
-        }
+    }
+
+    SystemPalette {
+        id: systemPalette
+
+        colorGroup: root.active ? SystemPalette.Active : SystemPalette.Inactive
     }
 
     FileDialog {
@@ -233,7 +182,7 @@ ApplicationWindow {
     FileDialog {
         id: saveDialog
 
-        property EditorPane pane: null
+        property Document document: null
         // Run after a successful save (closing, quitting…).
         property var then: null
 
@@ -241,10 +190,10 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         onAccepted: {
             const then = saveDialog.then;
-            const pane = saveDialog.pane;
+            const document = saveDialog.document;
             saveDialog.then = null;
-            saveDialog.pane = null;
-            if (pane && pane.document.saveAs(selectedFile)) {
+            saveDialog.document = null;
+            if (document && document.saveAs(selectedFile)) {
                 RecentDocuments.add(selectedFile);
                 if (then)
                     then();
@@ -252,64 +201,37 @@ ApplicationWindow {
         }
         onRejected: {
             saveDialog.then = null;
-            saveDialog.pane = null;
-            root.reviewQueue = [];
-            root.reviewDone = null;
+            saveDialog.document = null;
+            root.cancelReview();
         }
     }
 
     Alert {
         id: saveAlert
 
-        property EditorPane pane: null
+        property Document document: null
 
         window: root
         style: Alert.Warning
-        text: qsTr("Do you want to save the changes made to “%1”?").arg(pane ? pane.title : "")
+        text: qsTr("Do you want to save the changes made to “%1”?").arg(document ? document.fileName : "")
         informativeText: qsTr("Your changes will be lost if you don’t save them.")
         buttons: [qsTr("Save"), qsTr("Don’t Save"), qsTr("Cancel")]
         onFinished: button => {
-            const pane = saveAlert.pane;
-            saveAlert.pane = null;
-            if (button === 2 || !pane) {
-                root.reviewQueue = [];
-                root.reviewDone = null;
+            const document = saveAlert.document;
+            saveAlert.document = null;
+            if (button === 2 || !document) {
+                root.cancelReview();
                 return;
             }
             const next = () => {
-                root.reviewQueue = root.reviewQueue.filter(queued => queued !== pane);
+                root.reviewQueue = root.reviewQueue.filter(queued => queued !== document);
                 root.reviewNext();
             };
             if (button === 0)
-                root.save(pane, next);
+                root.save(document, next);
             else
                 next();
         }
-    }
-
-    Instantiator {
-        model: 9
-
-        delegate: Shortcut {
-            required property int index
-
-            sequence: "Ctrl+" + (index + 1)
-            context: Qt.WindowShortcut
-            // ⌘9 is the last tab, as in Safari.
-            onActivated: tabManager.currentIndex = index === 8 ? tabManager.tabs.length - 1 : index
-        }
-    }
-
-    // Control-Tab and Control-Shift-Tab go through the tabs too.
-    Shortcut {
-        sequence: "Meta+Tab"
-        context: Qt.WindowShortcut
-        onActivated: tabManager.selectAdjacentTab(1)
-    }
-    Shortcut {
-        sequence: "Meta+Shift+Tab"
-        context: Qt.WindowShortcut
-        onActivated: tabManager.selectAdjacentTab(-1)
     }
 
     menuBar: MenuBar {
@@ -318,16 +240,16 @@ ApplicationWindow {
 
             MenuItem {
                 action: Action {
-                    text: qsTr("New Window")
+                    text: qsTr("New")
                     shortcut: StandardKey.New
-                    onTriggered: root.app.openWindow(null)
+                    onTriggered: root.newDocument()
                 }
             }
             MenuItem {
                 action: Action {
-                    text: qsTr("New Tab")
-                    shortcut: StandardKey.AddTab
-                    onTriggered: root.newTab()
+                    text: qsTr("New Window")
+                    shortcut: "Ctrl+Shift+N"
+                    onTriggered: root.app.openWindow(null)
                 }
             }
             MenuItem {
@@ -378,33 +300,25 @@ ApplicationWindow {
                 action: Action {
                     text: qsTr("Save")
                     shortcut: StandardKey.Save
-                    enabled: root.activePane !== null
-                    onTriggered: root.save(root.activePane, null)
+                    enabled: root.activeDocument !== null
+                    onTriggered: root.save(root.activeDocument, null)
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Save As…")
                     shortcut: StandardKey.SaveAs
-                    enabled: root.activePane !== null
-                    onTriggered: root.saveAs(root.activePane, null)
+                    enabled: root.activeDocument !== null
+                    onTriggered: root.saveAs(root.activeDocument, null)
                 }
             }
             MenuSeparator {}
             MenuItem {
                 action: Action {
-                    text: qsTr("Close")
+                    text: qsTr("Close Document")
                     shortcut: StandardKey.Close
-                    enabled: root.activePane !== null
-                    onTriggered: root.closePane(root.activePane)
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Close Tab")
-                    shortcut: "Ctrl+Alt+W"
-                    enabled: tabManager.currentIndex >= 0
-                    onTriggered: root.closeTab(tabManager.currentIndex)
+                    enabled: root.activeDocument !== null
+                    onTriggered: root.closeDocument(root.activeDocument)
                 }
             }
             MenuItem {
@@ -488,9 +402,9 @@ ApplicationWindow {
             MenuItem {
                 action: Action {
                     text: qsTr("Go to Line…")
-                    enabled: root.activePane !== null
+                    enabled: root.activeView !== null
                     shortcut: "Ctrl+L"
-                    onTriggered: root.activePane.showGoToLine()
+                    onTriggered: root.activeView.showGoToLine()
                 }
             }
             Menu {
@@ -499,17 +413,17 @@ ApplicationWindow {
                 MenuItem {
                     action: Action {
                         text: qsTr("Find…")
-                        enabled: root.activePane !== null
+                        enabled: root.activeView !== null
                         shortcut: StandardKey.Find
-                        onTriggered: root.activePane.showSearch(false)
+                        onTriggered: root.activeView.showSearch(false)
                     }
                 }
                 MenuItem {
                     action: Action {
                         text: qsTr("Find and Replace…")
-                        enabled: root.activePane !== null
+                        enabled: root.activeView !== null
                         shortcut: "Ctrl+R"
-                        onTriggered: root.activePane.showSearch(true)
+                        onTriggered: root.activeView.showSearch(true)
                     }
                 }
                 MenuItem {
@@ -533,7 +447,7 @@ ApplicationWindow {
                         text: qsTr("Use Selection for Find")
                         enabled: root.editor?.hasSelection ?? false
                         shortcut: "Ctrl+E"
-                        onTriggered: root.activePane.useSelectionForFind()
+                        onTriggered: root.activeView.useSelectionForFind()
                     }
                 }
             }
@@ -609,7 +523,7 @@ ApplicationWindow {
             id: windowMenu
 
             // Where the list of windows starts: after the items above it.
-            readonly property int windowListOffset: 10
+            readonly property int windowListOffset: 12
 
             title: qsTr("Window")
 
@@ -629,42 +543,63 @@ ApplicationWindow {
             MenuSeparator {}
             MenuItem {
                 action: Action {
-                    text: qsTr("Split Horizontally")
-                    enabled: root.activePane !== null
+                    text: qsTr("Split Side by Side")
+                    enabled: root.activeView !== null
                     shortcut: "Ctrl+D"
-                    onTriggered: tabManager.split(root.activePane, Qt.Horizontal)
+                    onTriggered: windowSplits.split(root.activeView, Qt.Horizontal, {
+                        document: root.activeDocument
+                    })
                 }
             }
             MenuItem {
                 action: Action {
-                    text: qsTr("Split Vertically")
-                    enabled: root.activePane !== null
+                    text: qsTr("Split Top and Bottom")
+                    enabled: root.activeView !== null
                     shortcut: "Ctrl+Shift+D"
-                    onTriggered: tabManager.split(root.activePane, Qt.Vertical)
+                    onTriggered: windowSplits.split(root.activeView, Qt.Vertical, {
+                        document: root.activeDocument
+                    })
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Remove Split")
+                    enabled: windowSplits.count > 1
+                    shortcut: "Ctrl+Alt+D"
+                    onTriggered: windowSplits.remove(root.activeView)
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Next Split")
+                    enabled: windowSplits.count > 1
+                    shortcut: "Ctrl+Alt+]"
+                    onTriggered: windowSplits.activateAdjacent(1)
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Previous Split")
+                    enabled: windowSplits.count > 1
+                    shortcut: "Ctrl+Alt+["
+                    onTriggered: windowSplits.activateAdjacent(-1)
                 }
             }
             MenuSeparator {}
             MenuItem {
                 action: Action {
-                    text: qsTr("Show Previous Tab")
-                    enabled: tabManager.tabs.length > 1
-                    shortcut: "Ctrl+{"
-                    onTriggered: tabManager.selectAdjacentTab(-1)
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Show Next Tab")
-                    enabled: tabManager.tabs.length > 1
+                    text: qsTr("Next Document")
+                    enabled: OpenDocuments.count > 1
                     shortcut: "Ctrl+}"
-                    onTriggered: tabManager.selectAdjacentTab(1)
+                    onTriggered: root.app.showAdjacentDocument(root, 1)
                 }
             }
             MenuItem {
                 action: Action {
-                    text: qsTr("Move Tab to New Window")
-                    enabled: tabManager.tabs.length > 1
-                    onTriggered: root.app.moveTab(root, tabManager.currentIndex, null, 0)
+                    text: qsTr("Previous Document")
+                    enabled: OpenDocuments.count > 1
+                    shortcut: "Ctrl+{"
+                    onTriggered: root.app.showAdjacentDocument(root, -1)
                 }
             }
             MenuSeparator {}
@@ -715,201 +650,50 @@ ApplicationWindow {
         }
     }
 
-    // A tab's context menu.
-    Menu {
-        id: tabMenu
-
-        property int index: -1
-
-        popupType: Popup.Native
-
-        MenuItem {
-            text: qsTr("New Tab")
-            onTriggered: root.newTab()
-        }
-        MenuItem {
-            text: qsTr("Close Tab")
-            onTriggered: root.closeTab(tabMenu.index)
-        }
-        MenuSeparator {}
-        MenuItem {
-            text: qsTr("Move to New Window")
-            // A lone tab already is its own window.
-            enabled: tabManager.tabs.length > 1
-            // Deferred: the move rebuilds the tabs while this menu runs.
-            onTriggered: {
-                const index = tabMenu.index;
-                Qt.callLater(() => root.app.moveTab(root, index, null, 0));
-            }
-        }
-        Menu {
-            id: moveMenu
-
-            title: qsTr("Move to Window")
-            enabled: root.app.windows.length > 1
-
-            Instantiator {
-                model: root.app.windows.filter(window => window !== root)
-
-                delegate: MenuItem {
-                    required property EditorWindow modelData
-
-                    text: modelData.title
-                    onTriggered: {
-                        const index = tabMenu.index;
-                        const target = modelData;
-                        Qt.callLater(() => root.app.moveTab(root, index, target, -1));
-                    }
-                }
-
-                onObjectAdded: (index, object) => moveMenu.insertItem(index, object)
-                onObjectRemoved: (index, object) => moveMenu.removeItem(object)
-            }
-        }
-    }
-
+    // The title bar: the active document's name, with the window buttons on its left.
     Item {
-        id: content
+        id: titleBar
 
-        anchors.fill: parent
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: Math.max(root.SafeArea.margins.top, 40)
 
-        TabStrip {
-            id: tabStrip
-
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: requiredHeight
-            baseSafeTop: root.SafeArea.margins.top
-            leadingInset: root.visibility === Window.FullScreen ? 0 : Math.max(76, windowStyle.leadingInset)
-            nativeWindow: windowStyle
-            tabs: tabManager.tabs
-            currentIndex: tabManager.currentIndex
-            onActivateRequested: index => tabManager.currentIndex = index
-            onCloseRequested: index => root.closeTab(index)
-            onReorderRequested: (fromIndex, toIndex) => tabManager.moveTab(fromIndex, toIndex)
-            onAddRequested: root.newTab()
-            onContextMenuRequested: index => {
-                tabMenu.index = index;
-                tabMenu.popup();
-            }
-            onWindowDropRequested: (index, globalX, globalY) => root.app.dropTab(root, index, globalX, globalY)
+        TapHandler {
+            onDoubleTapped: windowStyle.titleBarDoubleClicked()
         }
 
-        StackLayout {
-            id: stack
-
-            anchors.top: tabStrip.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            currentIndex: tabManager.currentIndex
-
-            Repeater {
-                id: pages
-
-                model: tabManager.tabs
-
-                delegate: PaneLayout {
-                    required property Tab modelData
-
-                    tabs: tabManager
-                    tab: modelData
-                    onReviewRequested: (pane, action) => root.review([pane], action)
-                    onCloseRequested: pane => root.closePane(pane)
-                    onPaneDragStarted: (pane, grabX, grabY, headerWidth) => {
-                        root.paneDragGrabX = grabX;
-                        root.paneDragGrabY = grabY;
-                        root.paneDragWidth = headerWidth;
-                        root.paneDragPane = pane;
-                    }
-                    onPaneDragMoved: (globalX, globalY) => {
-                        root.paneDragGlobalX = globalX;
-                        root.paneDragGlobalY = globalY;
-                        if (root.paneDragPane)
-                            root.app.hoverPane(root.paneDragPane, root, globalX, globalY);
-                    }
-                    onPaneDragFinished: (pane, globalX, globalY) => {
-                        root.paneDragPane = null;
-                        root.app.dropPane(pane, root, globalX, globalY);
-                    }
-                    onPaneDragCanceled: {
-                        root.paneDragPane = null;
-                        root.app.clearPaneDrops();
-                    }
-                }
-            }
-        }
-
-        // Files dropped on the window open in tabs.
-        DropArea {
-            anchors.fill: parent
-            keys: ["text/uri-list"]
-            onDropped: drop => {
-                if (!drop.hasUrls)
-                    return;
-                root.app.openFiles(drop.urls, root);
-                drop.acceptProposedAction();
-            }
-        }
-
-        SystemPalette {
-            id: windowPalette
-
-            colorGroup: SystemPalette.Active
-        }
-
-        // Where a dragged pane lands: a tinted half of the target pane, or a
-        // bar between the tabs for a tab of its own.
-        Rectangle {
-            id: paneDropIndicator
-
-            property var drop: null
-            readonly property bool overTabs: drop !== null && drop.kind === "tab"
-
-            visible: drop !== null
-            z: 20
-            x: drop ? drop.rect.x : 0
-            y: drop ? drop.rect.y : 0
-            width: drop ? drop.rect.width : 0
-            height: drop ? drop.rect.height : 0
-            radius: overTabs ? width / 2 : 10
-            color: overTabs ? windowPalette.accent : Qt.alpha(windowPalette.accent, 0.18)
-            border.width: overTabs ? 0 : 2
-            border.color: windowPalette.accent
+        Label {
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, parent.width - 2 * 90)
+            text: !root.activeDocument ? "Tekst" : (root.activeDocument.modified ? qsTr("%1 — Edited").arg(root.activeDocument.fileName) : root.activeDocument.fileName)
+            color: systemPalette.windowText
+            opacity: root.active ? 1 : 0.5
+            font.weight: Font.DemiBold
+            elide: Text.ElideMiddle
         }
     }
 
-    // The dragged header follows the pointer in a frameless window of its
-    // own, so it shows over other windows and the desktop too.
-    Loader {
-        active: root.paneDragPane !== null
+    PaneLayout {
+        anchors.top: titleBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        splits: windowSplits
+        onDocumentChosen: (view, document) => root.showDocument(document, view)
+        onReviewRequested: (document, action) => root.review([document], action)
+        onCloseDocumentRequested: document => root.closeDocument(document)
+    }
 
-        sourceComponent: Window {
-            flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus
-            color: "transparent"
-            visible: true
-            x: root.paneDragGlobalX - Math.min(root.paneDragGrabX, width - 16)
-            y: root.paneDragGlobalY - root.paneDragGrabY
-            width: Math.max(120, Math.min(root.paneDragWidth, 320))
-            height: 28
-
-            Rectangle {
-                anchors.fill: parent
-                radius: height / 2
-                color: Qt.alpha(windowPalette.window, 0.92)
-                border.width: 1
-                border.color: windowPalette.accent
-            }
-
-            Text {
-                anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 14
-                text: root.paneDragPane ? root.paneDragPane.title : ""
-                color: windowPalette.windowText
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideMiddle
-            }
+    // Files dropped on the window open in the active split.
+    DropArea {
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onDropped: drop => {
+            if (!drop.hasUrls)
+                return;
+            root.app.openFiles(drop.urls, root);
+            drop.acceptProposedAction();
         }
     }
 }

@@ -15,6 +15,8 @@ set(editor_sources
     ../src/editor/SyntaxHighlighter.cpp
     ../src/editor/TextBuffer.h
     ../src/editor/TextBuffer.cpp
+    ../src/editor/TextDocument.h
+    ../src/editor/TextDocument.cpp
     ../src/editor/TextSearch.h
     ../src/editor/TextSearch.cpp
     ../src/editor/WrapIndex.h
@@ -134,13 +136,20 @@ target_link_libraries(tst_preferences PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)
 add_test(NAME tst_preferences COMMAND tst_preferences)
 set_tests_properties(tst_preferences PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-qt_add_executable(tst_tabmanager
-    tst_tabmanager.h
-    tst_tabmanager.cpp
-    ../src/TabManager.h
-    ../src/TabManager.cpp
+qt_add_executable(tst_splits
+    tst_splits.h
+    tst_splits.cpp
+    ../src/Splits.h
+    ../src/Splits.cpp
+    ../src/OpenDocuments.h
+    ../src/OpenDocuments.cpp
+    ../src/Document.h
+    ../src/Document.cpp
+    ../src/TextCodec.h
+    ../src/TextCodec.cpp
+    ${editor_sources}
 )
-target_include_directories(tst_tabmanager PRIVATE ../src)
-target_link_libraries(tst_tabmanager PRIVATE Qt6::Qml Qt6::Test)
-add_test(NAME tst_tabmanager COMMAND tst_tabmanager)
-set_tests_properties(tst_tabmanager PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+target_include_directories(tst_splits PRIVATE ../src ../src/editor)
+target_link_libraries(tst_splits PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+add_test(NAME tst_splits COMMAND tst_splits)
+set_tests_properties(tst_splits PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

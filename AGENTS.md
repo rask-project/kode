@@ -30,44 +30,49 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`, `TabStrip`, the Settings controls), `Rask.Dialogs`
+  (`SearchBar`, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler`, `RecentDocuments`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
   from the command line (`initialFile`) to `Tekst.Main`.
-- `Main.qml` — the app root (no window of its own): the window list,
-  opening files (a file already open is shown; an untouched new document
-  is replaced), moving tabs and panes between windows (drop targets under a
-  global point, tearing off into a new window), the session (`Session`,
-  saved on quit and when the last window closes, reopened at launch), the
-  quit review (`QuitGuard`: each window's unsaved panes in turn) and the
-  app-wide Settings and About windows. Like Konsoll's `Main.qml`.
-- `EditorWindow.qml` — a window: `TabStrip` in the title bar, a
-  `StackLayout` of `PaneLayout`s (one per tab), the menus, the file dialogs
-  and the "Save changes?" sheet (`review()` asks about each modified pane
-  in turn), files dropped on it, the drop indicator and preview of a
-  dragged pane. Menu actions go to the active pane.
-- `EditorPane.qml` — one document: `Document`, `TextEditor`, `SearchBar`,
-  `GoToLine`, `StatusBar`, and a header while its tab is split (close,
-  name, dragged to move the pane). Made by `TabManager` in the engine's root
-  context, it moves between windows: it never refers to its window (sheets
-  use `Window.window`; saving and reviews go to the window by signals).
-- `PaneLayout.qml` — a tab's tree as nested `SplitView`s; each leaf is a
-  slot the leaf's pane is reparented into, so rebuilding keeps documents.
-- `src/TabManager.{h,cpp}` — `TabManager` (one per window), `Tab`,
-  `PaneNode`: tabs as binary split trees (from Konsoll's `TerminalManager`);
-  leaves own their pane (`deleteLater`: a pane may close from its own
-  signal); split, close, move a pane beside another or into a tab of its
-  own, move tabs, in or across managers; `state()`/`restore()` save the
-  layout with each pane's file (post-order, no recursion). Panes are read
-  through their `title`, `modified` and `fileUrl` properties; the default
-  pane is `Tekst.EditorPane`, made from the module (an inline `Component`
-  is bound to its file's context under `ComponentBehavior: Bound`).
-- `src/Session.{h,cpp}` — `Session` (QML singleton): the windows to reopen
-  (geometry, tabs, files) in QSettings `session/windows`.
-- `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
-  `EditorView` and saves it back through `QSaveFile`, keeping its encoding,
+- `Main.qml` — the app root (no window of its own): the window list over
+  the documents they share (`OpenDocuments`), opening files (in the active
+  split; from the Finder or the Dock a file already in view is shown
+  there), the splits of a closing document moving to another one (none
+  left: the windows close), document errors and changes on disk (alerts
+  on the last active window), the session (`Session`: the open files and
+  each window's geometry and splits, saved on quit and when the last window
+  closes, reopened at launch), the quit review (`QuitGuard`) and the
+  app-wide Settings and About windows.
+- `EditorWindow.qml` — a window, as in Qt Creator: the active document's
+  name in the title bar, its splits (`Splits` + `PaneLayout`), the menus
+  (actions go to the active split), the file dialogs and the "Save
+  changes?" sheet (`review()` asks about each modified document in turn).
+  Closing a window keeps the documents open unless it is the last one.
+  `showDocument()` (not `show()`: that is the window's) puts a document in a
+  split and closes the untouched new document it replaces.
+- `EditorPane.qml` — one split: a bar with the documents menu (every open
+  document, by name; `Popup.Native`), close document and the split
+  buttons (glyphs drawn in QML), then `SearchBar`, `GoToLine`,
+  `TextEditor` and `StatusBar`. Shows one `Document` (`document`); other
+  splits may show the same one, each with its own caret and scroll.
+- `PaneLayout.qml` — a window's split tree as nested `SplitView`s; each
+  leaf is a slot its view is reparented into, so rebuilding keeps views.
+- `src/OpenDocuments.{h,cpp}` — `OpenDocuments` (QML singleton): every
+  open `Document`, owned (`deleteLater`), most recently shown first, by
+  name for the menu; one document per file; untitled ones numbered.
+- `src/Splits.{h,cpp}` — `Splits` (one per window) and `SplitNode`: the
+  binary split tree; leaves own their view (`deleteLater`: a view may go
+  from its own signal); split, remove a split (the last view stays),
+  activate; `state()`/`restore()` save the tree with each view's file
+  (post-order, no recursion). Views are `Tekst.EditorPane`, made from the
+  module in the engine's root context (an inline `Component` is bound to
+  its file's context under `ComponentBehavior: Bound`).
+- `src/Session.{h,cpp}` — `Session` (QML singleton): what to reopen, in
+  QSettings `session/state`.
+- `src/Document.{h,cpp}` — `Document` (QML type): an open file; owns its
+  text (`textDocument`, a `TextDocument`), loads it and saves it back through `QSaveFile`, keeping its encoding,
   byte order mark and line ending (changing them marks it modified);
   `reopen()` reads it again in another encoding. A `QFileSystemWatcher` on
   the file and its folder (a file replaced by renaming comes back there)
@@ -98,9 +103,16 @@ Guidance for AI agents working in this repository.
   - `TextBuffer` — piece table: original + append-only added buffer, each
     with a newline index; pieces carry their newline count; consecutive
     typing grows one piece. Lines use '\n' only.
-  - `EditorView` (`QQuickItem`) — sits in a `Flickable` (`contentX/Y`,
-    `contentWidth/Height`); all text changes go through `replace()`, which
-    records undo. `updatePolish()` (GUI thread) lays out the lines in view
+  - `TextDocument` — what views share: the buffer, undo history,
+    highlighter and indentation style. Every change goes through
+    `replace()`/`undo()`/`redo()`/`setText()` and reaches each view with
+    `replaced()`/`reset()`; a view moves its caret over another view's
+    edit. It keeps the place (caret, scroll) the last view left, for the
+    next one.
+  - `EditorView` (`QQuickItem`) — a view of a `TextDocument` (`document`;
+    its own when none): caret, selection, scroll, wrapping and layout. It
+    sits in a `Flickable` (`contentX/Y`, `contentWidth/Height`); its edits
+    go through `replace()`, which records undo in the document. `updatePolish()` (GUI thread) lays out the lines in view
     (`QTextLayout`), reusing rows by their *text* (an edit above a line moves
     it without laying it out again) and line numbers by line, and computes
     the selection rectangles and the caret, relative to the first line laid
@@ -156,7 +168,7 @@ Guidance for AI agents working in this repository.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
   randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`,
-  `tst_preferences`, `tst_tabmanager` with stand-in panes), run offscreen with
+  `tst_preferences`, `tst_splits` with stand-in views and `OpenDocuments`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in` (with the document types the Finder offers
   Tekst for), `AppIcons.cmake` (compiles `assets/tekst.icon`

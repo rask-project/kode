@@ -367,15 +367,17 @@ wrapping, invisibles, the indentation for new documents), bound to the
 
 ### Stage 7 — macOS document integration — done
 
-Done together with Stage 8's tabs, and splits like Konsoll's: every window
-holds tabs, each a tree of split panes (`TabManager`); a pane is one
-document. `NativeWindow` got `representedFile` and `documentEdited` (with
-the tab strip in the title bar the proxy icon itself is hidden, as AppKit
-hides it with the title); `Rask.Application` has `QuitGuard`,
-`FileOpenHandler` and `RecentDocuments` (an Open Recent menu in File, the
-system's list for the Dock); windows and their documents reopen from
-`Session` (not a `WindowState` in `Rask.Window`: geometry is saved with the
-tabs).
+Done, with Qt Creator's model instead of tabs: the open documents are
+the app's (`OpenDocuments`), and every window is a tree of splits, each
+showing one of them, picked from its bar (`EditorPane`); two splits can
+show the same document (`TextDocument` shared by the views, each with its
+caret and scroll). `NativeWindow` got `representedFile` and
+`documentEdited` (the proxy icon stays hidden with the title AppKit hides
+for the QML title bar); `Rask.Application` has `QuitGuard`,
+`FileOpenHandler` and `RecentDocuments` (Open Recent in File, the system's
+list for the Dock); `Session` reopens the documents and each window's
+geometry and splits. ⌘N new document, ⇧⌘N new window, ⌘W close document,
+⌘D / ⇧⌘D split side by side / top and bottom, ⌥⌘D remove split.
 
 - Multiple windows, one per document (⌘N opens a new window); window
   controller in `Main.qml`.
@@ -394,22 +396,12 @@ tabs).
 
 ---
 
-### Stage 8 — Tabs — done (with Stage 7)
+### Stage 8 — Tabs — replaced
 
-`TabStrip` in `Rask.Controls` (from Konsoll: wrapping rows, drag to reorder,
-drag out to another window or a new one, close button, modified dot).
-⌘T new tab, ⇧⌘[ / ⇧⌘] and Control-Tab to move between tabs, ⌘1…9; Move
-Tab to New Window / to another window; splits: ⌘D side by side, ⇧⌘D one
-above the other, panes dragged by their header beside another pane, into
-the tab strip or out to a new window. ⌘W closes the active pane (then its
-tab, then the window), ⌥⌘W the tab, ⇧⌘W the window. Konsoll still has its
-own strip.
+Tekst has no tabs: Stage 7's splits and documents menu (Qt Creator's
+model) take their place. `TabStrip` was added to `Rask.Controls` for it
+and stays there for Konsoll.
 
-- **`Rask.Controls`**: extract generic `TabStrip`/`TabButton` from Konsoll
-  (tab model, drag to reorder, close button, modified indicator, respecting
-  the traffic lights' `leadingInset`).
-- Tekst: several documents per window; ⌘T new tab, ⌘⇧[ / ⌘⇧] to navigate,
-  ⌘1…9; move a tab to a new window / between windows.
 - Migrate Konsoll to the shared `TabStrip` (can happen in parallel).
 
 ---
@@ -430,7 +422,7 @@ own strip.
 
 ## 4. Future items (outside the initial scope)
 
-On top of `EditorView`: code folding, multiple cursors, minimap, split view.
+On top of `EditorView`: code folding, multiple cursors, minimap.
 Also Markdown with preview, LSP (completion/diagnostics), compare mode
 (diff), Quick Look and Spotlight integration, AppleScript/Shortcuts support.
 

@@ -1,14 +1,15 @@
 #pragma once
 
-#include <QJsonArray>
 #include <QObject>
+#include <QVariantMap>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace tekst
 {
 
-// The windows open when the app last quit (their geometry, tabs and files),
-// reopened at launch. Kept in QSettings (`session/windows`, JSON).
+// What was open when the app last quit (the documents, and each window's
+// geometry and splits), reopened at launch. Kept in QSettings
+// (`session/state`, JSON).
 class Session : public QObject
 {
     Q_OBJECT
@@ -17,8 +18,8 @@ class Session : public QObject
 public:
     explicit Session(QObject *parent = nullptr);
 
-    Q_INVOKABLE [[nodiscard]] static QJsonArray windows();
-    Q_INVOKABLE static void save(const QJsonArray &windows);
+    Q_INVOKABLE [[nodiscard]] static QVariantMap state();
+    Q_INVOKABLE static void save(const QVariantMap &state);
 };
 
 } // namespace tekst

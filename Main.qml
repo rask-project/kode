@@ -7,9 +7,10 @@ import Rask.Dialogs
 
 import Tekst
 
-// The app: its windows (EditorWindow), opening files in them, moving tabs
-// and panes between them, the session reopened at launch and the review of
-// unsaved documents before quitting. One Settings window for all of them.
+// The app: its windows (EditorWindow) over the documents they share
+// (OpenDocuments), opening files, closing documents in every split that
+// shows them, the session reopened at launch and the review of unsaved
+// documents before quitting. One Settings window for all of them.
 Item {
     id: app
 
@@ -19,20 +20,21 @@ Item {
     property list<EditorWindow> windows: []
     property EditorWindow lastActiveWindow: null
 
+    // A window with the splits of `state` (see EditorWindow.state()), else
+    // one split with a new document.
     function openWindow(state: var): EditorWindow {
         const window = windowComponent.createObject(app) as EditorWindow;
         app.windows.push(window);
-        if (state) {
-            window.tabs.restore(state.tabs);
-            if (state.width > 0) {
-                window.x = state.x;
-                window.y = state.y;
-                window.width = state.width;
-                window.height = state.height;
-            }
+        if (state && state.width > 0) {
+            window.x = state.x;
+            window.y = state.y;
+            window.width = state.width;
+            window.height = state.height;
         }
-        if (window.tabs.tabs.length === 0)
-            window.newTab();
+        if (!state || !window.splits.restore(state.splits))
+            window.splits.addView({
+                document: OpenDocuments.create()
+            });
         if (state && state.visibility === "fullscreen")
             window.showFullScreen();
         else if (state && state.visibility === "maximized")
@@ -45,45 +47,51 @@ Item {
         return window;
     }
 
-    // The pane showing `file` in any window, or null.
-    function paneWithFile(file: url): EditorPane {
+    // The splits showing `document`, in every window.
+    function viewsOf(document: Document): list<EditorPane> {
+        const views = [];
         for (const window of app.windows) {
-            const pane = window.allPanes().find(candidate => candidate.fileUrl.toString() === file.toString());
-            if (pane)
-                return pane;
+            for (const view of window.splits.views) {
+                if ((view as EditorPane).document === document)
+                    views.push(view as EditorPane);
+            }
         }
-        return null;
+        return views;
     }
 
-    // Each file in a tab of `window` (the last active one, or a new one),
-    // in place of an untouched new document; a file already open is shown.
+    function isShown(document: Document): bool {
+        return app.viewsOf(document).length > 0;
+    }
+
+    // Each file in the active split of `window`. From outside the app
+    // (`window` null: the Finder, the Dock) a file already in view is shown
+    // where it is, else in the last active window.
     function openFiles(files: list<url>, window: EditorWindow) {
         for (const file of files) {
-            const open = app.paneWithFile(file);
-            if (open) {
-                app.showPane(open);
+            const document = OpenDocuments.open(file);
+            if (!document)
+                continue;
+            RecentDocuments.add(file);
+            const shown = window ? [] : app.viewsOf(document);
+            if (shown.length > 0) {
+                const owner = app.windows.find(candidate => candidate.splits.views.includes(shown[0]));
+                owner.splits.activate(shown[0]);
+                owner.raise();
+                owner.requestActivate();
                 continue;
             }
             const target = window ?? app.lastActiveWindow ?? app.openWindow(null);
-            const pane = target.activePane && target.activePane.untouched ? target.activePane : target.newTab();
-            if (pane)
-                pane.open(file);
+            target.showDocument(document, null);
             target.raise();
             target.requestActivate();
         }
     }
 
-    function windowOf(pane: EditorPane): EditorWindow {
-        return app.windows.find(window => window.tabs.tabOf(pane) >= 0) ?? null;
-    }
-
-    function showPane(pane: EditorPane) {
-        const window = app.windowOf(pane);
-        if (!window)
-            return;
-        window.tabs.activatePane(pane);
-        window.raise();
-        window.requestActivate();
+    // The next (1) or previous (-1) document by name, in `window`'s active split.
+    function showAdjacentDocument(window: EditorWindow, step: int) {
+        const documents = OpenDocuments.sortedDocuments;
+        const index = documents.indexOf(window.activeDocument);
+        window.showDocument(documents[(index + step + documents.length) % documents.length] as Document, null);
     }
 
     function noteActiveWindow(window: EditorWindow) {
@@ -106,122 +114,25 @@ Item {
     }
 
     function saveSession() {
-        Session.save(app.windows.map(window => window.state()));
+        // Oldest first, so reopening them in order keeps the most recent on top.
+        const files = OpenDocuments.documents.map(document => (document as Document).fileUrl.toString()).filter(file => file.startsWith("file:")).reverse();
+        Session.save({
+            documents: files,
+            windows: app.windows.map(window => window.state())
+        });
     }
 
-    // Moves the tab at `index` of `source` to `target` (a new window when
-    // null) at `targetIndex` (the end when negative); its documents stay as
-    // they are. A source left without tabs closes.
-    function moveTab(source: EditorWindow, index: int, target: EditorWindow, targetIndex: int): EditorWindow {
-        const newWindow = target === null;
-        if (newWindow) {
-            target = windowComponent.createObject(app) as EditorWindow;
-            app.windows.push(target);
-            target.width = source.width;
-            target.height = source.height;
-        }
-        const position = targetIndex < 0 ? target.tabs.tabs.length : targetIndex;
-        if (!source.tabs.moveTabTo(index, target.tabs, position)) {
-            if (newWindow)
-                target.close();
-            return null;
-        }
-        target.show();
-        target.raise();
-        target.requestActivate();
-        return target;
-    }
-
-    // The window under a global point; `preferred` wins where windows overlap.
-    function windowAtGlobal(globalX: real, globalY: real, preferred: EditorWindow): EditorWindow {
-        const contains = window => window.visible && window.visibility !== Window.Minimized && globalX >= window.x && globalX < window.x + window.width && globalY >= window.y && globalY < window.y + window.height;
-        if (preferred && contains(preferred))
-            return preferred;
-        return app.windows.find(contains) ?? null;
-    }
-
-    // A tab dragged out of `source` and released at a global point joins the
-    // window under it, or tears off into a new window placed there.
-    function dropTab(source: EditorWindow, index: int, globalX: real, globalY: real) {
-        const target = app.windows.find(window => window !== source && window === app.windowAtGlobal(globalX, globalY, null)) ?? null;
-        if (target) {
-            app.moveTab(source, index, target, target.tabInsertionIndexAtGlobal(globalX, globalY));
-            return;
-        }
-        // A lone tab torn off would just be its window again.
-        if (source.tabs.tabs.length < 2)
-            return;
-        const window = app.moveTab(source, index, null, 0);
-        if (window && window.visibility === Window.Windowed) {
-            window.x = globalX - 100;
-            window.y = globalY - 18;
-        }
-    }
-
-    // Where a pane dragged out of `source` to a global point lands.
-    function paneDropAt(pane: EditorPane, source: EditorWindow, globalX: real, globalY: real): var {
-        const target = app.windowAtGlobal(globalX, globalY, source);
-        let drop = target ? target.paneDropTarget(globalX, globalY, pane) : null;
-        // A window's only pane already is its own tab there.
-        if (drop && drop.kind === "tab" && target === source && source.tabs.paneCount < 2)
-            drop = null;
-        return {
-            window: target,
-            drop: drop
-        };
-    }
-
-    function hoverPane(pane: EditorPane, source: EditorWindow, globalX: real, globalY: real) {
-        const at = app.paneDropAt(pane, source, globalX, globalY);
-        app.windows.forEach(window => window.showPaneDrop(window === at.window ? at.drop : null));
-    }
-
-    function clearPaneDrops() {
-        app.windows.forEach(window => window.showPaneDrop(null));
-    }
-
-    // A pane released at a global point: beside the pane under it (in this
-    // or another window), into a tab strip as a tab of its own, or torn off
-    // into a new window placed there.
-    function dropPane(pane: EditorPane, source: EditorWindow, globalX: real, globalY: real) {
-        app.clearPaneDrops();
-        const at = app.paneDropAt(pane, source, globalX, globalY);
-        if (at.window) {
-            if (!at.drop)
-                return;
-            const moved = at.drop.kind === "pane" ? source.tabs.movePane(pane, at.window.tabs, at.drop.pane, at.drop.edge) : source.tabs.movePaneToTab(pane, at.window.tabs, at.drop.index);
-            if (moved && at.window !== source) {
-                at.window.raise();
-                at.window.requestActivate();
-            }
-            return;
-        }
-        if (source.tabs.paneCount < 2)
-            return;
-        const window = windowComponent.createObject(app) as EditorWindow;
-        app.windows.push(window);
-        window.width = source.width;
-        window.height = source.height;
-        window.x = globalX - 100;
-        window.y = globalY - 18;
-        if (!source.tabs.movePaneToTab(pane, window.tabs, 0)) {
-            window.close();
-            return;
-        }
-        window.show();
-        window.raise();
-        window.requestActivate();
-    }
-
-    // Reviews each window's unsaved documents in turn, then quits.
-    function reviewWindows(index: int) {
-        if (index >= app.windows.length) {
-            app.saveSession();
+    // Reviews every unsaved document in the last active window, then quits.
+    function quit() {
+        const window = app.lastActiveWindow ?? app.windows[0];
+        if (!window) {
             QuitGuard.quit();
             return;
         }
-        const window = app.windows[index];
-        window.review(window.allPanes(), () => app.reviewWindows(index + 1));
+        window.review(OpenDocuments.modifiedDocuments(), () => {
+            app.saveSession();
+            QuitGuard.quit();
+        });
     }
 
     function showSettings() {
@@ -260,6 +171,57 @@ Item {
         id: aboutQtDialog
     }
 
+    Alert {
+        id: errorAlert
+
+        window: app.lastActiveWindow
+        style: Alert.Critical
+        text: qsTr("The document could not be opened or saved.")
+    }
+
+    Alert {
+        id: changedAlert
+
+        property Document document: null
+
+        window: app.lastActiveWindow
+        style: Alert.Warning
+        text: qsTr("“%1” changed on disk.").arg(document ? document.fileName : "")
+        informativeText: qsTr("Reload it and lose your changes here, or keep editing your version?")
+        buttons: [qsTr("Reload"), qsTr("Keep Mine")]
+        onFinished: button => {
+            if (button === 0 && changedAlert.document)
+                changedAlert.document.reload();
+            changedAlert.document = null;
+        }
+    }
+
+    Connections {
+        target: OpenDocuments
+
+        // The splits showing a closing document show another one; with
+        // none left, the windows close.
+        function onDocumentClosing(document: Document) {
+            const next = OpenDocuments.other(document);
+            if (!next) {
+                for (const window of app.windows)
+                    window.closeApproved = true;
+                Qt.callLater(() => app.windows.slice().forEach(window => window.close()));
+                return;
+            }
+            for (const view of app.viewsOf(document))
+                view.document = next;
+        }
+        function onErrorOccurred(message: string) {
+            errorAlert.informativeText = message;
+            errorAlert.open();
+        }
+        function onChangedOnDisk(document: Document) {
+            changedAlert.document = document;
+            changedAlert.open();
+        }
+    }
+
     Connections {
         target: FileOpenHandler
 
@@ -272,12 +234,14 @@ Item {
         target: QuitGuard
 
         function onQuitRequested() {
-            app.reviewWindows(0);
+            app.quit();
         }
     }
 
     Component.onCompleted: {
-        for (const state of Session.windows())
+        const session = Session.state();
+        OpenDocuments.restore(session.documents ?? []);
+        for (const state of session.windows ?? [])
             app.openWindow(state);
         if (app.initialFile.toString() !== "")
             app.openFiles([app.initialFile], null);

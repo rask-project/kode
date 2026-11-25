@@ -1,6 +1,7 @@
 #include "Session.h"
 
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
 
 namespace tekst
@@ -9,20 +10,20 @@ namespace tekst
 namespace
 {
 
-const QString windowsKey{QStringLiteral("session/windows")};
+const QString stateKey{QStringLiteral("session/state")};
 
 } // namespace
 
 Session::Session(QObject *parent) : QObject(parent) {}
 
-QJsonArray Session::windows()
+QVariantMap Session::state()
 {
-    return QJsonDocument::fromJson(QSettings{}.value(windowsKey).toByteArray()).array();
+    return QJsonDocument::fromJson(QSettings{}.value(stateKey).toByteArray()).object().toVariantMap();
 }
 
-void Session::save(const QJsonArray &windows)
+void Session::save(const QVariantMap &state)
 {
-    QSettings{}.setValue(windowsKey, QJsonDocument{windows}.toJson(QJsonDocument::Compact));
+    QSettings{}.setValue(stateKey, QJsonDocument{QJsonObject::fromVariantMap(state)}.toJson(QJsonDocument::Compact));
 }
 
 } // namespace tekst

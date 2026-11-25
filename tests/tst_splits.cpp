@@ -1,0 +1,156 @@
+#include "tst_splits.h"
+
+#include "OpenDocuments.h"
+#include "Splits.h"
+
+#include <QFile>
+#include <QJsonArray>
+#include <QSignalSpy>
+#include <QTest>
+
+namespace
+{
+
+QList<QObject *> viewsOf(const tekst::Splits &splits)
+{
+    QList<QObject *> views;
+    for (const QVariant &view : splits.views()) {
+        views.emplace_back(view.value<QObject *>());
+    }
+    return views;
+}
+
+QUrl createFile(const QTemporaryDir &dir, const QString &name, const QByteArray &bytes = {})
+{
+    QFile file{dir.filePath(name)};
+    if (!file.open(QIODevice::WriteOnly)) {
+        return {};
+    }
+    file.write(bytes);
+    return QUrl::fromLocalFile(file.fileName());
+}
+
+} // namespace
+
+void TestSplits::initTestCase()
+{
+    QVERIFY(m_files.isValid());
+    m_view = std::make_unique<QQmlComponent>(&m_engine);
+    m_view->setData(
+        "import QtQuick\nQtObject { property url initialFile; property url fileUrl: initialFile }",
+        QUrl{QStringLiteral("qrc:/view.qml")}
+    );
+    QVERIFY2(m_view->isReady(), qPrintable(m_view->errorString()));
+}
+
+void TestSplits::splitsViews()
+{
+    tekst::Splits splits;
+    splits.setViewComponent(m_view.get());
+    QObject *const first{splits.addView()};
+    QVERIFY(first != nullptr);
+    QCOMPARE(splits.addView(), nullptr);
+    QObject *const right{splits.split(first, Qt::Horizontal)};
+    QObject *const below{splits.split(right, Qt::Vertical)};
+    QCOMPARE(viewsOf(splits), (QList<QObject *>{first, right, below}));
+    QCOMPARE(splits.activeView(), below);
+    const tekst::SplitNode *const root{splits.root()};
+    QCOMPARE(root->orientation(), static_cast<qint32>(Qt::Horizontal));
+    QCOMPARE(root->first()->view(), first);
+    QCOMPARE(root->second()->orientation(), static_cast<qint32>(Qt::Vertical));
+}
+
+void TestSplits::removesSplits()
+{
+    tekst::Splits splits;
+    splits.setViewComponent(m_view.get());
+    QObject *const first{splits.addView()};
+    QObject *const right{splits.split(first, Qt::Horizontal)};
+    QObject *const below{splits.split(right, Qt::Vertical)};
+    QVERIFY(splits.remove(right));
+    QCOMPARE(viewsOf(splits), (QList<QObject *>{first, below}));
+    QCOMPARE(splits.activeView(), below);
+    QVERIFY(splits.remove(below));
+    QVERIFY(splits.root()->leaf());
+    QCOMPARE(splits.activeView(), first);
+    // The last view stays.
+    QVERIFY(!splits.remove(first));
+    QCOMPARE(splits.count(), 1);
+}
+
+void TestSplits::activatesViewsInTurn()
+{
+    tekst::Splits splits;
+    splits.setViewComponent(m_view.get());
+    QObject *const first{splits.addView()};
+    QObject *const second{splits.split(first, Qt::Horizontal)};
+    splits.activateAdjacent(1);
+    QCOMPARE(splits.activeView(), first);
+    splits.activateAdjacent(-1);
+    QCOMPARE(splits.activeView(), second);
+}
+
+void TestSplits::savesAndRestoresTheLayout()
+{
+    const QUrl one{createFile(m_files, QStringLiteral("one.txt"))};
+    const QUrl gone{QUrl::fromLocalFile(m_files.filePath(QStringLiteral("gone.txt")))};
+    tekst::Splits saved;
+    saved.setViewComponent(m_view.get());
+    QObject *const top{saved.addView({{QStringLiteral("initialFile"), one}})};
+    saved.split(top, Qt::Vertical, {{QStringLiteral("initialFile"), gone}});
+
+    tekst::Splits restored;
+    restored.setViewComponent(m_view.get());
+    QVERIFY(restored.restore(saved.state()));
+    QCOMPARE(restored.root()->orientation(), static_cast<qint32>(Qt::Vertical));
+    QCOMPARE(restored.root()->first()->view()->property("fileUrl").toUrl(), one);
+    // A file gone since keeps its split, without the file.
+    QVERIFY(restored.root()->second()->view()->property("fileUrl").toUrl().isEmpty());
+    QCOMPARE(restored.activeView(), restored.root()->first()->view());
+}
+
+void TestSplits::opensEachFileOnce()
+{
+    const QUrl file{createFile(m_files, QStringLiteral("text.txt"), "text\n")};
+    tekst::OpenDocuments documents;
+    tekst::Document *const opened{documents.open(file)};
+    QVERIFY(opened != nullptr);
+    QCOMPARE(documents.open(file), opened);
+    QCOMPARE(documents.count(), 1);
+    QCOMPARE(opened->textDocument()->text(), QStringLiteral("text\n"));
+
+    const QSignalSpy errors{&documents, &tekst::OpenDocuments::errorOccurred};
+    QCOMPARE(documents.open(QUrl::fromLocalFile(m_files.filePath(QStringLiteral("missing.txt")))), nullptr);
+    QCOMPARE(errors.count(), 1);
+    QCOMPARE(documents.count(), 1);
+
+    const QSignalSpy closing{&documents, &tekst::OpenDocuments::documentClosing};
+    documents.close(opened);
+    QCOMPARE(closing.count(), 1);
+    QCOMPARE(documents.count(), 0);
+}
+
+void TestSplits::keepsTheMostRecentFirst()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const first{documents.create()};
+    tekst::Document *const second{documents.create()};
+    QCOMPARE(documents.documents().first().value<tekst::Document *>(), second);
+    documents.touch(first);
+    QCOMPARE(documents.documents().first().value<tekst::Document *>(), first);
+    QCOMPARE(documents.other(first), second);
+    QCOMPARE(documents.other(nullptr), first);
+}
+
+void TestSplits::numbersUntitledDocuments()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const first{documents.create()};
+    tekst::Document *const second{documents.create()};
+    QCOMPARE(first->fileName(), QStringLiteral("Untitled"));
+    QCOMPARE(second->fileName(), QStringLiteral("Untitled 2"));
+    documents.close(first);
+    QCOMPARE(second->fileName(), QStringLiteral("Untitled"));
+}
+
+QTEST_MAIN(TestSplits)
