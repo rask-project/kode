@@ -105,9 +105,9 @@ holds the library's rules), consumed by the apps as a **git submodule**
 |---|---|---|
 | **`Rask.Platform`** | `Appearance` (light/dark), `SystemColors` (semantic `NSColor`s), `AppInfo` (versions, `nativeMenuBar`) | metronom, notes |
 | **`Rask.Window`** | `NativeWindow` (translucency, blur, content under the title bar, `leadingInset`, movable, title-bar double click, `representedFile`, `documentEdited`), `GlassEffect`, `WindowState` (geometry/screen/restoration) | konsoll + metronom + notes, unified |
-| **`Rask.Dialogs`** | Generic `NativeDialogs`: `alert`, `confirm`, `prompt(text)`, **`askSaveChanges()`** (Save / Don't Save / Cancel); `AboutPanel` | konsoll |
+| **`Rask.Dialogs`** | `AboutDialog` (system About panel), `AboutQtDialog`, `Alert` (`NSAlert`, sheet when given a window — e.g. Save / Don't Save / Cancel); later a text prompt for Konsoll | konsoll |
 | **`Rask.Application`** | `QuitGuard` (the app asks before quitting), configurable `DockMenu`, `RecentDocuments` (`NSDocumentController` → native "Open Recent" menu), `FileOpenHandler` (`QFileOpenEvent`, Finder's "Open With") | konsoll + new |
-| **`Rask.Updater`** | `Updater` (Sparkle, beta channel) + `RaskSparkle.cmake` + `update-appcast.py` | konsoll |
+| **`Rask.Updater`** | `Updater` singleton (Sparkle, beta channel, "Check for Updates…") + `RaskSparkle.cmake` + `rask_sparkle_plist_keys()`; later `update-appcast.py` | konsoll |
 | **`Rask.Controls`** | `TabStrip`, `TabButton`, `GlassSurface`, `ToolButton`, `SearchBar`, `Menu`, `MenuItem`, `FormGroup`, `FormRow`, `SidebarItem` | konsoll (generalized) |
 | **`Rask.Style`** | Qt Quick Controls style for macOS (extends `QtQuick.Controls.macOS`) | metronom `MacStyle` |
 | `cmake/RaskApp.cmake` | `rask_version_from_git()`, `rask_bundle_version()`, `rask_macos_bundle()` (Info.plist, embedding and signing the `Rask.*` libraries, prune, icons) | konsoll + metronom |
@@ -121,9 +121,11 @@ section 3), not all at once.
   export macros, hidden symbols, `SOVERSION`, install/export,
   `rask_embed_libraries()`), **`Rask.Platform`** (`Appearance`) and
   **`Rask.Window`** (`NativeWindow`, unifying Konsoll's `WindowTranslucency`
-  and Metronom's `NativeWindow`), with an example app, tests and CI.
-- **Next:** `SystemColors` in `Rask.Platform` and `Rask.Dialogs` (Stage 2),
-  then the rest as the stages below need them.
+  and Metronom's `NativeWindow`), **`Rask.Dialogs`** (`AboutDialog`,
+  `AboutQtDialog`, `Alert`) and **`Rask.Updater`** (`Updater`, Sparkle
+  embedded by `rask_embed_libraries()`), with example apps, tests and CI.
+- **Next:** `SystemColors` in `Rask.Platform` (Stage 2), then the rest as the
+  stages below need them.
 
 ### Migrating the existing apps
 
@@ -192,11 +194,11 @@ without losing data, with no native code.
 ### Stage 2 — Adopt `rask` and give it a Mac look
 
 First stage where Tekst uses shared code. Already in `rask` (section 2,
-*Status*): the shared-library plumbing, **`Rask.Platform`** (`Appearance`) and
-**`Rask.Window`** (`NativeWindow`).
+*Status*): the shared-library plumbing, **`Rask.Platform`** (`Appearance`),
+**`Rask.Window`** (`NativeWindow`), **`Rask.Dialogs`** and **`Rask.Updater`**.
 
-- Tekst: add `rask` as a submodule (`external/rask`), link `Rask::Platform` /
-  `Rask::Window` and call `rask_embed_libraries()` before the bundle's ad hoc
+- Tekst: add `rask` as a submodule (`external/rask`), link `Rask::Platform`,
+  `Rask::Window` and `Rask::Dialogs`, and call `rask_embed_libraries()` before the bundle's ad hoc
   signing. Check `otool -L` / `codesign --verify --deep --strict` on the
   built `Tekst.app`. No import path is needed: the modules' `qmldir` is in
   the libraries' resources.
@@ -206,8 +208,9 @@ First stage where Tekst uses shared code. Already in `rask` (section 2,
   (`Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint`), translucent
   blurred background (optional), text/selection/caret colors from
   `SystemColors`, follows light/dark.
-- **`Rask.Dialogs`**: replace the `MessageDialog` with the native `NSAlert`
-  "Save changes?" (as a sheet attached to the window).
+- Replace the `MessageDialog` with `Rask.Dialogs`' `Alert` "Save changes?"
+  (a sheet on the window); "About Tekst" and "About Qt" in the menu with
+  `AboutDialog` / `AboutQtDialog`.
 - Migrate **Metronom** to `Rask.Window` + `Rask.Platform` (proves the API
   serves two apps and works outside macOS).
 
@@ -293,11 +296,11 @@ useful.
 
 ### Stage 8 — Polish and distribution
 
-- **`Rask.Updater`** (Sparkle) + appcast + release via GitHub Actions
+- **`Rask.Updater`** (link it, `rask_sparkle_plist_keys()` in `Info.plist`,
+  `Updater.start()`) + appcast + release via GitHub Actions
   (Developer ID signing and notarization, as in `konsoll/docs/RELEASE.md`;
   every embedded `Rask.*` dylib and QML plugin signed with the hardened
   runtime).
-- About panel (`Rask.Dialogs.AboutPanel`), app icon.
 - Liquid Glass (`GlassEffect`) on the tab strip/status bar on macOS 26.
 - **`Rask.Style`** extracted from Metronom and adopted by Tekst.
 - Website (GitHub Pages) following the Konsoll/Metronom pattern.
