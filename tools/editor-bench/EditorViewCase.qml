@@ -1,6 +1,6 @@
 import QtQuick
 
-// The prototype: EditorView in a Flickable, kept in view as it scrolls.
+// EditorView in a Flickable, kept in view as it scrolls, highlighting C++.
 Flickable {
     id: root
 
@@ -33,6 +33,7 @@ Flickable {
         contentX: root.contentX
         contentY: root.contentY
         textColor: "black"
+        syntax: "C++"
         font.family: "Menlo"
         font.pointSize: 13
         onCursorRectangleChanged: {

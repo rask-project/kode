@@ -22,6 +22,11 @@ Guidance for AI agents working in this repository.
 - `CMakeLists.txt` — app target `tekst` (bundle `Tekst.app`), QML module
   `Tekst`, version from the git tag, the `rask` libraries embedded
   (`rask_embed_libraries()`) and ad hoc signing after the build.
+- `external/extra-cmake-modules`, `external/syntax-highlighting` — KDE's
+  ECM and KSyntaxHighlighting (submodules, pinned to a KF6 tag), built once
+  at configure time into `build/…/deps` by `cmake/KSyntaxHighlighting.cmake`
+  and embedded as `libKF6SyntaxHighlighting.6.dylib`; bump both tags
+  together.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
@@ -61,6 +66,13 @@ Guidance for AI agents working in this repository.
     reports text, caret and selection changes to it while accessibility is
     active; `TextEditor.qml` gives it its `Accessible.role`/`name` so it
     joins the tree.
+  - `SyntaxHighlighter` — a KSyntaxHighlighting `AbstractHighlighter` over
+    the `TextBuffer`: each line's end state, computed from the top by
+    `advance()` (bounded by a deadline: 4 ms in a layout, 3 ms slices
+    from a zero timer ahead of the view); `linesReplaced()` after an edit
+    keeps the old states aligned so highlighting stops at the first line
+    that ends as before. `EditorView` rows are reused only with the same
+    start state; `syntax`/`detectSyntax()`/`darkTheme` drive it.
   - Keep scene coordinates small: positions are relative to the first line
     laid out, never `line × lineHeight` (float vertices lose precision past
     a few million pixels).
@@ -68,8 +80,9 @@ Guidance for AI agents working in this repository.
   one file, in a real window) and `run.sh` (1/10/100 MB, Markdown table for
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
-  against a `QString`), run offscreen with `ctest`; the sources under test
-  are compiled into each test.
+  against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
+  randomized edits against highlighting from scratch), run offscreen with
+  `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).
 - `assets/` — app icon: `tekst.icon` (Icon Composer document), `tekst.svg`,

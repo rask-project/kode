@@ -15,8 +15,10 @@ qt_add_qml_module(tekst_editor_bench
         ../../src/editor/EditorAccessible.cpp
         ../../src/editor/EditorView.h
         ../../src/editor/EditorView.cpp
+        ../../src/editor/SyntaxHighlighter.h
+        ../../src/editor/SyntaxHighlighter.cpp
 )
 
 set_target_properties(tekst_editor_bench PROPERTIES OUTPUT_NAME tekst-editor-bench)
 target_include_directories(tekst_editor_bench PRIVATE ../../src/editor)
-target_link_libraries(tekst_editor_bench PRIVATE Qt6::Quick)
+target_link_libraries(tekst_editor_bench PRIVATE Qt6::Quick KF6::SyntaxHighlighting)

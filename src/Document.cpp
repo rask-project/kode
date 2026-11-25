@@ -74,6 +74,7 @@ bool Document::load(const QUrl &fileUrl)
     lines.replace(crlf, QStringLiteral("\n"));
     // Also clears the undo history and the modified state.
     m_editor->setText(lines);
+    m_editor->detectSyntax(fileUrl.fileName());
     setFileUrl(fileUrl);
     return true;
 }
@@ -97,6 +98,9 @@ bool Document::saveAs(const QUrl &fileUrl)
         return false;
     }
     m_editor->markSaved();
+    if (fileUrl != m_fileUrl) {
+        m_editor->detectSyntax(fileUrl.fileName());
+    }
     setFileUrl(fileUrl);
     return true;
 }
@@ -107,6 +111,7 @@ void Document::clear()
         return;
     }
     m_editor->setText({});
+    m_editor->setSyntax({});
     m_lineEnding = QStringLiteral("\n");
     setFileUrl({});
 }

@@ -288,6 +288,15 @@ Stage 1 (round trips, IME, unsaved-changes flows).
 
 ### Stage 5 — Syntax highlighting
 
+Started: KSyntaxHighlighting 6.32 built from submodules (with ECM) at
+configure time and embedded; `SyntaxHighlighter` keeps each line's end
+state, highlights in 3 ms slices ahead of the view and after an edit only
+until a line ends as before; rows carry their start state; detection by
+file name and shebang; Breeze light/dark following `Appearance`
+(`docs/editor-bench.md`). Left: the selector in the status bar, bracket
+matching and the current-word highlight, and off-thread highlighting if
+large files need it.
+
 - **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes;
   QtCore/QtGui only) through `AbstractHighlighter`, line by line: each line
   keeps the state it ends in; an edit re-highlights from its line until the

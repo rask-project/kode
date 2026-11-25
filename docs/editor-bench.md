@@ -79,6 +79,28 @@ less work). The scroll test jumps to unrelated parts of the file, where
 every line in view is new; scrolling through lines already laid out only
 changes a matrix.
 
+## With syntax highlighting
+
+Stage 5: the benchmark's EditorView highlights the text as C++
+(KSyntaxHighlighting, the file is the project's own sources). States are
+computed from the top in 3 ms slices between frames, so right after
+opening, typing in the middle of a large file starts plain and turns
+highlighted when the slices get there (at 10 MB after about one second;
+at 100 MB not within the test).
+
+| Size (MB) | Open to first frame (ms) | Keystroke update avg (ms) | Keystroke update max (ms) | Keystroke to screen max (ms) | Scroll jump update avg (ms) | Scroll jump update max (ms) | Memory (MB) |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 36.2 | 0.47 | 4.50 | 20.35 | 0.81 | 1.89 | 4 |
+| 10 | 33.2 | 0.21 | 2.81 | 32.41 | 0.94 | 3.31 | 9 |
+| 100 | 99.9 | 0.09 | 0.20 | 33.16 | 0.44 | 2.79 | 32 |
+
+A highlighted keystroke costs about 0.5 ms (the line highlighted again
+and laid out with its formats; the next lines only checked). The max
+update is the frame where the view's lines first get their colors (all
+laid out again). While slices run, a frame is missed now and then
+(33 ms); with 8 ms slices it was most of the first keystrokes. Moving the
+work off the GUI thread is the next step if this shows in use.
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal

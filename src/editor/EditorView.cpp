@@ -1,8 +1,13 @@
 #include "EditorView.h"
 
 #include "EditorAccessible.h"
+#include "SyntaxHighlighter.h"
+
+#include <KSyntaxHighlighting/Definition>
+#include <KSyntaxHighlighting/Theme>
 
 #include <QClipboard>
+#include <QDeadlineTimer>
 #include <QDrag>
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -19,6 +24,7 @@
 #include <QTextOption>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace tekst
@@ -34,6 +40,11 @@ constexpr qreal caretWidth{2.0};
 constexpr qsizetype overscan{4};
 // No wrapping: lines are laid out this wide.
 constexpr qreal noWrapWidth{1.0e7};
+// Highlighting: how long a layout may wait for it (shown plain past that),
+// a slice of it ahead of the view, and how far ahead it runs.
+constexpr std::chrono::milliseconds highlightInLayout{4};
+constexpr std::chrono::milliseconds highlightSlice{3};
+constexpr qsizetype highlightLookahead{1000};
 
 bool isWordCharacter(QChar character)
 {
@@ -154,8 +165,15 @@ void resizeRectangles(QQuickWindow *window, QSGNode *parent, QList<QSGRectangleN
 }
 } // namespace
 
-EditorView::EditorView(QQuickItem *parent) : QQuickItem(parent), m_font(QStringLiteral("Menlo"), 13)
+EditorView::EditorView(QQuickItem *parent)
+    : QQuickItem(parent)
+    , m_highlighter{std::make_unique<SyntaxHighlighter>(&m_buffer)}
+    , m_font(QStringLiteral("Menlo"), 13)
 {
+    m_highlighter->setTheme(SyntaxHighlighter::defaultTheme(false));
+    m_highlightTimer.setSingleShot(true);
+    m_highlightTimer.setInterval(0);
+    connect(&m_highlightTimer, &QTimer::timeout, this, &EditorView::highlightAhead);
     setFlag(ItemHasContents);
     setFlag(ItemAcceptsInputMethod);
     setFlag(ItemIsFocusScope);
@@ -186,6 +204,51 @@ void EditorView::setFont(const QFont &font)
     emit contentSizeChanged();
     emit cursorChanged();
     polish();
+}
+
+QString EditorView::syntax() const
+{
+    return m_highlighter->isActive() ? m_highlighter->definition().name() : QString{};
+}
+
+void EditorView::setSyntax(const QString &syntax)
+{
+    applyDefinition(SyntaxHighlighter::definitionForName(syntax));
+}
+
+void EditorView::detectSyntax(const QString &fileName)
+{
+    applyDefinition(SyntaxHighlighter::detect(fileName, m_buffer.lineCount() > 0 ? m_buffer.line(0) : QString{}));
+}
+
+void EditorView::applyDefinition(const KSyntaxHighlighting::Definition &definition)
+{
+    if (m_highlighter->definition() == definition) {
+        return;
+    }
+    m_highlighter->setDefinition(definition);
+    m_rows.clear();
+    emit syntaxChanged();
+    polish();
+}
+
+void EditorView::setDarkTheme(bool dark)
+{
+    if (darkTheme() == dark) {
+        return;
+    }
+    m_flags = dark ? (m_flags | DarkTheme) : (m_flags & ~DarkTheme);
+    m_highlighter->setTheme(SyntaxHighlighter::defaultTheme(dark));
+    m_rows.clear();
+    emit darkThemeChanged();
+    polish();
+}
+
+void EditorView::textReplaced(qsizetype position, const QString &removed, const QString &inserted)
+{
+    m_highlighter
+        ->linesReplaced(m_buffer.lineAt(position), removed.count(QLatin1Char('\n')), inserted.count(QLatin1Char('\n')));
+    notifyTextChanged(position, removed, inserted);
 }
 
 void EditorView::setColor(QRgb &field, const QColor &color)
@@ -334,6 +397,7 @@ bool EditorView::canPaste()
 void EditorView::setText(const QString &text)
 {
     m_buffer = TextBuffer{text};
+    m_highlighter->reset();
     m_undo.clear();
     m_undoIndex = 0;
     m_cleanIndex = 0;
@@ -342,7 +406,7 @@ void EditorView::setText(const QString &text)
     m_preedit.clear();
     m_preferredX = -1.0;
     m_widestLine = 0.0;
-    m_flags = 0U;
+    m_flags &= DarkTheme;
     m_contentY = 0.0;
     m_contentX = 0.0;
     emit contentXChanged();
@@ -408,7 +472,7 @@ void EditorView::replace(qsizetype position, qsizetype count, const QString &tex
 
     m_buffer.remove(position, count);
     m_buffer.insert(position, text);
-    notifyTextChanged(position, edit.removed, text);
+    textReplaced(position, edit.removed, text);
     m_cursor = edit.cursorAfter;
     m_anchor = m_cursor;
     m_preferredX = -1.0;
@@ -441,7 +505,7 @@ void EditorView::applyEdit(const Edit &edit, bool forward)
     const QString &to{forward ? edit.inserted : edit.removed};
     m_buffer.remove(edit.position, from.size());
     m_buffer.insert(edit.position, to);
-    notifyTextChanged(edit.position, from, to);
+    textReplaced(edit.position, from, to);
     m_cursor = forward ? edit.cursorAfter : edit.cursorBefore;
     m_anchor = forward ? edit.cursorAfter : edit.anchorBefore;
 }
@@ -619,6 +683,11 @@ qsizetype EditorView::firstVisibleLine() const
     return std::clamp(line - overscan, qsizetype{0}, m_buffer.lineCount() - 1);
 }
 
+qsizetype EditorView::lastVisibleLine() const
+{
+    return std::min(firstVisibleLine() + visibleLineCount(), m_buffer.lineCount());
+}
+
 qsizetype EditorView::visibleLineCount() const
 {
     return static_cast<qsizetype>(std::ceil(height() / m_lineHeight)) + (2 * overscan) + 1;
@@ -639,7 +708,9 @@ std::unique_ptr<QTextLayout> EditorView::layoutLine(qsizetype line) const
     return layoutText(displayText(line), composing ? m_cursor - m_buffer.lineStart(line) : -1);
 }
 
-std::unique_ptr<QTextLayout> EditorView::layoutText(const QString &text, qsizetype preeditColumn) const
+std::unique_ptr<QTextLayout>
+EditorView::layoutText(const QString &text, qsizetype preeditColumn, const QList<QTextLayout::FormatRange> &formats)
+    const
 {
     auto layout{std::make_unique<QTextLayout>(text, m_font)};
     QTextOption option;
@@ -655,6 +726,8 @@ std::unique_ptr<QTextLayout> EditorView::layoutText(const QString &text, qsizety
               .length = static_cast<int>(m_preedit.size()),
               .format = underline}}
         );
+    } else if (!formats.isEmpty()) {
+        layout->setFormats(formats);
     }
     layout->setCacheEnabled(true);
     layout->beginLayout();
@@ -700,6 +773,48 @@ qsizetype EditorView::positionAt(const QPointF &point) const
     return m_buffer.lineStart(line) + layout->lineAt(0).xToCursor(x, QTextLine::CursorBetweenCharacters);
 }
 
+EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
+{
+    // A row already laid out with the same text, variant and starting state
+    // (wherever its line was), else a new one.
+    const bool composing{!m_preedit.isEmpty() && line == cursorLine};
+    const bool highlighted{!composing && m_highlighter->isActive() && m_highlighter->isReady(line)};
+    const quint64 variant{composing ? m_preeditGeneration : (highlighted ? Highlighted : Plain)};
+    KSyntaxHighlighting::State state{highlighted ? m_highlighter->startState(line) : KSyntaxHighlighting::State{}};
+    QString text{displayText(line)};
+    const auto reusable{std::ranges::find_if(m_rows, [&text, &state, variant](const Row &row) {
+        return row.layout != nullptr && row.variant == variant && row.text == text && row.state == state;
+    })};
+    if (reusable != m_rows.end()) {
+        Row row{std::move(*reusable)};
+        row.line = line;
+        return row;
+    }
+    Row row{.id = m_nextRowId++, .line = line, .variant = variant, .text = {}, .layout = {}, .state = std::move(state)};
+    row.layout = layoutText(
+        text,
+        composing ? m_cursor - m_buffer.lineStart(line) : -1,
+        highlighted ? m_highlighter->formats(line, text) : QList<QTextLayout::FormatRange>{}
+    );
+    row.width = row.layout->lineAt(0).naturalTextWidth();
+    row.text = std::move(text);
+    m_widestLine = std::max(m_widestLine, row.width);
+    return row;
+}
+
+EditorView::Number EditorView::takeNumber(qsizetype line)
+{
+    const auto number{std::ranges::find_if(m_numbers, [line](const Number &candidate) {
+        return candidate.line == line && candidate.layout != nullptr;
+    })};
+    if (number != m_numbers.end()) {
+        return std::move(*number);
+    }
+    Number laidOut{.line = line, .layout = layoutNumber(line), .width = 0.0};
+    laidOut.width = laidOut.layout->lineAt(0).naturalTextWidth();
+    return laidOut;
+}
+
 void EditorView::layoutRows()
 {
     // Lay out the lines in view, reusing the rows (and numbers) already laid
@@ -707,43 +822,38 @@ void EditorView::layoutRows()
     const qsizetype first{firstVisibleLine()};
     const qsizetype count{std::min(visibleLineCount(), m_buffer.lineCount() - first)};
     const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
+    // Highlight up to the view, unless that takes long: the rest comes later.
+    if (!m_highlighter->advance(first + count, QDeadlineTimer{highlightInLayout}) ||
+        !m_highlighter->isReady(std::min(first + count + highlightLookahead, m_buffer.lineCount()))) {
+        m_highlightTimer.start();
+    }
     std::vector<Row> rows;
     std::vector<Number> numbers;
     rows.reserve(static_cast<std::size_t>(count));
     numbers.reserve(static_cast<std::size_t>(count));
     for (qsizetype line{first}; line < first + count; ++line) {
-        const bool composing{!m_preedit.isEmpty() && line == cursorLine};
-        const quint64 variant{composing ? m_preeditGeneration : 0U};
-        QString text{displayText(line)};
-        const auto reusable{std::ranges::find_if(m_rows, [&text, variant](const Row &row) {
-            return row.layout != nullptr && row.variant == variant && row.text == text;
-        })};
-        if (reusable != m_rows.end()) {
-            rows.push_back(std::move(*reusable));
-            rows.back().line = line;
-        } else {
-            Row row{.id = m_nextRowId++, .line = line, .variant = variant, .text = {}, .layout = {}, .width = 0.0};
-            row.layout = layoutText(text, composing ? m_cursor - m_buffer.lineStart(line) : -1);
-            row.width = row.layout->lineAt(0).naturalTextWidth();
-            row.text = std::move(text);
-            m_widestLine = std::max(m_widestLine, row.width);
-            rows.push_back(std::move(row));
-        }
-
-        const auto number{std::ranges::find_if(m_numbers, [line](const Number &candidate) {
-            return candidate.line == line && candidate.layout != nullptr;
-        })};
-        if (number != m_numbers.end()) {
-            numbers.push_back(std::move(*number));
-        } else {
-            Number laidOut{.line = line, .layout = layoutNumber(line), .width = 0.0};
-            laidOut.width = laidOut.layout->lineAt(0).naturalTextWidth();
-            numbers.push_back(std::move(laidOut));
-        }
+        rows.push_back(takeRow(line, cursorLine));
+        numbers.push_back(takeNumber(line));
     }
     m_rows = std::move(rows);
     m_numbers = std::move(numbers);
     m_baseLine = first;
+}
+
+void EditorView::highlightAhead()
+{
+    const qsizetype last{lastVisibleLine()};
+    const bool wasReady{m_highlighter->isReady(last)};
+    const bool done{m_highlighter->advance(
+        std::min(last + highlightLookahead, m_buffer.lineCount()),
+        QDeadlineTimer{highlightSlice}
+    )};
+    if (!wasReady && m_highlighter->isReady(last)) {
+        polish();
+    }
+    if (!done) {
+        m_highlightTimer.start();
+    }
 }
 
 void EditorView::layoutDecorations()

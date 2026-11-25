@@ -8,17 +8,25 @@
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>
+#include <QTextLayout>
+#include <QTimer>
 #include <QtQmlIntegration/qqmlintegration.h>
+
+#include <KSyntaxHighlighting/State>
 
 #include <memory>
 #include <vector>
 
-class QTextLayout;
+namespace KSyntaxHighlighting
+{
+class Definition;
+} // namespace KSyntaxHighlighting
 
 namespace tekst
 {
 
 class EditorAccessible;
+class SyntaxHighlighter;
 
 // The editing surface: a TextBuffer drawn by laying out and rendering only
 // the lines in view (one QSGTextNode per line and per line number), with
@@ -57,6 +65,10 @@ class EditorView : public QQuickItem
     Q_PROPERTY(bool canPaste READ canPaste NOTIFY canPasteChanged)
     // Changed since setText() or markSaved(); undoing back clears it.
     Q_PROPERTY(bool modified READ modified NOTIFY modifiedChanged)
+    // The highlighting definition's name; empty: plain text.
+    Q_PROPERTY(QString syntax READ syntax WRITE setSyntax NOTIFY syntaxChanged)
+    // Highlight with the dark theme (else the light one).
+    Q_PROPERTY(bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged)
 public:
     explicit EditorView(QQuickItem *parent = nullptr);
     ~EditorView() override;
@@ -95,6 +107,10 @@ public:
     [[nodiscard]] bool canRedo() const noexcept { return m_undoIndex < m_undo.size(); }
     [[nodiscard]] static bool canPaste();
     [[nodiscard]] bool modified() const noexcept { return m_undoIndex != m_cleanIndex; }
+    [[nodiscard]] QString syntax() const;
+    void setSyntax(const QString &syntax);
+    [[nodiscard]] bool darkTheme() const noexcept { return (m_flags & DarkTheme) != 0U; }
+    void setDarkTheme(bool dark);
 
     // The whole text, lines ending with '\n'.
     Q_INVOKABLE [[nodiscard]] QString text() const { return m_buffer.toString(); }
@@ -112,6 +128,8 @@ public:
     Q_INVOKABLE void paste();
     // The text now matches the file: no longer modified.
     Q_INVOKABLE void markSaved();
+    // Picks the syntax for a file named `fileName` (or by its shebang).
+    Q_INVOKABLE void detectSyntax(const QString &fileName);
 
 signals:
     void fontChanged();
@@ -125,6 +143,8 @@ signals:
     void undoStateChanged();
     void canPasteChanged();
     void modifiedChanged();
+    void syntaxChanged();
+    void darkThemeChanged();
 
 protected:
     void updatePolish() override;
@@ -159,17 +179,23 @@ private:
     };
 
     // A laid out line in view. Rows are found again by their text (and
-    // `variant`), not their line number: an edit above a line moves it but
-    // keeps its layout, and its scene graph node (matched by `id`).
+    // `variant` and highlighting state), not their line number: an edit
+    // above a line moves it but keeps its layout, and its scene graph node
+    // (matched by `id`).
     struct Row {
         quint64 id{0};
         qsizetype line{-1};
-        // 0, or the preedit generation for the line showing a composition.
+        // Plain, Highlighted, or the preedit generation for the line
+        // showing a composition.
         quint64 variant{0};
         QString text;
         std::unique_ptr<QTextLayout> layout;
+        // The highlighting state the line starts in.
+        KSyntaxHighlighting::State state;
         qreal width{0.0};
     };
+    static constexpr quint64 Plain{0U};
+    static constexpr quint64 Highlighted{1U};
 
     // A laid out line number in view, found again by its line.
     struct Number {
@@ -198,6 +224,8 @@ private:
     static constexpr quint32 DragPending{1U << 1U};
     // A drag from this view was dropped back into it (and moved there).
     static constexpr quint32 DroppedHere{1U << 2U};
+    // Highlighting uses the dark theme.
+    static constexpr quint32 DarkTheme{1U << 3U};
 
     void updateMetrics();
     void textEdited();
@@ -216,8 +244,11 @@ private:
     [[nodiscard]] qsizetype visibleLineCount() const;
     [[nodiscard]] QString displayText(qsizetype line) const;
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutLine(qsizetype line) const;
-    [[nodiscard]] std::unique_ptr<QTextLayout> layoutText(const QString &text, qsizetype preeditColumn) const;
+    [[nodiscard]] std::unique_ptr<QTextLayout>
+    layoutText(const QString &text, qsizetype preeditColumn, const QList<QTextLayout::FormatRange> &formats = {}) const;
     void layoutRows();
+    [[nodiscard]] Row takeRow(qsizetype line, qsizetype cursorLine);
+    [[nodiscard]] Number takeNumber(qsizetype line);
     void layoutDecorations();
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
     [[nodiscard]] qreal xForPosition(qsizetype position) const;
@@ -228,11 +259,18 @@ private:
     // Tells assistive technologies about a change of text, caret or selection.
     void notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted);
     void notifyCursorChanged();
+    // After the buffer changed: highlighting and assistive technologies.
+    void textReplaced(qsizetype position, const QString &removed, const QString &inserted);
+    void applyDefinition(const KSyntaxHighlighting::Definition &definition);
+    // Highlights ahead of the view, a slice per event loop pass.
+    void highlightAhead();
+    [[nodiscard]] qsizetype lastVisibleLine() const;
     void startDrag();
     void setDropPosition(qsizetype position);
     void setColor(QRgb &field, const QColor &color);
 
     TextBuffer m_buffer;
+    std::unique_ptr<SyntaxHighlighter> m_highlighter;
     QList<Edit> m_undo;
     // Move-only rows: std::vector (QList needs copyable elements).
     std::vector<Row> m_rows;
@@ -247,6 +285,7 @@ private:
     QElapsedTimer m_lastDoubleClick;
     // Where a press on the selection happened, for starting a drag.
     QPointF m_pressPoint;
+    QTimer m_highlightTimer;
     qreal m_contentX{0.0};
     qreal m_contentY{0.0};
     qreal m_lineHeight{16.0};
@@ -267,8 +306,9 @@ private:
     // Where dragged text would be dropped (shown as the caret); -1: no drag.
     qsizetype m_dropPosition{-1};
     quint64 m_nextRowId{1};
-    // Bumped when the composition changes, so its line is laid out again.
-    quint64 m_preeditGeneration{1};
+    // Bumped when the composition changes, so its line is laid out again
+    // (above Plain and Highlighted).
+    quint64 m_preeditGeneration{2};
     Colors m_colors;
     quint32 m_flags{0U};
 };

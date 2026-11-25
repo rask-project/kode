@@ -1,3 +1,9 @@
 [submodule "external/rask"]
 	path = external/rask
 	url = https://github.com/rask-project/rask.git
+[submodule "external/extra-cmake-modules"]
+	path = external/extra-cmake-modules
+	url = https://invent.kde.org/frameworks/extra-cmake-modules.git
+[submodule "external/syntax-highlighting"]
+	path = external/syntax-highlighting
+	url = https://invent.kde.org/frameworks/syntax-highlighting.git
