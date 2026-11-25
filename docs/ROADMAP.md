@@ -194,8 +194,9 @@ Save, Cancel), the save panel for an untitled document.
 **Done when:** you can create, open, edit, undo, save and close a file
 without losing data, with no native code.
 
-> Known limitation: Qt Quick's `TextArea` gets slow on large files (several
-> MB). Accepted for the MVP and addressed in Stage 7.
+> Known limitation: Qt Quick's `TextEdit` gets slow on large files (several
+> MB) and cannot grow into a code editor. Accepted for the MVP; `EditorView`
+> (Stages 3–4) replaces it.
 
 ---
 
@@ -220,7 +221,93 @@ Linux builds unchanged).
 
 ---
 
-### Stage 3 — macOS document integration
+### Stage 3 — `EditorView` prototype — done
+
+Result (`docs/editor-bench.md`): `EditorView`'s keystroke and scroll cost is
+flat from 1 to 100 MB; `TextEdit` takes 20 s to open 100 MB and freezes up to
+1.5 s per key. Opening is 15–235× faster, memory 25–40× lower. Stage 4 goes
+ahead.
+
+Why: a code editor at the level of Qt Creator (highlighting, gutter, folding,
+multiple cursors, minimap, large files) needs control over the text model,
+the layout and the rendering, which `TextEdit` does not give. Qt Creator's
+editing core is not QWidgets: `QTextDocument`, `QTextLayout` and
+KSyntaxHighlighting are QtGui-only; only its `QPlainTextEdit` shell is a
+widget. Tekst keeps QML for the whole UI and moves the editing surface to a
+C++ `QQuickItem` drawing into the scene graph (Konsoll's `TerminalRenderer`
+pattern). Highlighting comes after it, since it is designed for it.
+
+A short prototype first, to confirm the approach before investing:
+
+- `TextBuffer`: piece table (original + added buffers, a newline index per
+  buffer, consecutive typing coalesced into one piece). Line start, line
+  text and position ↔ line in O(pieces + log n). QtTest against a plain
+  `QString` reference, randomized.
+- `EditorView` (`QQuickItem`): lays out only the visible lines
+  (`QTextLayout`, monospaced, no wrapping yet) in `updatePolish()`, draws
+  each with a `QSGTextNode` (`NativeRendering`) plus a caret node; typing,
+  Backspace/Delete, arrows, Home/End and page keys, click to place the caret,
+  committed input-method text. Scrolls inside a `Flickable`.
+- `tekst-editor-bench`: opens 1, 10 and 100 MB files with `TextEdit` and
+  with `EditorView` in a real window and reports open-to-first-frame,
+  keystroke-to-frame, scroll frame time and memory.
+
+
+---
+
+### Stage 4 — `EditorView` replaces `TextEdit`
+
+- Selection (mouse, Shift + keys, double/triple click), clipboard, drag and
+  drop of text.
+- Undo/redo on the piece table (grouped by typing bursts), `Document`
+  loading and saving through `TextBuffer` instead of `QTextDocument`.
+- Input methods in full: preedit (marked text) shown inline,
+  `inputMethodQuery` for the candidate window, dead keys and emoji picker.
+- Word navigation (⌥←/→, ⌥⌫), line wrapping (soft wrap with a visual-line
+  index), horizontal scrolling when wrapping is off.
+- Gutter: line numbers and current-line highlight, drawn by the view.
+- Accessibility: a `QAccessibleInterface` with the text and caret for
+  VoiceOver.
+- Retina, font changes, light/dark colors (`SystemColors` from Stage 2).
+
+**Done when:** Tekst edits with `EditorView` and nothing regresses from
+Stage 1 (round trips, IME, unsaved-changes flows).
+
+---
+
+### Stage 5 — Syntax highlighting
+
+- **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes;
+  QtCore/QtGui only) through `AbstractHighlighter`, line by line: each line
+  keeps the state it ends in; an edit re-highlights from its line until the
+  state matches what was stored, so a keystroke costs a line or two. Runs
+  ahead of the visible lines, off the GUI thread for large files.
+- Formats applied to the visible lines' `QTextLayout`s.
+- Language detection by extension/shebang, selector in the status bar.
+- Light/dark themes following `Appearance`.
+- Brackets matching and current-word highlight.
+
+---
+
+### Stage 6 — Editor features
+
+- Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌥⌘F, regex,
+  case sensitivity, matches highlighted by the `EditorView` (search runs on
+  the text buffer, off the GUI thread for large files).
+- Go to line (⌘L).
+- Toggle line wrapping; show invisible characters.
+- Indentation: tabs/spaces, width, auto-indent, ⌘[ / ⌘] to indent the
+  selection.
+- Status bar: line:column, selection, encoding, line ending, indentation,
+  language.
+- Font zoom (⌘+ / ⌘- / ⌘0).
+- Encodings beyond UTF-8 (detection + "Reopen with Encoding").
+- Settings window (⌘,) with `Rask.Controls`' `SidebarLayout`, `FormGroup`
+  and `FormRow` (as in `rask/examples/settings`); `QSettings`.
+
+---
+
+### Stage 7 — macOS document integration
 
 - Multiple windows, one per document (⌘N opens a new window); window
   controller in `Main.qml`.
@@ -239,7 +326,7 @@ Linux builds unchanged).
 
 ---
 
-### Stage 4 — Tabs
+### Stage 8 — Tabs
 
 - **`Rask.Controls`**: extract generic `TabStrip`/`TabButton` from Konsoll
   (tab model, drag to reorder, close button, modified indicator, respecting
@@ -250,51 +337,7 @@ Linux builds unchanged).
 
 ---
 
-### Stage 5 — Editor features
-
-- Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌥⌘F, regex,
-  case sensitivity, highlight matches.
-- Go to line (⌘L).
-- Gutter with line numbers and current-line highlight.
-- Toggle line wrapping; show invisible characters.
-- Indentation: tabs/spaces, width, auto-indent, ⌘[ / ⌘] to indent the
-  selection.
-- Status bar: line:column, selection, encoding, line ending, indentation,
-  language.
-- Font zoom (⌘+ / ⌘- / ⌘0).
-- Encodings beyond UTF-8 (detection + "Reopen with Encoding").
-- Settings window (⌘,) with `Rask.Controls`' `SidebarLayout`, `FormGroup`
-  and `FormRow` (as in `rask/examples/settings`); `QSettings`.
-
----
-
-### Stage 6 — Syntax highlighting
-
-- **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes)
-  attached to the `QQuickTextDocument` via `SyntaxHighlighter`.
-- Language detection by extension/shebang, selector in the status bar.
-- Light/dark themes following `Appearance`.
-- Measure the performance impact before moving on to Stage 7.
-
----
-
-### Stage 7 — Performance and large files
-
-Entry criterion: measure opening, typing and scrolling with 1 MB, 10 MB and
-100 MB files. If `TextArea` falls short:
-
-- Own text model (piece table or rope) in C++, with its own undo/redo.
-- `EditorView` (`QQuickItem`) rendering only the visible lines — the same
-  principle as Konsoll's `TerminalRenderer` — with caret, selection, IME
-  (`inputMethodQuery`) and accessibility.
-- Incremental highlighting reusing KSyntaxHighlighting's states.
-
-This is the largest stage, which is why it comes after the app is already
-useful.
-
----
-
-### Stage 8 — Polish and distribution
+### Stage 9 — Polish and distribution
 
 - **`Rask.Updater`** (link it, `rask_sparkle_plist_keys()` in `Info.plist`,
   `Updater.start()`) + appcast + release via GitHub Actions
@@ -310,9 +353,9 @@ useful.
 
 ## 4. Future items (outside the initial scope)
 
-Minimap, multiple cursors, split view, Markdown with preview, LSP
-(completion/diagnostics), compare mode (diff), Quick Look and Spotlight
-integration, AppleScript/Shortcuts support.
+On top of `EditorView`: code folding, multiple cursors, minimap, split view.
+Also Markdown with preview, LSP (completion/diagnostics), compare mode
+(diff), Quick Look and Spotlight integration, AppleScript/Shortcuts support.
 
 ## 5. Open decisions
 

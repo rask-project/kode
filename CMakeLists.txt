@@ -76,6 +76,8 @@ qt_add_executable(tekst
 qt_add_qml_module(tekst
     URI Tekst
     VERSION 1.0
+    # For qmllint and qmlcachegen: where rask's modules are built.
+    IMPORT_PATH "${CMAKE_CURRENT_BINARY_DIR}/external/rask/qml"
     QML_FILES
         Main.qml
     SOURCES
@@ -88,7 +90,8 @@ target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
-set_property(SOURCE main.cpp src/Document.cpp APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
+set_property(SOURCE main.cpp src/Document.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp
+    APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
 # Debug builds get a bundle id of their own, so they don't share macOS
 # permissions and Launch Services entries with the installed app.
@@ -147,6 +150,11 @@ if(APPLE)
         OUTPUT_SCRIPT deploy_script
     )
     install(SCRIPT ${deploy_script})
+endif()
+
+option(TEKST_BUILD_TOOLS "Build the Tekst tools (editor benchmark)" ${PROJECT_IS_TOP_LEVEL})
+if(TEKST_BUILD_TOOLS)
+    add_subdirectory(tools/editor-bench)
 endif()
 
 option(TEKST_BUILD_TESTS "Build the Tekst tests" ${PROJECT_IS_TOP_LEVEL})

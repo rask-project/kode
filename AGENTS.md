@@ -37,8 +37,22 @@ Guidance for AI agents working in this repository.
 - `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
   editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
   kept, written through `QSaveFile`.
-- `tests/` — QtTest (`tst_document`), run offscreen with `ctest`; `Document`
-  is compiled into the test.
+- `src/editor/` — the `EditorView` prototype (roadmap Stage 3), which will
+  replace `TextEdit`:
+  - `TextBuffer` — piece table: original + append-only added buffer, each
+    with a newline index; pieces carry their newline count; consecutive
+    typing grows one piece. Lines use '\n' only.
+  - `EditorView` (`QQuickItem`) — lays out the visible lines (`QTextLayout`)
+    in `updatePolish()` (GUI thread), keeps rows still valid across scrolls,
+    and in `updatePaintNode()` draws one `QSGTextNode` per row
+    (`NativeRendering`) plus the caret; sits in a `Flickable` (`contentY`,
+    `contentHeight`). Nothing per frame scales with the file size.
+- `tools/editor-bench/` — `tekst-editor-bench` (TextEdit vs. EditorView on
+  one file, in a real window) and `run.sh` (1/10/100 MB, Markdown table for
+  `docs/editor-bench.md`). Benchmark Release builds only.
+- `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
+  against a `QString`), run offscreen with `ctest`; the sources under test
+  are compiled into each test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).
 - `assets/` — app icon: `tekst.icon` (Icon Composer document), `tekst.svg`,
@@ -134,6 +148,19 @@ Qt Creator opens the project directly with the matching kit.
   fit in a byte should be packed, not given a full field each. Debug builds
   enable `-Wpadded` to flag any layout that still wastes padding — keep it
   clean.
+
+## Editor core
+
+- The editing surface is C++ (`EditorView`, a `QQuickItem` drawing into the
+  scene graph), the rest of the UI QML. No QWidgets anywhere: Qt Creator's
+  useful parts (`QTextLayout`, KSyntaxHighlighting) are QtGui-only.
+- Work per keystroke and per frame is bounded by what is visible: lay out
+  and draw only the lines in view, never walk or copy the whole text on the
+  GUI thread. Text layout happens in `updatePolish()`, not in
+  `updatePaintNode()` (render thread).
+- Scene-graph nodes are owned by their parent node: create with
+  `std::make_unique` / the window's `create*Node()`, hand over with
+  `release()`, take back into a `unique_ptr` when removing.
 
 ## Qt / QML
 

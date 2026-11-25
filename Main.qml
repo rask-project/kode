@@ -3,9 +3,11 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+
 import Rask.Dialogs
 import Rask.Platform
 import Rask.Window
+
 import Tekst
 
 ApplicationWindow {
