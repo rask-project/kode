@@ -1,12 +1,11 @@
 #pragma once
 
-#include "EditorView.h"
 #include "TextCodec.h"
+#include "TextDocument.h"
 
 #include <QDateTime>
 #include <QFileSystemWatcher>
 #include <QObject>
-#include <QPointer>
 #include <QString>
 #include <QTimer>
 #include <QUrl>
@@ -17,20 +16,20 @@
 namespace tekst
 {
 
-// The file behind an editor's text: loads it into an EditorView and saves it
-// back. The file's encoding (detected, or chosen with reopen()), byte order
-// mark and line ending (LF or CRLF) are kept unless changed; saving goes
-// through QSaveFile, so a failed write leaves the file as it was. A change
-// to the file by another program reloads it when there are no unsaved
-// changes, else emits changedOnDisk().
+// An open file: its text (a TextDocument, shown by any number of
+// EditorViews), loaded from the file and saved back. The file's encoding (detected, or chosen with reopen()), byte
+// order mark and line ending (LF or CRLF) are kept unless changed; saving goes through QSaveFile, so a failed write
+// leaves the file as it was. A change to the file by another program reloads it when there are no unsaved changes, else
+// emits changedOnDisk().
 class Document : public QObject
 {
     Q_OBJECT
     QML_ELEMENT
-    Q_PROPERTY(tekst::EditorView *editor READ editor WRITE setEditor NOTIFY editorChanged)
+    // The text, for EditorView.document.
+    Q_PROPERTY(tekst::TextDocument *textDocument READ textDocument CONSTANT)
     // Empty for a new, never saved document.
     Q_PROPERTY(QUrl fileUrl READ fileUrl NOTIFY fileUrlChanged)
-    // The file's name, or "Untitled".
+    // The file's name, or "Untitled" (numbered from the second one).
     Q_PROPERTY(QString fileName READ fileName NOTIFY fileUrlChanged)
     // The text, or how it is saved (encoding, line ending), changed.
     Q_PROPERTY(bool modified READ modified NOTIFY modifiedChanged)
@@ -43,10 +42,11 @@ class Document : public QObject
 public:
     explicit Document(QObject *parent = nullptr);
 
-    [[nodiscard]] EditorView *editor() const { return m_editor; }
-    void setEditor(EditorView *editor);
+    [[nodiscard]] TextDocument *textDocument() noexcept { return &m_text; }
     [[nodiscard]] QUrl fileUrl() const { return m_fileUrl; }
     [[nodiscard]] QString fileName() const;
+    // Which untitled document this is, from 1 (OpenDocuments numbers them).
+    void setUntitledNumber(qint32 number);
     [[nodiscard]] bool modified() const;
     [[nodiscard]] QString encoding() const { return m_format.encoding; }
     void setEncoding(const QString &encoding);
@@ -67,7 +67,6 @@ public:
     Q_INVOKABLE void clear();
 
 signals:
-    void editorChanged();
     void fileUrlChanged();
     void modifiedChanged();
     void formatChanged();
@@ -80,8 +79,9 @@ private:
     // The encoding or line ending changed since the file was read or saved.
     static constexpr quint64 FormatChanged{1U << 1U};
 
-    // Reads the file as `encoding` (detected when empty).
-    bool read(const QUrl &fileUrl, const QString &encoding);
+    // Reads the file as `encoding` (detected when empty); views keep their
+    // place when `keepPlace`.
+    bool read(const QUrl &fileUrl, const QString &encoding, bool keepPlace);
     [[nodiscard]] std::expected<void, QString> write(const QUrl &fileUrl) const;
     void setFileUrl(const QUrl &fileUrl);
     void setFormatChanged(bool changed);
@@ -89,7 +89,7 @@ private:
     void watch();
     void checkFile();
 
-    QPointer<EditorView> m_editor;
+    TextDocument m_text;
     QUrl m_fileUrl;
     codec::Format m_format;
     QFileSystemWatcher m_watcher;
@@ -98,6 +98,7 @@ private:
     QDateTime m_fileModified;
     qint64 m_fileSize{-1};
     quint64 m_flags{0U};
+    qint64 m_untitledNumber{1};
 };
 
 } // namespace tekst

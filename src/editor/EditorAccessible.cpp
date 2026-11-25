@@ -164,12 +164,12 @@ void EditorAccessible::setCursorPosition(int position)
 
 QString EditorAccessible::text(int startOffset, int endOffset) const
 {
-    return view()->m_buffer.text(startOffset, endOffset - startOffset);
+    return view()->buffer().text(startOffset, endOffset - startOffset);
 }
 
 EditorAccessible::Range EditorAccessible::unitAt(qsizetype offset, QAccessible::TextBoundaryType boundaryType) const
 {
-    const TextBuffer &buffer{view()->m_buffer};
+    const TextBuffer &buffer{view()->buffer()};
     const qsizetype length{buffer.length()};
     offset = std::clamp(offset, qsizetype{0}, length);
     switch (boundaryType) {
@@ -197,7 +197,7 @@ QString EditorAccessible::textOf(Range range, int *startOffset, int *endOffset) 
 {
     *startOffset = static_cast<int>(range.start);
     *endOffset = static_cast<int>(range.end);
-    return view()->m_buffer.text(range.start, range.end - range.start);
+    return view()->buffer().text(range.start, range.end - range.start);
 }
 
 QString
@@ -229,7 +229,7 @@ QString EditorAccessible::textAfterOffset(
 ) const
 {
     const Range at{unitAt(offset, boundaryType)};
-    const qsizetype length{view()->m_buffer.length()};
+    const qsizetype length{view()->buffer().length()};
     if (at.end >= length) {
         return textOf({.start = length, .end = length}, startOffset, endOffset);
     }
@@ -248,7 +248,7 @@ QRect EditorAccessible::characterRect(int offset) const
         return {};
     }
     const QRectF here{editor->positionRect(offset)};
-    const QRectF next{editor->positionRect(std::min(qsizetype{offset} + 1, editor->m_buffer.length()))};
+    const QRectF next{editor->positionRect(std::min(qsizetype{offset} + 1, editor->buffer().length()))};
     // The next character's x, when it is on the same visual line.
     const qreal width{
         qFuzzyCompare(next.y(), here.y()) && next.x() > here.x() ? next.x() - here.x() : editor->m_charWidth

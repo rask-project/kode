@@ -1,6 +1,7 @@
 #include "tst_editorview.h"
 
 #include "EditorView.h"
+#include "TextDocument.h"
 
 #include <QAccessible>
 #include <QInputMethodEvent>
@@ -426,6 +427,66 @@ void TestEditorView::newTextStartsWithTheDefaultIndentation()
     editor.detectIndentation();
     QVERIFY(!editor.indentWithTabs());
     QCOMPARE(editor.indentWidth(), 2);
+}
+
+void TestEditorView::viewsShareADocument()
+{
+    tekst::TextDocument document;
+    tekst::EditorView first;
+    tekst::EditorView second;
+    first.setDocument(&document);
+    second.setDocument(&document);
+    document.setText(QStringLiteral("hello world"));
+    second.setCursorPosition(6);
+    const QSignalSpy secondModified{&second, &tekst::EditorView::modifiedChanged};
+    first.setCursorPosition(0);
+    type(first, QStringLiteral(">> "));
+    QCOMPARE(second.text(), QStringLiteral(">> hello world"));
+    // The other view's caret stays on "world".
+    QCOMPARE(second.cursorPosition(), 9);
+    QCOMPARE(first.cursorPosition(), 3);
+    QVERIFY(second.modified());
+    QCOMPARE(secondModified.count(), 1);
+}
+
+void TestEditorView::undoInOneViewReachesTheOther()
+{
+    tekst::TextDocument document;
+    tekst::EditorView first;
+    tekst::EditorView second;
+    first.setDocument(&document);
+    second.setDocument(&document);
+    document.setText(QStringLiteral("text"));
+    first.setCursorPosition(4);
+    type(first, QStringLiteral("!"));
+    QVERIFY(second.canUndo());
+    second.undo();
+    QCOMPARE(first.text(), QStringLiteral("text"));
+    QVERIFY(!first.modified());
+    QCOMPARE(second.cursorPosition(), 4);
+}
+
+void TestEditorView::switchingDocumentsKeepsEachPlace()
+{
+    tekst::TextDocument one;
+    tekst::TextDocument two;
+    one.setText(QStringLiteral("first document"));
+    two.setText(QStringLiteral("second"));
+    tekst::EditorView view;
+    view.setDocument(&one);
+    view.setCursorPosition(6);
+    view.setDocument(&two);
+    QCOMPARE(view.text(), QStringLiteral("second"));
+    QCOMPARE(view.cursorPosition(), 0);
+    view.setDocument(&one);
+    QCOMPARE(view.cursorPosition(), 6);
+    // Deleting the document shown leaves the view with its own, empty one.
+    {
+        tekst::TextDocument gone;
+        gone.setText(QStringLiteral("gone"));
+        view.setDocument(&gone);
+    }
+    QVERIFY(view.text().isEmpty());
 }
 
 QTEST_MAIN(TestEditorView)

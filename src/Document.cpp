@@ -23,32 +23,29 @@ Document::Document(QObject *parent) : QObject(parent)
     connect(&m_checkTimer, &QTimer::timeout, this, &Document::checkFile);
     connect(&m_watcher, &QFileSystemWatcher::fileChanged, &m_checkTimer, qOverload<>(&QTimer::start));
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, &m_checkTimer, qOverload<>(&QTimer::start));
-}
-
-void Document::setEditor(EditorView *editor)
-{
-    if (m_editor == editor) {
-        return;
-    }
-    if (m_editor != nullptr) {
-        disconnect(m_editor, nullptr, this, nullptr);
-    }
-    m_editor = editor;
-    if (m_editor != nullptr) {
-        connect(m_editor, &EditorView::modifiedChanged, this, &Document::modifiedChanged);
-    }
-    emit editorChanged();
-    emit modifiedChanged();
+    connect(&m_text, &TextDocument::modifiedChanged, this, &Document::modifiedChanged);
 }
 
 QString Document::fileName() const
 {
-    return m_fileUrl.isEmpty() ? tr("Untitled") : m_fileUrl.fileName();
+    if (!m_fileUrl.isEmpty()) {
+        return m_fileUrl.fileName();
+    }
+    return m_untitledNumber > 1 ? tr("Untitled %1").arg(m_untitledNumber) : tr("Untitled");
+}
+
+void Document::setUntitledNumber(qint32 number)
+{
+    if (m_untitledNumber == number) {
+        return;
+    }
+    m_untitledNumber = number;
+    emit fileUrlChanged();
 }
 
 bool Document::modified() const
 {
-    return (m_editor != nullptr && m_editor->modified()) || (m_flags & FormatChanged) != 0U;
+    return m_text.modified() || (m_flags & FormatChanged) != 0U;
 }
 
 void Document::setFormatChanged(bool changed)
@@ -83,25 +80,17 @@ void Document::setCrlf(bool crlf)
 
 bool Document::load(const QUrl &fileUrl)
 {
-    return read(fileUrl, {});
+    return read(fileUrl, {}, false);
 }
 
 bool Document::reopen(const QString &encoding)
 {
-    return !m_fileUrl.isEmpty() && read(m_fileUrl, encoding);
+    return !m_fileUrl.isEmpty() && read(m_fileUrl, encoding, false);
 }
 
 bool Document::reload()
 {
-    if (m_fileUrl.isEmpty() || m_editor == nullptr) {
-        return false;
-    }
-    const qint64 cursor{m_editor->cursorPosition()};
-    if (!read(m_fileUrl, m_format.encoding)) {
-        return false;
-    }
-    m_editor->setCursorPosition(std::min(cursor, m_editor->length()));
-    return true;
+    return !m_fileUrl.isEmpty() && read(m_fileUrl, m_format.encoding, true);
 }
 
 void Document::watch()
@@ -156,11 +145,8 @@ void Document::checkFile()
     reload();
 }
 
-bool Document::read(const QUrl &fileUrl, const QString &encoding)
+bool Document::read(const QUrl &fileUrl, const QString &encoding, bool keepPlace)
 {
-    if (m_editor == nullptr) {
-        return false;
-    }
     const QString path{fileUrl.toLocalFile()};
     QFile file{path};
     if (!file.open(QIODevice::ReadOnly)) {
@@ -183,9 +169,9 @@ bool Document::read(const QUrl &fileUrl, const QString &encoding)
     m_format = format;
     m_flags = fileCrlf ? Crlf : 0U;
     // Also clears the undo history and the modified state.
-    m_editor->setText(lines);
-    m_editor->detectSyntax(fileUrl.fileName());
-    m_editor->detectIndentation();
+    m_text.setText(lines, keepPlace);
+    m_text.detectSyntax(fileUrl.fileName());
+    m_text.detectIndentation();
     setFileUrl(fileUrl);
     watch();
     emit formatChanged();
@@ -204,17 +190,14 @@ bool Document::save()
 
 bool Document::saveAs(const QUrl &fileUrl)
 {
-    if (m_editor == nullptr) {
-        return false;
-    }
     if (const std::expected<void, QString> written{write(fileUrl)}; !written) {
         emit errorOccurred(written.error());
         return false;
     }
-    m_editor->markSaved();
+    m_text.markSaved();
     setFormatChanged(false);
     if (fileUrl != m_fileUrl) {
-        m_editor->detectSyntax(fileUrl.fileName());
+        m_text.detectSyntax(fileUrl.fileName());
     }
     setFileUrl(fileUrl);
     watch();
@@ -223,11 +206,8 @@ bool Document::saveAs(const QUrl &fileUrl)
 
 void Document::clear()
 {
-    if (m_editor == nullptr) {
-        return;
-    }
-    m_editor->setText({});
-    m_editor->setSyntax({});
+    m_text.setText({});
+    m_text.setSyntax({});
     m_format = {};
     m_flags = 0U;
     emit formatChanged();
@@ -239,7 +219,7 @@ void Document::clear()
 std::expected<void, QString> Document::write(const QUrl &fileUrl) const
 {
     const QString path{fileUrl.toLocalFile()};
-    QString text{m_editor->text()};
+    QString text{m_text.text()};
     if (crlf()) {
         text.replace(QLatin1Char('\n'), crlfText);
     }

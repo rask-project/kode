@@ -55,6 +55,16 @@ constexpr std::chrono::milliseconds searchSlice{3};
 
 using matching::isWordCharacter;
 
+// Where `at` is after `removed` characters at `position` became `inserted`
+// ones: inside the change, at its start.
+qsizetype shifted(qsizetype at, qsizetype position, qsizetype removed, qsizetype inserted)
+{
+    if (at < position) {
+        return at;
+    }
+    return at >= position + removed ? at - removed + inserted : position;
+}
+
 // How far the bracket matching the one at the caret is searched for.
 constexpr qsizetype bracketSearchLines{2000};
 
@@ -234,11 +244,10 @@ void syncRectangles(
 
 EditorView::EditorView(QQuickItem *parent)
     : QQuickItem(parent)
-    , m_highlighter{std::make_unique<SyntaxHighlighter>(&m_buffer)}
-    , m_search{std::make_unique<TextSearch>(&m_buffer)}
+    , m_ownDocument{std::make_unique<TextDocument>()}
     , m_font(QStringLiteral("Menlo"), 13)
 {
-    m_highlighter->setTheme(SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Light")));
+    attach(m_ownDocument.get());
     m_highlightTimer.setSingleShot(true);
     m_highlightTimer.setInterval(0);
     connect(&m_highlightTimer, &QTimer::timeout, this, &EditorView::highlightAhead);
@@ -279,29 +288,139 @@ void EditorView::setFont(const QFont &font)
     resetWrap(anchor);
 }
 
-QString EditorView::syntax() const
+void EditorView::setDocument(TextDocument *document)
 {
-    return m_highlighter->isActive() ? m_highlighter->definition().name() : QString{};
-}
-
-void EditorView::setSyntax(const QString &syntax)
-{
-    applyDefinition(SyntaxHighlighter::definitionForName(syntax));
-}
-
-void EditorView::detectSyntax(const QString &fileName)
-{
-    applyDefinition(SyntaxHighlighter::detect(fileName, m_buffer.lineCount() > 0 ? m_buffer.line(0) : QString{}));
-}
-
-void EditorView::applyDefinition(const KSyntaxHighlighting::Definition &definition)
-{
-    if (m_highlighter->definition() == definition) {
+    TextDocument *const shown{document != nullptr ? document : m_ownDocument.get()};
+    if (m_document == shown) {
         return;
     }
-    m_highlighter->setDefinition(definition);
-    m_rows.clear();
+    // Where this view was, for the next view of that document (unless it is
+    // being deleted).
+    if (m_document != nullptr) {
+        m_document->setPlace(
+            {.contentX = m_contentX, .contentY = m_contentY, .caret = {.cursor = m_cursor, .anchor = m_anchor}}
+        );
+    }
+    attach(shown);
+    startOver(shown->place());
+    emit documentChanged();
+    emit textChanged();
+    emit undoStateChanged();
+    emit modifiedChanged();
     emit syntaxChanged();
+    emit indentationChanged();
+    emit defaultIndentationChanged();
+}
+
+void EditorView::attach(TextDocument *document)
+{
+    if (m_document != nullptr) {
+        disconnect(m_document, nullptr, this, nullptr);
+    }
+    m_document = document;
+    connect(document, &TextDocument::replaced, this, &EditorView::documentReplaced);
+    connect(document, &TextDocument::reset, this, &EditorView::documentReset);
+    connect(document, &TextDocument::modifiedChanged, this, &EditorView::modifiedChanged);
+    connect(document, &TextDocument::undoStateChanged, this, &EditorView::undoStateChanged);
+    connect(document, &TextDocument::syntaxChanged, this, &EditorView::syntaxChanged);
+    connect(document, &TextDocument::highlightingChanged, this, &EditorView::documentHighlightingChanged);
+    connect(document, &TextDocument::indentationChanged, this, &EditorView::documentIndentationChanged);
+    connect(document, &TextDocument::defaultIndentationChanged, this, &EditorView::defaultIndentationChanged);
+    // A document deleted under the view (its file closed): back to its own.
+    if (document != m_ownDocument.get()) {
+        connect(document, &QObject::destroyed, this, [this] { setDocument(nullptr); });
+    }
+    if (!m_syntaxTheme.isEmpty()) {
+        document->setTheme(m_syntaxTheme);
+    }
+    // The search goes on, over the new text.
+    auto search{std::make_unique<TextSearch>(&document->buffer())};
+    if (m_search != nullptr) {
+        search->setQuery(m_search->pattern(), m_search->caseSensitive(), m_search->regularExpression());
+    }
+    m_search = std::move(search);
+}
+
+void EditorView::startOver(const TextDocument::Place &place)
+{
+    if (wrap()) {
+        m_wrapIndex.reset(buffer(), static_cast<qsizetype>(std::floor(m_wrapWidth / m_charWidth)));
+    }
+    m_cursor = std::clamp(place.caret.cursor, qsizetype{0}, buffer().length());
+    m_anchor = std::clamp(place.caret.anchor, qsizetype{0}, buffer().length());
+    m_preedit.clear();
+    m_preferredX = -1.0;
+    m_widestLine = 0.0;
+    m_rows.clear();
+    m_numbers.clear();
+    m_contentX = place.contentX;
+    m_contentY = place.contentY;
+    emit contentXChanged();
+    emit contentYChanged();
+    emit selectionChanged();
+    if (m_search->isActive()) {
+        m_search->restart();
+        searchAhead();
+    }
+    emit textChanged();
+    emit contentSizeChanged();
+    emit cursorChanged();
+    polish();
+}
+
+void EditorView::documentReset(bool keepPlace)
+{
+    if (keepPlace) {
+        startOver({.contentX = m_contentX, .contentY = m_contentY, .caret = {.cursor = m_cursor, .anchor = m_cursor}});
+    } else {
+        startOver({});
+    }
+    emit indentationChanged();
+    emit caretMoved();
+}
+
+void EditorView::documentReplaced(qsizetype position, const QString &removed, const QString &inserted)
+{
+    if (wrap()) {
+        m_wrapIndex.linesReplaced(
+            buffer(),
+            buffer().lineAt(position),
+            removed.count(QLatin1Char('\n')),
+            inserted.count(QLatin1Char('\n'))
+        );
+    }
+    // Another view's edit: the caret stays on the same text.
+    if ((m_flags & Editing) == 0U) {
+        m_cursor = shifted(m_cursor, position, removed.size(), inserted.size());
+        m_anchor = shifted(m_anchor, position, removed.size(), inserted.size());
+        m_preedit.clear();
+    }
+    notifyTextChanged(position, removed, inserted);
+    if (m_search->isActive()) {
+        m_search->restart();
+        searchAhead();
+    }
+    emit textChanged();
+    emit contentSizeChanged();
+    emit cursorChanged();
+    emit selectionChanged();
+    polish();
+}
+
+void EditorView::documentIndentationChanged()
+{
+    // Tab stops move.
+    m_rows.clear();
+    m_widestLine = 0.0;
+    emit indentationChanged();
+    emit contentSizeChanged();
+    emit cursorChanged();
+    polish();
+}
+
+void EditorView::documentHighlightingChanged()
+{
+    m_rows.clear();
     polish();
 }
 
@@ -311,25 +430,8 @@ void EditorView::setSyntaxTheme(const QString &name)
         return;
     }
     m_syntaxTheme = name;
-    m_highlighter->setTheme(SyntaxHighlighter::themeNamed(name));
-    m_rows.clear();
+    m_document->setTheme(name);
     emit syntaxThemeChanged();
-    polish();
-}
-
-void EditorView::textReplaced(qsizetype position, const QString &removed, const QString &inserted)
-{
-    if (wrap()) {
-        m_wrapIndex.linesReplaced(
-            m_buffer,
-            m_buffer.lineAt(position),
-            removed.count(QLatin1Char('\n')),
-            inserted.count(QLatin1Char('\n'))
-        );
-    }
-    m_highlighter
-        ->linesReplaced(m_buffer.lineAt(position), removed.count(QLatin1Char('\n')), inserted.count(QLatin1Char('\n')));
-    notifyTextChanged(position, removed, inserted);
 }
 
 void EditorView::setColor(QRgb &field, const QColor &color)
@@ -411,7 +513,7 @@ void EditorView::setContentY(qreal contentY)
 
 qreal EditorView::gutterWidth() const
 {
-    const auto digits{std::max(3, static_cast<qint32>(std::log10(static_cast<qreal>(m_buffer.lineCount()))) + 1)};
+    const auto digits{std::max(3, static_cast<qint32>(std::log10(static_cast<qreal>(buffer().lineCount()))) + 1)};
     return (static_cast<qreal>(digits) * m_charWidth) + (2.0 * padding);
 }
 
@@ -427,12 +529,12 @@ qsizetype EditorView::rowOfLine(qsizetype line) const
 
 qsizetype EditorView::lineAtRow(qsizetype row) const
 {
-    return wrap() ? m_wrapIndex.lineAt(row) : std::clamp(row, qsizetype{0}, m_buffer.lineCount() - 1);
+    return wrap() ? m_wrapIndex.lineAt(row) : std::clamp(row, qsizetype{0}, buffer().lineCount() - 1);
 }
 
 qsizetype EditorView::totalRows() const
 {
-    return wrap() ? m_wrapIndex.totalRows() : m_buffer.lineCount();
+    return wrap() ? m_wrapIndex.totalRows() : buffer().lineCount();
 }
 
 qreal EditorView::wrapWidth() const
@@ -452,7 +554,7 @@ void EditorView::resetWrap(qsizetype anchorLine)
     m_wrapWidth = wrapWidth();
     m_rows.clear();
     if (wrap()) {
-        m_wrapIndex.reset(m_buffer, static_cast<qsizetype>(std::floor(m_wrapWidth / m_charWidth)));
+        m_wrapIndex.reset(buffer(), static_cast<qsizetype>(std::floor(m_wrapWidth / m_charWidth)));
     }
     emit contentSizeChanged();
     emit cursorChanged();
@@ -492,8 +594,8 @@ const QTextLayout *EditorView::laidOut(qsizetype line) const
 
 QRectF EditorView::positionRect(qsizetype position) const
 {
-    const qsizetype line{m_buffer.lineAt(position)};
-    qsizetype column{position - m_buffer.lineStart(line)};
+    const qsizetype line{buffer().lineAt(position)};
+    qsizetype column{position - buffer().lineStart(line)};
     if (!m_preedit.isEmpty() && position == m_cursor) {
         column += m_preeditCursor;
     }
@@ -526,7 +628,7 @@ qsizetype EditorView::positionAtRow(qsizetype row, qreal x) const
     if (visualLine + 1 < layout->lineCount() && column >= textLine.textStart() + textLine.textLength()) {
         column = textLine.textStart() + textLine.textLength() - 1;
     }
-    return m_buffer.lineStart(line) + column;
+    return buffer().lineStart(line) + column;
 }
 
 void EditorView::notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted)
@@ -570,12 +672,12 @@ void EditorView::setCursorPosition(qint64 position)
 
 qint32 EditorView::cursorLine() const
 {
-    return static_cast<qint32>(m_buffer.lineAt(m_cursor));
+    return static_cast<qint32>(buffer().lineAt(m_cursor));
 }
 
 qint32 EditorView::cursorColumn() const
 {
-    return static_cast<qint32>(m_cursor - m_buffer.lineStart(m_buffer.lineAt(m_cursor)));
+    return static_cast<qint32>(m_cursor - buffer().lineStart(buffer().lineAt(m_cursor)));
 }
 
 QRectF EditorView::cursorRectangle() const
@@ -590,108 +692,29 @@ bool EditorView::canPaste()
 
 // --- text and edits ---------------------------------------------------------
 
-void EditorView::setText(const QString &text)
-{
-    m_buffer = TextBuffer{text};
-    m_highlighter->reset();
-    if (wrap()) {
-        m_wrapIndex.reset(m_buffer, static_cast<qsizetype>(std::floor(m_wrapWidth / m_charWidth)));
-    }
-    m_undo.clear();
-    m_undoIndex = 0;
-    m_cleanIndex = 0;
-    m_cursor = 0;
-    m_anchor = 0;
-    m_preedit.clear();
-    m_preferredX = -1.0;
-    m_widestLine = 0.0;
-    // Only the edit state goes; the view's options stay.
-    m_flags &= DefaultIndentWithTabs | Wrap | ShowInvisibles;
-    // New text starts with the default indentation (a file's is detected).
-    if (defaultIndentWithTabs()) {
-        m_flags |= IndentWithTabs;
-    }
-    m_indentWidth = m_defaultIndentWidth;
-    m_rows.clear();
-    emit indentationChanged();
-    m_contentY = 0.0;
-    m_contentX = 0.0;
-    emit contentXChanged();
-    emit contentYChanged();
-    emit undoStateChanged();
-    emit modifiedChanged();
-    emit selectionChanged();
-    textEdited();
-}
-
 QString EditorView::selectedText() const
 {
-    return m_buffer.text(selectionStart(), selectionEnd() - selectionStart());
+    return buffer().text(selectionStart(), selectionEnd() - selectionStart());
 }
 
 void EditorView::replace(qsizetype position, qsizetype count, const QString &text, bool mergeable)
 {
-    const bool wasModified{modified()};
-    const bool couldUndo{canUndo()};
-    const bool couldRedo{canRedo()};
-    const Edit edit{
-        .position = position,
-        .removed = m_buffer.text(position, count),
-        .inserted = text,
-        .cursorBefore = m_cursor,
-        .anchorBefore = m_anchor,
-        .cursorAfter = position + text.size()
-    };
+    m_flags |= Editing;
+    m_document->replace(position, count, text, mergeable, {.cursor = m_cursor, .anchor = m_anchor});
+    m_flags &= ~Editing;
+    editedTo({.cursor = position + text.size(), .anchor = position + text.size()});
+}
 
-    // Forget what was undone, and the clean state if it was there.
-    if (m_undoIndex < m_undo.size()) {
-        m_undo.resize(m_undoIndex);
-        if (m_cleanIndex > m_undoIndex) {
-            m_cleanIndex = -1;
-        }
-    }
-
-    // Typing and deleting one character at a time extend the last edit; a
-    // new line closes the group, so a line typed after it is its own edit.
-    mergeable = mergeable && !text.contains(QLatin1Char('\n'));
-    bool merged{false};
-    const bool canMerge{mergeable && (m_flags & MergeOpen) != 0U && !m_undo.isEmpty() && m_cleanIndex != m_undoIndex};
-    if (canMerge) {
-        Edit &last{m_undo.last()};
-        if (count == 0 && last.removed.isEmpty() && last.position + last.inserted.size() == position) {
-            last.inserted.append(text);
-            last.cursorAfter = edit.cursorAfter;
-            merged = true;
-        } else if (text.isEmpty() && last.inserted.isEmpty() && position + count == last.position) {
-            last.removed.prepend(edit.removed);
-            last.position = position;
-            last.cursorAfter = position;
-            merged = true;
-        } else if (text.isEmpty() && last.inserted.isEmpty() && position == last.position) {
-            last.removed.append(edit.removed);
-            merged = true;
-        }
-    }
-    if (!merged) {
-        m_undo.append(edit);
-        ++m_undoIndex;
-    }
-
-    m_buffer.remove(position, count);
-    m_buffer.insert(position, text);
-    textReplaced(position, edit.removed, text);
-    m_cursor = edit.cursorAfter;
-    m_anchor = m_cursor;
+void EditorView::editedTo(TextDocument::Caret caret)
+{
+    m_cursor = caret.cursor;
+    m_anchor = caret.anchor;
     m_preferredX = -1.0;
-    m_flags = mergeable ? (m_flags | MergeOpen) : (m_flags & ~MergeOpen);
-    textEdited();
+    emit cursorChanged();
+    emit caretMoved();
     emit selectionChanged();
-    if (couldUndo != canUndo() || couldRedo != canRedo()) {
-        emit undoStateChanged();
-    }
-    if (wasModified != modified()) {
-        emit modifiedChanged();
-    }
+    notifyCursorChanged();
+    polish();
 }
 
 void EditorView::insert(const QString &text)
@@ -706,67 +729,30 @@ void EditorView::deleteSelection()
     }
 }
 
-void EditorView::applyEdit(const Edit &edit, bool forward)
-{
-    const QString &from{forward ? edit.removed : edit.inserted};
-    const QString &to{forward ? edit.inserted : edit.removed};
-    m_buffer.remove(edit.position, from.size());
-    m_buffer.insert(edit.position, to);
-    textReplaced(edit.position, from, to);
-    m_cursor = forward ? edit.cursorAfter : edit.cursorBefore;
-    m_anchor = forward ? edit.cursorAfter : edit.anchorBefore;
-}
-
 void EditorView::undo()
 {
-    if (!canUndo()) {
-        return;
-    }
-    const bool wasModified{modified()};
-    --m_undoIndex;
-    applyEdit(m_undo.at(m_undoIndex), false);
-    m_flags &= ~MergeOpen;
-    m_preferredX = -1.0;
-    textEdited();
-    emit selectionChanged();
-    emit undoStateChanged();
-    if (wasModified != modified()) {
-        emit modifiedChanged();
+    m_flags |= Editing;
+    const std::optional<TextDocument::Caret> caret{m_document->undo()};
+    m_flags &= ~Editing;
+    if (caret) {
+        editedTo(*caret);
     }
 }
 
 void EditorView::redo()
 {
-    if (!canRedo()) {
-        return;
+    m_flags |= Editing;
+    const std::optional<TextDocument::Caret> caret{m_document->redo()};
+    m_flags &= ~Editing;
+    if (caret) {
+        editedTo(*caret);
     }
-    const bool wasModified{modified()};
-    applyEdit(m_undo.at(m_undoIndex), true);
-    ++m_undoIndex;
-    m_flags &= ~MergeOpen;
-    m_preferredX = -1.0;
-    textEdited();
-    emit selectionChanged();
-    emit undoStateChanged();
-    if (wasModified != modified()) {
-        emit modifiedChanged();
-    }
-}
-
-void EditorView::markSaved()
-{
-    if (m_cleanIndex == m_undoIndex) {
-        return;
-    }
-    m_cleanIndex = m_undoIndex;
-    m_flags &= ~MergeOpen;
-    emit modifiedChanged();
 }
 
 void EditorView::select(qint64 start, qint64 end)
 {
-    start = std::clamp(start, qint64{0}, m_buffer.length());
-    end = std::clamp(end, qint64{0}, m_buffer.length());
+    start = std::clamp(start, qint64{0}, buffer().length());
+    end = std::clamp(end, qint64{0}, buffer().length());
     m_anchor = start;
     moveCaret(end, Select::Extend);
     // Even when the caret did not move, the anchor may have.
@@ -776,7 +762,7 @@ void EditorView::select(qint64 start, qint64 end)
 
 void EditorView::selectAll()
 {
-    select(0, m_buffer.length());
+    select(0, buffer().length());
 }
 
 void EditorView::cut()
@@ -804,26 +790,13 @@ void EditorView::paste()
     replace(selectionStart(), selectionEnd() - selectionStart(), text, false);
 }
 
-void EditorView::textEdited()
-{
-    if (m_search->isActive()) {
-        m_search->restart();
-        searchAhead();
-    }
-    emit textChanged();
-    emit contentSizeChanged();
-    emit cursorChanged();
-    emit caretMoved();
-    polish();
-}
-
 // --- caret and selection -------------------------------------------------------
 
 void EditorView::moveCaret(qsizetype position, Select select)
 {
-    position = std::clamp(position, qsizetype{0}, m_buffer.length());
+    position = std::clamp(position, qsizetype{0}, buffer().length());
     const qsizetype anchor{select == Select::Extend ? m_anchor : position};
-    m_flags &= ~MergeOpen;
+    m_document->closeMerge();
     m_preferredX = -1.0;
     if (position == m_cursor && anchor == m_anchor) {
         return;
@@ -852,13 +825,13 @@ void EditorView::moveVertically(qsizetype lines, Select select)
 
 qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
 {
-    const qsizetype line{m_buffer.lineAt(position)};
-    const qsizetype lineStart{m_buffer.lineStart(line)};
-    const QString text{m_buffer.line(line)};
+    const qsizetype line{buffer().lineAt(position)};
+    const qsizetype lineStart{buffer().lineStart(line)};
+    const QString text{buffer().line(line)};
     qsizetype column{position - lineStart};
     if (forward) {
         if (column >= text.size()) {
-            return std::min(position + 1, m_buffer.length());
+            return std::min(position + 1, buffer().length());
         }
         // Past the spaces and punctuation, then past the word.
         while (column < text.size() && !isWordCharacter(text.at(column))) {
@@ -883,85 +856,29 @@ qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
 
 // --- indentation --------------------------------------------------------------
 
-void EditorView::setIndentWithTabs(bool tabs)
-{
-    if (indentWithTabs() == tabs) {
-        return;
-    }
-    m_flags = tabs ? (m_flags | IndentWithTabs) : (m_flags & ~IndentWithTabs);
-    emit indentationChanged();
-}
-
-void EditorView::setIndentWidth(qint32 width)
-{
-    width = std::clamp(width, 1, 16);
-    if (m_indentWidth == width) {
-        return;
-    }
-    m_indentWidth = width;
-    // Tab stops move.
-    m_rows.clear();
-    m_widestLine = 0.0;
-    emit indentationChanged();
-    emit contentSizeChanged();
-    emit cursorChanged();
-    polish();
-}
-
 indentation::Style EditorView::indentStyle() const
 {
     return {
-        .width = static_cast<quint8>(m_indentWidth),
+        .width = static_cast<quint8>(indentWidth()),
         .kind = indentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
     };
 }
 
-void EditorView::setDefaultIndentWithTabs(bool tabs)
-{
-    if (defaultIndentWithTabs() == tabs) {
-        return;
-    }
-    m_flags = tabs ? (m_flags | DefaultIndentWithTabs) : (m_flags & ~DefaultIndentWithTabs);
-    emit defaultIndentationChanged();
-}
-
-void EditorView::setDefaultIndentWidth(qint32 width)
-{
-    width = std::clamp(width, 1, 16);
-    if (m_defaultIndentWidth == width) {
-        return;
-    }
-    m_defaultIndentWidth = width;
-    emit defaultIndentationChanged();
-}
-
-void EditorView::detectIndentation()
-{
-    constexpr qsizetype linesToRead{1000};
-    const indentation::Style fallback{
-        .width = static_cast<quint8>(m_defaultIndentWidth),
-        .kind = defaultIndentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
-    };
-    const indentation::Style style{indentation::detect(m_buffer, linesToRead, fallback)};
-    setIndentWithTabs(style.kind == indentation::Kind::Tabs);
-    setIndentWidth(style.width);
-}
-
 void EditorView::insertNewline()
 {
-    const qsizetype line{m_buffer.lineAt(selectionStart())};
-    const qsizetype lineStart{m_buffer.lineStart(line)};
-    const QString text{m_buffer.text(lineStart, selectionStart() - lineStart)};
+    const qsizetype line{buffer().lineAt(selectionStart())};
+    const qsizetype lineStart{buffer().lineStart(line)};
+    const QString text{buffer().text(lineStart, selectionStart() - lineStart)};
     insert(QStringLiteral("\n") + indentation::leadingWhitespace(text));
 }
 
 void EditorView::insertTab()
 {
-    if (hasSelection() && m_buffer.lineAt(selectionStart()) != m_buffer.lineAt(selectionEnd())) {
+    if (hasSelection() && buffer().lineAt(selectionStart()) != buffer().lineAt(selectionEnd())) {
         indent();
         return;
     }
-    const qsizetype column{selectionStart() - m_buffer.lineStart(m_buffer.lineAt(selectionStart()))};
+    const qsizetype column{selectionStart() - buffer().lineStart(buffer().lineAt(selectionStart()))};
     insert(indentation::tabAt(indentStyle(), column));
 }
 
@@ -977,17 +894,17 @@ void EditorView::outdent()
 
 void EditorView::changeSelectedLines(bool outdenting)
 {
-    const qsizetype firstLine{m_buffer.lineAt(selectionStart())};
-    qsizetype lastLine{m_buffer.lineAt(selectionEnd())};
+    const qsizetype firstLine{buffer().lineAt(selectionStart())};
+    qsizetype lastLine{buffer().lineAt(selectionEnd())};
     // A selection ending at the start of a line leaves that line out.
-    if (hasSelection() && lastLine > firstLine && selectionEnd() == m_buffer.lineStart(lastLine)) {
+    if (hasSelection() && lastLine > firstLine && selectionEnd() == buffer().lineStart(lastLine)) {
         --lastLine;
     }
-    const qsizetype start{m_buffer.lineStart(firstLine)};
-    const qsizetype end{m_buffer.lineStart(lastLine) + m_buffer.lineLength(lastLine)};
-    const QString before{m_buffer.text(start, end - start)};
+    const qsizetype start{buffer().lineStart(firstLine)};
+    const qsizetype end{buffer().lineStart(lastLine) + buffer().lineLength(lastLine)};
+    const QString before{buffer().text(start, end - start)};
     const indentation::Style style{
-        .width = static_cast<quint8>(m_indentWidth),
+        .width = static_cast<quint8>(indentWidth()),
         .kind = indentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
     };
     const QString after{outdenting ? indentation::outdented(before, style) : indentation::indented(before, style)};
@@ -995,7 +912,7 @@ void EditorView::changeSelectedLines(bool outdenting)
         return;
     }
     const bool selected{hasSelection()};
-    const qsizetype caretColumn{m_cursor - m_buffer.lineStart(m_buffer.lineAt(m_cursor))};
+    const qsizetype caretColumn{m_cursor - buffer().lineStart(buffer().lineAt(m_cursor))};
     replace(start, end - start, after, false);
     if (selected) {
         select(start, start + after.size());
@@ -1019,9 +936,9 @@ bool EditorView::goToLine(const QString &target)
     if (!lineOk || !columnOk) {
         return false;
     }
-    const qsizetype clampedLine{std::clamp(line - 1, qsizetype{0}, m_buffer.lineCount() - 1)};
-    const qsizetype clampedColumn{std::clamp(column - 1, qsizetype{0}, m_buffer.lineLength(clampedLine))};
-    moveCaret(m_buffer.lineStart(clampedLine) + clampedColumn, Select::Collapse);
+    const qsizetype clampedLine{std::clamp(line - 1, qsizetype{0}, buffer().lineCount() - 1)};
+    const qsizetype clampedColumn{std::clamp(column - 1, qsizetype{0}, buffer().lineLength(clampedLine))};
+    moveCaret(buffer().lineStart(clampedLine) + clampedColumn, Select::Collapse);
     return true;
 }
 
@@ -1170,7 +1087,7 @@ qint32 EditorView::replaceAll(const QString &replacement)
     QString text;
     qsizetype done{start};
     for (const TextSearch::Match &match : matches) {
-        text.append(m_buffer.text(done, match.start - done));
+        text.append(buffer().text(done, match.start - done));
         text.append(m_search->replacementFor(match, replacement));
         done = match.start + match.length;
     }
@@ -1190,12 +1107,12 @@ void EditorView::updateMetrics()
 qsizetype EditorView::firstVisibleLine() const
 {
     const auto row{static_cast<qsizetype>(std::floor((m_contentY - topPadding) / m_lineHeight))};
-    return std::clamp(lineAtRow(std::max(row, qsizetype{0})) - overscan, qsizetype{0}, m_buffer.lineCount() - 1);
+    return std::clamp(lineAtRow(std::max(row, qsizetype{0})) - overscan, qsizetype{0}, buffer().lineCount() - 1);
 }
 
 qsizetype EditorView::lastVisibleLine() const
 {
-    return std::min(firstVisibleLine() + visibleLineCount(), m_buffer.lineCount());
+    return std::min(firstVisibleLine() + visibleLineCount(), buffer().lineCount());
 }
 
 qsizetype EditorView::visibleLineCount() const
@@ -1205,17 +1122,17 @@ qsizetype EditorView::visibleLineCount() const
 
 QString EditorView::displayText(qsizetype line) const
 {
-    QString text{m_buffer.line(line)};
-    if (!m_preedit.isEmpty() && line == m_buffer.lineAt(m_cursor)) {
-        text.insert(m_cursor - m_buffer.lineStart(line), m_preedit);
+    QString text{buffer().line(line)};
+    if (!m_preedit.isEmpty() && line == buffer().lineAt(m_cursor)) {
+        text.insert(m_cursor - buffer().lineStart(line), m_preedit);
     }
     return text;
 }
 
 std::unique_ptr<QTextLayout> EditorView::layoutLine(qsizetype line) const
 {
-    const bool composing{!m_preedit.isEmpty() && line == m_buffer.lineAt(m_cursor)};
-    return layoutText(displayText(line), composing ? m_cursor - m_buffer.lineStart(line) : -1);
+    const bool composing{!m_preedit.isEmpty() && line == buffer().lineAt(m_cursor)};
+    return layoutText(displayText(line), composing ? m_cursor - buffer().lineStart(line) : -1);
 }
 
 std::unique_ptr<QTextLayout>
@@ -1225,7 +1142,7 @@ EditorView::layoutText(const QString &text, qsizetype preeditColumn, const QList
     auto layout{std::make_unique<QTextLayout>(text, m_font)};
     QTextOption option;
     option.setWrapMode(wrap() ? QTextOption::WrapAtWordBoundaryOrAnywhere : QTextOption::NoWrap);
-    option.setTabStopDistance(static_cast<qreal>(m_indentWidth) * m_charWidth);
+    option.setTabStopDistance(static_cast<qreal>(indentWidth()) * m_charWidth);
     if (showInvisibles()) {
         option.setFlags(QTextOption::ShowTabsAndSpaces);
     }
@@ -1268,7 +1185,7 @@ qsizetype EditorView::positionAt(const QPointF &point) const
         return 0;
     }
     if (row >= totalRows()) {
-        return m_buffer.length();
+        return buffer().length();
     }
     return positionAtRow(row, point.x() + m_contentX - textLeft());
 }
@@ -1278,9 +1195,9 @@ EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
     // A row already laid out with the same text, variant and starting state
     // (wherever its line was), else a new one.
     const bool composing{!m_preedit.isEmpty() && line == cursorLine};
-    const bool highlighted{!composing && m_highlighter->isActive() && m_highlighter->isReady(line)};
+    const bool highlighted{!composing && highlighter().isActive() && highlighter().isReady(line)};
     const quint64 variant{composing ? m_preeditGeneration : (highlighted ? Highlighted : Plain)};
-    KSyntaxHighlighting::State state{highlighted ? m_highlighter->startState(line) : KSyntaxHighlighting::State{}};
+    KSyntaxHighlighting::State state{highlighted ? highlighter().startState(line) : KSyntaxHighlighting::State{}};
     QString text{displayText(line)};
     const auto reusable{std::ranges::find_if(m_rows, [&text, &state, variant](const Row &row) {
         return row.layout != nullptr && row.variant == variant && row.text == text && row.state == state;
@@ -1293,8 +1210,8 @@ EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
     Row row{.id = m_nextRowId++, .line = line, .variant = variant, .text = {}, .layout = {}, .state = std::move(state)};
     row.layout = layoutText(
         text,
-        composing ? m_cursor - m_buffer.lineStart(line) : -1,
-        highlighted ? m_highlighter->formats(line, text) : QList<QTextLayout::FormatRange>{}
+        composing ? m_cursor - buffer().lineStart(line) : -1,
+        highlighted ? highlighter().formats(line, text) : QList<QTextLayout::FormatRange>{}
     );
     row.width = row.layout->lineAt(0).naturalTextWidth();
     row.text = std::move(text);
@@ -1323,16 +1240,16 @@ void EditorView::layoutRows()
         resetWrap(topLine());
     }
     const qsizetype first{firstVisibleLine()};
-    const qsizetype count{std::min(visibleLineCount(), m_buffer.lineCount() - first)};
-    const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
+    const qsizetype count{std::min(visibleLineCount(), buffer().lineCount() - first)};
+    const qsizetype cursorLine{buffer().lineAt(m_cursor)};
     const qsizetype baseRow{rowOfLine(first)};
     // Down to this row (overscan included): wrapped lines take several.
     const qsizetype lastRow{
         static_cast<qsizetype>(std::floor((m_contentY + height() - topPadding) / m_lineHeight)) + overscan
     };
     // Highlight up to the view, unless that takes long: the rest comes later.
-    if (!m_highlighter->advance(first + count, QDeadlineTimer{highlightInLayout}) ||
-        !m_highlighter->isReady(std::min(first + count + highlightLookahead, m_buffer.lineCount()))) {
+    if (!highlighter().advance(first + count, QDeadlineTimer{highlightInLayout}) ||
+        !highlighter().isReady(std::min(first + count + highlightLookahead, buffer().lineCount()))) {
         m_highlightTimer.start();
     }
     std::vector<Row> rows;
@@ -1340,7 +1257,7 @@ void EditorView::layoutRows()
     rows.reserve(static_cast<std::size_t>(count));
     numbers.reserve(static_cast<std::size_t>(count));
     qsizetype rowsAbove{0};
-    for (qsizetype line{first}; line < m_buffer.lineCount() && baseRow + rowsAbove <= lastRow; ++line) {
+    for (qsizetype line{first}; line < buffer().lineCount() && baseRow + rowsAbove <= lastRow; ++line) {
         Row row{takeRow(line, cursorLine)};
         row.top = static_cast<qreal>(rowsAbove) * m_lineHeight;
         const qsizetype visualLines{row.layout->lineCount()};
@@ -1361,12 +1278,11 @@ void EditorView::layoutRows()
 void EditorView::highlightAhead()
 {
     const qsizetype last{lastVisibleLine()};
-    const bool wasReady{m_highlighter->isReady(last)};
-    const bool done{m_highlighter->advance(
-        std::min(last + highlightLookahead, m_buffer.lineCount()),
-        QDeadlineTimer{highlightSlice}
-    )};
-    if (!wasReady && m_highlighter->isReady(last)) {
+    const bool wasReady{highlighter().isReady(last)};
+    const bool done{
+        highlighter().advance(std::min(last + highlightLookahead, buffer().lineCount()), QDeadlineTimer{highlightSlice})
+    };
+    if (!wasReady && highlighter().isReady(last)) {
         polish();
     }
     if (!done) {
@@ -1382,10 +1298,10 @@ void EditorView::layoutDecorations()
     m_caretRect = {};
     // While text is dragged over the view, the caret shows where it would go.
     const qsizetype caret{m_dropPosition >= 0 ? m_dropPosition : m_cursor};
-    const qsizetype cursorLine{m_buffer.lineAt(caret)};
+    const qsizetype cursorLine{buffer().lineAt(caret)};
     for (const Row &row : m_rows) {
-        const qsizetype lineStart{m_buffer.lineStart(row.line)};
-        const qsizetype lineEnd{lineStart + m_buffer.lineLength(row.line)};
+        const qsizetype lineStart{buffer().lineStart(row.line)};
+        const qsizetype lineEnd{lineStart + buffer().lineLength(row.line)};
         if (row.line == cursorLine) {
             qsizetype column{caret - lineStart};
             if (!m_preedit.isEmpty() && m_dropPosition < 0) {
@@ -1452,16 +1368,16 @@ void EditorView::layoutMatches()
     if (m_rows.empty() || !m_search->isActive()) {
         return;
     }
-    const qsizetype first{m_buffer.lineStart(m_rows.front().line)};
+    const qsizetype first{buffer().lineStart(m_rows.front().line)};
     const QList<TextSearch::Match> &matches{m_search->matches()};
     for (qsizetype index{m_search->indexFrom(first)}; index < matches.size(); ++index) {
         const TextSearch::Match &match{matches.at(index)};
-        const qsizetype line{m_buffer.lineAt(match.start)};
+        const qsizetype line{buffer().lineAt(match.start)};
         if (line > m_rows.back().line) {
             break;
         }
         const Row &row{m_rows.at(static_cast<std::size_t>(line - m_rows.front().line))};
-        const qsizetype column{match.start - m_buffer.lineStart(line)};
+        const qsizetype column{match.start - buffer().lineStart(line)};
         appendRangeRects(m_matchRects, row, column, column + match.length);
     }
 }
@@ -1509,22 +1425,22 @@ void EditorView::layoutMarks()
         return std::ranges::find_if(m_rows, [line](const Row &row) { return row.line == line; });
     }};
     if (const std::optional<matching::BracketPair> pair{
-            matching::matchingBracket(m_buffer, m_cursor, bracketSearchLines)
+            matching::matchingBracket(buffer(), m_cursor, bracketSearchLines)
         }) {
         for (const qsizetype position : {pair->bracket, pair->match}) {
-            const qsizetype line{m_buffer.lineAt(position)};
+            const qsizetype line{buffer().lineAt(position)};
             const auto row{rowAt(line)};
             if (row != m_rows.end()) {
-                const qsizetype column{position - m_buffer.lineStart(line)};
+                const qsizetype column{position - buffer().lineStart(line)};
                 appendRangeRects(m_bracketRects, *row, column, column + 1);
             }
         }
     }
-    const auto cursorRow{rowAt(m_buffer.lineAt(m_cursor))};
+    const auto cursorRow{rowAt(buffer().lineAt(m_cursor))};
     if (cursorRow == m_rows.end()) {
         return;
     }
-    const matching::Range word{matching::wordAt(cursorRow->text, m_cursor - m_buffer.lineStart(cursorRow->line))};
+    const matching::Range word{matching::wordAt(cursorRow->text, m_cursor - buffer().lineStart(cursorRow->line))};
     if (word.end == word.start) {
         return;
     }
@@ -1604,7 +1520,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     removeText(node->textLayer, node->rows);
     node->rows = std::move(rows);
 
-    const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
+    const qsizetype cursorLine{buffer().lineAt(m_cursor)};
     const QColor numberColor{lineNumberColor()};
     QHash<quint64, Shown> numbers;
     // Numbers and rows are laid out in step: a number sits at its row's top.
@@ -1665,9 +1581,9 @@ bool EditorView::handleNavigation(const QKeyEvent *event)
     const bool command{modifiers.testFlag(Qt::ControlModifier)};
     const bool option{modifiers.testFlag(Qt::AltModifier)};
     const Select select{modifiers.testFlag(Qt::ShiftModifier) ? Select::Extend : Select::Collapse};
-    const qsizetype line{m_buffer.lineAt(m_cursor)};
-    const qsizetype lineStart{m_buffer.lineStart(line)};
-    const qsizetype lineEnd{lineStart + m_buffer.lineLength(line)};
+    const qsizetype line{buffer().lineAt(m_cursor)};
+    const qsizetype lineStart{buffer().lineStart(line)};
+    const qsizetype lineEnd{lineStart + buffer().lineLength(line)};
     const qsizetype page{std::max(qsizetype{1}, static_cast<qsizetype>(height() / m_lineHeight) - 1)};
     const bool collapsing{hasSelection() && select == Select::Collapse};
 
@@ -1699,7 +1615,7 @@ bool EditorView::handleNavigation(const QKeyEvent *event)
         return true;
     case Qt::Key_Down:
         if (command) {
-            moveCaret(m_buffer.length(), select);
+            moveCaret(buffer().length(), select);
         } else {
             moveVertically(1, select);
         }
@@ -1734,12 +1650,12 @@ bool EditorView::handleDeletion(const QKeyEvent *event)
     const Qt::KeyboardModifiers modifiers{event->modifiers()};
     const bool command{modifiers.testFlag(Qt::ControlModifier)};
     const bool option{modifiers.testFlag(Qt::AltModifier)};
-    const qsizetype line{m_buffer.lineAt(m_cursor)};
-    const qsizetype lineStart{m_buffer.lineStart(line)};
+    const qsizetype line{buffer().lineAt(m_cursor)};
+    const qsizetype lineStart{buffer().lineStart(line)};
     // ⌘ to the line's start or end, ⌥ to the word's, otherwise one character.
-    qsizetype target{std::clamp(m_cursor + (backspace ? -1 : 1), qsizetype{0}, m_buffer.length())};
+    qsizetype target{std::clamp(m_cursor + (backspace ? -1 : 1), qsizetype{0}, buffer().length())};
     if (command) {
-        target = backspace ? lineStart : lineStart + m_buffer.lineLength(line);
+        target = backspace ? lineStart : lineStart + buffer().lineLength(line);
     } else if (option) {
         target = wordBoundary(m_cursor, !backspace);
     }
@@ -1787,7 +1703,7 @@ void EditorView::inputMethodEvent(QInputMethodEvent *event)
     const QString commit{event->commitString()};
     if (event->replacementLength() > 0) {
         const qsizetype from{std::max(qsizetype{0}, m_cursor + event->replacementStart())};
-        replace(from, std::min<qsizetype>(event->replacementLength(), m_buffer.length() - from), commit, false);
+        replace(from, std::min<qsizetype>(event->replacementLength(), buffer().length() - from), commit, false);
     } else if (!commit.isEmpty()) {
         replace(selectionStart(), selectionEnd() - selectionStart(), commit, !hasSelection() && commit.size() == 1);
     }
@@ -1812,8 +1728,8 @@ void EditorView::inputMethodEvent(QInputMethodEvent *event)
 
 QVariant EditorView::inputMethodQuery(Qt::InputMethodQuery query) const
 {
-    const qsizetype line{m_buffer.lineAt(m_cursor)};
-    const qsizetype lineStart{m_buffer.lineStart(line)};
+    const qsizetype line{buffer().lineAt(m_cursor)};
+    const qsizetype lineStart{buffer().lineStart(line)};
     switch (query) {
     case Qt::ImEnabled:
         return true;
@@ -1826,19 +1742,19 @@ QVariant EditorView::inputMethodQuery(Qt::InputMethodQuery query) const
     case Qt::ImAnchorRectangle:
         return positionRect(m_anchor).translated(-m_contentX, -m_contentY);
     case Qt::ImSurroundingText:
-        return m_buffer.line(line);
+        return buffer().line(line);
     case Qt::ImCursorPosition:
         return static_cast<qint32>(m_cursor - lineStart);
     case Qt::ImAnchorPosition:
-        return static_cast<qint32>(m_buffer.lineAt(m_anchor) == line ? m_anchor - lineStart : m_cursor - lineStart);
+        return static_cast<qint32>(buffer().lineAt(m_anchor) == line ? m_anchor - lineStart : m_cursor - lineStart);
     case Qt::ImAbsolutePosition:
         return static_cast<qint64>(m_cursor);
     case Qt::ImCurrentSelection:
         return selectedText();
     case Qt::ImTextBeforeCursor:
-        return m_buffer.text(lineStart, m_cursor - lineStart);
+        return buffer().text(lineStart, m_cursor - lineStart);
     case Qt::ImTextAfterCursor:
-        return m_buffer.text(m_cursor, lineStart + m_buffer.lineLength(line) - m_cursor);
+        return buffer().text(m_cursor, lineStart + buffer().lineLength(line) - m_cursor);
     default:
         return QQuickItem::inputMethodQuery(query);
     }
@@ -1854,9 +1770,9 @@ void EditorView::mousePressEvent(QMouseEvent *event)
     const qint32 interval{QGuiApplication::styleHints()->mouseDoubleClickInterval()};
     if (m_lastDoubleClick.isValid() && m_lastDoubleClick.elapsed() < interval) {
         m_lastDoubleClick.invalidate();
-        const qsizetype line{m_buffer.lineAt(position)};
-        const qsizetype next{line + 1 < m_buffer.lineCount() ? m_buffer.lineStart(line + 1) : m_buffer.length()};
-        select(m_buffer.lineStart(line), next);
+        const qsizetype line{buffer().lineAt(position)};
+        const qsizetype next{line + 1 < buffer().lineCount() ? buffer().lineStart(line + 1) : buffer().length()};
+        select(buffer().lineStart(line), next);
         event->accept();
         return;
     }
@@ -1985,7 +1901,7 @@ void EditorView::dropEvent(QDropEvent *event)
 void EditorView::mouseDoubleClickEvent(QMouseEvent *event)
 {
     const qsizetype position{positionAt(event->position())};
-    const qsizetype start{wordBoundary(std::min(position + 1, m_buffer.length()), false)};
+    const qsizetype start{wordBoundary(std::min(position + 1, buffer().length()), false)};
     const qsizetype end{wordBoundary(start, true)};
     select(start, std::max(end, position));
     m_lastDoubleClick.start();

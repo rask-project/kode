@@ -1,11 +1,13 @@
 #pragma once
 
 #include "TextBuffer.h"
+#include "TextDocument.h"
 #include "WrapIndex.h"
 
 #include <QColor>
 #include <QElapsedTimer>
 #include <QFont>
+#include <QPointer>
 #include <QQuickItem>
 #include <QRectF>
 #include <QString>
@@ -35,16 +37,19 @@ struct Style;
 class SyntaxHighlighter;
 class TextSearch;
 
-// The editing surface: a TextBuffer drawn by laying out and rendering only
+// The editing surface: a TextDocument drawn by laying out and rendering only
 // the lines in view (one QSGTextNode per line and per line number), with
-// caret, selection, undo, the clipboard and input methods. Monospaced
-// layout, no wrapping. It sits in a Flickable, filling its viewport:
+// caret, selection, the clipboard and input methods. Several views may show
+// one document (`document`), each with its own caret, scroll and layout;
+// without one a view edits a document of its own. Monospaced layout. It sits in a Flickable, filling its viewport:
 // `contentWidth`/`contentHeight` size the Flickable, `contentX`/`contentY`
 // say which part is in view; `cursorRectangle` is what to keep visible.
 class EditorView : public QQuickItem
 {
     Q_OBJECT
     QML_ELEMENT
+    // The text shown; null: the view's own.
+    Q_PROPERTY(tekst::TextDocument *document READ document WRITE setDocument NOTIFY documentChanged)
     Q_PROPERTY(QFont font READ font WRITE setFont NOTIFY fontChanged)
     Q_PROPERTY(QColor textColor READ textColor WRITE setTextColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY colorsChanged)
@@ -112,6 +117,8 @@ public:
     ~EditorView() override;
     Q_DISABLE_COPY_MOVE(EditorView)
 
+    [[nodiscard]] TextDocument *document() const { return m_document; }
+    void setDocument(TextDocument *document);
     [[nodiscard]] QFont font() const { return m_font; }
     void setFont(const QFont &font);
     [[nodiscard]] QColor textColor() const { return QColor::fromRgba(m_colors.text); }
@@ -144,14 +151,14 @@ public:
     void setWrap(bool wrap);
     [[nodiscard]] bool showInvisibles() const noexcept { return (m_flags & ShowInvisibles) != 0U; }
     void setShowInvisibles(bool show);
-    [[nodiscard]] bool indentWithTabs() const noexcept { return (m_flags & IndentWithTabs) != 0U; }
-    void setIndentWithTabs(bool tabs);
-    [[nodiscard]] qint32 indentWidth() const noexcept { return static_cast<qint32>(m_indentWidth); }
-    void setIndentWidth(qint32 width);
-    [[nodiscard]] bool defaultIndentWithTabs() const noexcept { return (m_flags & DefaultIndentWithTabs) != 0U; }
-    void setDefaultIndentWithTabs(bool tabs);
-    [[nodiscard]] qint32 defaultIndentWidth() const noexcept { return static_cast<qint32>(m_defaultIndentWidth); }
-    void setDefaultIndentWidth(qint32 width);
+    [[nodiscard]] bool indentWithTabs() const noexcept { return m_document->indentWithTabs(); }
+    void setIndentWithTabs(bool tabs) { m_document->setIndentWithTabs(tabs); }
+    [[nodiscard]] qint32 indentWidth() const noexcept { return m_document->indentWidth(); }
+    void setIndentWidth(qint32 width) { m_document->setIndentWidth(width); }
+    [[nodiscard]] bool defaultIndentWithTabs() const noexcept { return m_document->defaultIndentWithTabs(); }
+    void setDefaultIndentWithTabs(bool tabs) { m_document->setDefaultIndentWithTabs(tabs); }
+    [[nodiscard]] qint32 defaultIndentWidth() const noexcept { return m_document->defaultIndentWidth(); }
+    void setDefaultIndentWidth(qint32 width) { m_document->setDefaultIndentWidth(width); }
     [[nodiscard]] qreal contentX() const noexcept { return m_contentX; }
     void setContentX(qreal contentX);
     [[nodiscard]] qreal contentY() const noexcept { return m_contentY; }
@@ -159,8 +166,8 @@ public:
     [[nodiscard]] qreal contentWidth() const;
     [[nodiscard]] qreal contentHeight() const;
     [[nodiscard]] qreal gutterWidth() const;
-    [[nodiscard]] qint32 lineCount() const { return static_cast<qint32>(m_buffer.lineCount()); }
-    [[nodiscard]] qint64 length() const { return m_buffer.length(); }
+    [[nodiscard]] qint32 lineCount() const { return static_cast<qint32>(buffer().lineCount()); }
+    [[nodiscard]] qint64 length() const { return buffer().length(); }
     [[nodiscard]] qint64 cursorPosition() const noexcept { return m_cursor; }
     void setCursorPosition(qint64 position);
     [[nodiscard]] qint32 cursorLine() const;
@@ -169,19 +176,19 @@ public:
     [[nodiscard]] qint64 selectionStart() const noexcept { return std::min(m_anchor, m_cursor); }
     [[nodiscard]] qint64 selectionEnd() const noexcept { return std::max(m_anchor, m_cursor); }
     [[nodiscard]] bool hasSelection() const noexcept { return m_anchor != m_cursor; }
-    [[nodiscard]] bool canUndo() const noexcept { return m_undoIndex > 0; }
-    [[nodiscard]] bool canRedo() const noexcept { return m_undoIndex < m_undo.size(); }
+    [[nodiscard]] bool canUndo() const noexcept { return m_document->canUndo(); }
+    [[nodiscard]] bool canRedo() const noexcept { return m_document->canRedo(); }
     [[nodiscard]] static bool canPaste();
-    [[nodiscard]] bool modified() const noexcept { return m_undoIndex != m_cleanIndex; }
-    [[nodiscard]] QString syntax() const;
-    void setSyntax(const QString &syntax);
+    [[nodiscard]] bool modified() const noexcept { return m_document->modified(); }
+    [[nodiscard]] QString syntax() const { return m_document->syntax(); }
+    void setSyntax(const QString &syntax) { m_document->setSyntax(syntax); }
     [[nodiscard]] QString syntaxTheme() const { return m_syntaxTheme; }
     void setSyntaxTheme(const QString &name);
 
     // The whole text, lines ending with '\n'.
-    Q_INVOKABLE [[nodiscard]] QString text() const { return m_buffer.toString(); }
+    Q_INVOKABLE [[nodiscard]] QString text() const { return buffer().toString(); }
     // Replaces everything: no undo history, not modified, caret at the start.
-    Q_INVOKABLE void setText(const QString &text);
+    Q_INVOKABLE void setText(const QString &text) { m_document->setText(text); }
     Q_INVOKABLE [[nodiscard]] QString selectedText() const;
     // Replaces the selection (or inserts at the caret), as typing does.
     Q_INVOKABLE void insert(const QString &text);
@@ -193,14 +200,14 @@ public:
     Q_INVOKABLE void copy() const;
     Q_INVOKABLE void paste();
     // The text now matches the file: no longer modified.
-    Q_INVOKABLE void markSaved();
+    Q_INVOKABLE void markSaved() { m_document->markSaved(); }
     // Picks the syntax for a file named `fileName` (or by its shebang).
-    Q_INVOKABLE void detectSyntax(const QString &fileName);
+    Q_INVOKABLE void detectSyntax(const QString &fileName) { m_document->detectSyntax(fileName); }
     // The selected lines (or the caret's) one level in or out, as one edit.
     Q_INVOKABLE void indent();
     Q_INVOKABLE void outdent();
     // Takes the indentation style from the text (see indentation::detect()).
-    Q_INVOKABLE void detectIndentation();
+    Q_INVOKABLE void detectIndentation() { m_document->detectIndentation(); }
     // Moves the caret to "line" or "line:column" (from 1, clamped); false
     // when `target` is neither.
     Q_INVOKABLE bool goToLine(const QString &target);
@@ -215,6 +222,7 @@ public:
     Q_INVOKABLE qint32 replaceAll(const QString &replacement);
 
 signals:
+    void documentChanged();
     void fontChanged();
     void colorsChanged();
     void contentXChanged();
@@ -259,17 +267,6 @@ protected:
 
 private:
     friend class EditorAccessible;
-
-    // One undoable change: at `position`, `removed` was replaced by
-    // `inserted`; the caret and anchor before and the caret after.
-    struct Edit {
-        qsizetype position{0};
-        QString removed;
-        QString inserted;
-        qsizetype cursorBefore{0};
-        qsizetype anchorBefore{0};
-        qsizetype cursorAfter{0};
-    };
 
     // A laid out line in view. Rows are found again by their text (and
     // `variant` and highlighting state), not their line number: an edit
@@ -319,28 +316,36 @@ private:
         QRgb match{0x66ffd60aU};
     };
 
-    // The next typing may merge into the last edit.
-    static constexpr quint64 MergeOpen{1U << 0U};
+    // This view is editing: replaced() is its own change.
+    static constexpr quint64 Editing{1U << 0U};
     // The press was on the selection: a drag may start from it.
     static constexpr quint64 DragPending{1U << 1U};
     // A drag from this view was dropped back into it (and moved there).
     static constexpr quint64 DroppedHere{1U << 2U};
-    // Indent with tabs.
-    static constexpr quint64 IndentWithTabs{1U << 3U};
     static constexpr quint64 Wrap{1U << 4U};
     static constexpr quint64 ShowInvisibles{1U << 5U};
     // m_invisibleRects changed since the scene last took them.
     static constexpr quint64 InvisiblesChanged{1U << 6U};
-    static constexpr quint64 DefaultIndentWithTabs{1U << 7U};
 
+    [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
+    [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
+    // Follows `document`'s changes; the view starts over on it.
+    void attach(TextDocument *document);
+    // Another view's (or this view's) change to the text.
+    void documentReplaced(qsizetype position, const QString &removed, const QString &inserted);
+    void documentReset(bool keepPlace);
+    void documentIndentationChanged();
+    void documentHighlightingChanged();
+    // Back to the start of the text, or to `place`.
+    void startOver(const TextDocument::Place &place);
+    // After an edit or undo by this view: the caret goes to `caret`.
+    void editedTo(TextDocument::Caret caret);
     void updateMetrics();
-    void textEdited();
-    // The one way the text changes: replaces `count` characters at
-    // `position` with `text`, recorded for undo; typing merges into the
-    // previous edit while `mergeable`.
+    // The one way this view changes the text: replaces `count` characters
+    // at `position` with `text` in the document, recorded for undo; typing
+    // merges into the previous edit while `mergeable`.
     void replace(qsizetype position, qsizetype count, const QString &text, bool mergeable);
     void deleteSelection();
-    void applyEdit(const Edit &edit, bool forward);
     void moveCaret(qsizetype position, Select select);
     void moveVertically(qsizetype lines, Select select);
     [[nodiscard]] qsizetype wordBoundary(qsizetype position, bool forward) const;
@@ -397,9 +402,6 @@ private:
     // Tells assistive technologies about a change of text, caret or selection.
     void notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted);
     void notifyCursorChanged();
-    // After the buffer changed: highlighting and assistive technologies.
-    void textReplaced(qsizetype position, const QString &removed, const QString &inserted);
-    void applyDefinition(const KSyntaxHighlighting::Definition &definition);
     // Highlights ahead of the view, a slice per event loop pass.
     void highlightAhead();
     [[nodiscard]] qsizetype lastVisibleLine() const;
@@ -407,11 +409,11 @@ private:
     void setDropPosition(qsizetype position);
     void setColor(QRgb &field, const QColor &color);
 
-    TextBuffer m_buffer;
+    // The view's own document, shown while `document` is null.
+    std::unique_ptr<TextDocument> m_ownDocument;
+    QPointer<TextDocument> m_document;
     WrapIndex m_wrapIndex;
-    std::unique_ptr<SyntaxHighlighter> m_highlighter;
     std::unique_ptr<TextSearch> m_search;
-    QList<Edit> m_undo;
     // Move-only rows: std::vector (QList needs copyable elements).
     std::vector<Row> m_rows;
     std::vector<Number> m_numbers;
@@ -448,16 +450,11 @@ private:
     qreal m_baseTop{0.0};
     qsizetype m_cursor{0};
     qsizetype m_anchor{0};
-    qsizetype m_undoIndex{0};
-    // The undo index when the text matched the file; -1: never again.
-    qsizetype m_cleanIndex{0};
     qsizetype m_preeditCursor{0};
     // The first line laid out; the scene is placed relative to it.
     qsizetype m_baseLine{0};
     // Where dragged text would be dropped (shown as the caret); -1: no drag.
     qsizetype m_dropPosition{-1};
-    qsizetype m_indentWidth{4};
-    qsizetype m_defaultIndentWidth{4};
     quint64 m_nextRowId{1};
     // Bumped when the composition changes, so its line is laid out again
     // (above Plain and Highlighted).

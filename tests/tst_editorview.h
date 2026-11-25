@@ -33,4 +33,7 @@ private slots:
     void wrappingFollowsEditsAndNewText();
     void relayoutKeepsTheTopLine();
     void newTextStartsWithTheDefaultIndentation();
+    void viewsShareADocument();
+    void undoInOneViewReachesTheOther();
+    void switchingDocumentsKeepsEachPlace();
 };

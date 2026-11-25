@@ -25,6 +25,8 @@ qt_add_qml_module(tekst_editor_bench
         ../../src/editor/TextSearch.cpp
         ../../src/editor/SyntaxHighlighter.h
         ../../src/editor/SyntaxHighlighter.cpp
+        ../../src/editor/TextDocument.h
+        ../../src/editor/TextDocument.cpp
 )
 
 set_target_properties(tekst_editor_bench PROPERTIES OUTPUT_NAME tekst-editor-bench)

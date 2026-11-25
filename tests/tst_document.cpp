@@ -41,7 +41,7 @@ void TestDocument::roundTripsUtf8()
     writeFile(path(QStringLiteral("utf8.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("utf8.txt")))));
     QCOMPARE(editor.text(), QString::fromUtf8(bytes));
     QVERIFY(document.saveAs(QUrl::fromLocalFile(path(QStringLiteral("utf8-copy.txt")))));
@@ -54,7 +54,7 @@ void TestDocument::keepsCrlf()
     writeFile(path(QStringLiteral("crlf.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("crlf.txt")))));
     // The editor sees plain newlines.
     QCOMPARE(editor.text(), QStringLiteral("one\ntwo\n\nthree"));
@@ -68,7 +68,7 @@ void TestDocument::keepsLfAndFinalNewline()
     writeFile(path(QStringLiteral("lf.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("lf.txt")))));
     QVERIFY(document.save());
     QCOMPARE(readFile(path(QStringLiteral("lf.txt"))), bytes);
@@ -81,7 +81,7 @@ void TestDocument::keepsNonBreakingSpaces()
     writeFile(path(QStringLiteral("nbsp.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("nbsp.txt")))));
     QVERIFY(document.save());
     QCOMPARE(readFile(path(QStringLiteral("nbsp.txt"))), bytes);
@@ -91,7 +91,7 @@ void TestDocument::reportsMissingFile()
 {
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     const QSignalSpy errors{&document, &tekst::Document::errorOccurred};
     QVERIFY(!document.load(QUrl::fromLocalFile(path(QStringLiteral("missing.txt")))));
     QCOMPARE(errors.count(), 1);
@@ -104,7 +104,7 @@ void TestDocument::readsWindows1252WhenNotUtf8()
     writeFile(path(QStringLiteral("cp1252.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("cp1252.txt")))));
     QCOMPARE(document.encoding(), QStringLiteral("Windows-1252"));
     QCOMPARE(editor.text(), QStringLiteral("café €\n"));
@@ -119,7 +119,7 @@ void TestDocument::keepsTheByteOrderMark()
     writeFile(path(QStringLiteral("bom.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("bom.txt")))));
     QVERIFY(document.byteOrderMark());
     QCOMPARE(editor.text(), QStringLiteral("bom\n"));
@@ -132,7 +132,7 @@ void TestDocument::reopensWithAnotherEncoding()
     writeFile(path(QStringLiteral("utf8-as-latin1.txt")), QByteArray{"caf\xC3\xA9"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("utf8-as-latin1.txt")))));
     QCOMPARE(editor.text(), QStringLiteral("café"));
     QVERIFY(document.reopen(QStringLiteral("ISO-8859-1")));
@@ -145,7 +145,7 @@ void TestDocument::convertsEncodingAndLineEnding()
     writeFile(path(QStringLiteral("convert.txt")), QByteArray{"a\xC3\xA9\nb\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("convert.txt")))));
     document.setEncoding(QStringLiteral("UTF-16LE"));
     document.setCrlf(true);
@@ -160,7 +160,7 @@ void TestDocument::refusesCharactersTheEncodingLacks()
     writeFile(path(QStringLiteral("lacks.txt")), QByteArray{"\xE2\x82\xAC\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("lacks.txt")))));
     document.setEncoding(QStringLiteral("ISO-8859-1"));
     const QSignalSpy errors{&document, &tekst::Document::errorOccurred};
@@ -174,7 +174,7 @@ void TestDocument::tracksModified()
     writeFile(path(QStringLiteral("edit.txt")), QByteArray{"text\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("edit.txt")))));
     QVERIFY(!document.modified());
 
@@ -194,7 +194,7 @@ void TestDocument::clearsToUntitled()
     writeFile(path(QStringLiteral("clear.txt")), QByteArray{"text\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("clear.txt")))));
     document.clear();
     QVERIFY(document.fileUrl().isEmpty());
@@ -211,7 +211,7 @@ void TestDocument::reloadsAChangeOnDisk()
     writeFile(file, QByteArray{"first\nsecond\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(file)));
     editor.setCursorPosition(6);
     writeFile(file, QByteArray{"first\nchanged elsewhere\n"});
@@ -226,7 +226,7 @@ void TestDocument::reportsAChangeOnDiskWhenModified()
     writeFile(file, QByteArray{"mine\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(file)));
     editor.insert(QStringLiteral("typed "));
     QSignalSpy changed{&document, &tekst::Document::changedOnDisk};
@@ -243,7 +243,7 @@ void TestDocument::ignoresItsOwnSaves()
     writeFile(file, QByteArray{"text\n"});
     tekst::EditorView editor;
     tekst::Document document;
-    document.setEditor(&editor);
+    editor.setDocument(document.textDocument());
     QVERIFY(document.load(QUrl::fromLocalFile(file)));
     editor.insert(QStringLiteral("more "));
     QSignalSpy changed{&document, &tekst::Document::changedOnDisk};
