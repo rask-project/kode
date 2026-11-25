@@ -96,7 +96,6 @@ Flickable {
         bracketColor: Qt.alpha(SystemColors.controlAccent, 0.35)
         wordColor: Qt.alpha(SystemColors.text, 0.1)
         matchColor: Qt.alpha(SystemColors.findHighlight, 0.45)
-        darkTheme: Appearance.dark
 
         onCaretMoved: root.ensureVisible(view.cursorRectangle)
         onScrollRequested: contentY => root.contentY = Math.max(0, Math.min(contentY, root.contentHeight - root.height))

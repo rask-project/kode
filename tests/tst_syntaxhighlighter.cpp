@@ -31,7 +31,7 @@ void highlightAll(tekst::SyntaxHighlighter &highlighter, const tekst::TextBuffer
 std::unique_ptr<tekst::SyntaxHighlighter> cppHighlighter(const tekst::TextBuffer &buffer)
 {
     auto highlighter{std::make_unique<tekst::SyntaxHighlighter>(&buffer)};
-    highlighter->setTheme(tekst::SyntaxHighlighter::defaultTheme(false));
+    highlighter->setTheme(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Light")));
     highlighter->setDefinition(tekst::SyntaxHighlighter::definitionForName(QStringLiteral("C++")));
     return highlighter;
 }
@@ -109,6 +109,29 @@ void TestSyntaxHighlighter::stopsAtTheDeadline()
     QVERIFY(!highlighter->advance(buffer.lineCount(), QDeadlineTimer{1}));
     QVERIFY(!highlighter->isReady(buffer.lineCount()));
     QVERIFY(highlighter->isReady(0));
+}
+
+void TestSyntaxHighlighter::loadsTekstThemes()
+{
+    QCOMPARE(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Dark")).name(), QStringLiteral("Tekst Dark"));
+    QVERIFY(tekst::SyntaxHighlighter::themeNames(true).contains(QStringLiteral("Tekst Dark")));
+    QVERIFY(tekst::SyntaxHighlighter::themeNames(false).contains(QStringLiteral("Tekst Light")));
+    QVERIFY(!tekst::SyntaxHighlighter::themeNames(true).contains(QStringLiteral("Tekst Light")));
+}
+
+void TestSyntaxHighlighter::tekstDarkColorsKeywords()
+{
+    // Qt Creator's Dark (2024) keyword: cyan, italic.
+    const tekst::TextBuffer buffer{QStringLiteral("return 0;")};
+    const std::unique_ptr<tekst::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    highlighter->setTheme(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Dark")));
+    highlightAll(*highlighter, buffer);
+    const QList<QTextLayout::FormatRange> formats{highlighter->formats(0, buffer.line(0))};
+    QVERIFY(!formats.isEmpty());
+    QCOMPARE(formats.first().start, 0);
+    QCOMPARE(formats.first().length, 6);
+    QCOMPARE(formats.first().format.foreground().color(), QColor(QStringLiteral("#45c6d6")));
+    QVERIFY(formats.first().format.fontItalic());
 }
 
 QTEST_MAIN(TestSyntaxHighlighter)

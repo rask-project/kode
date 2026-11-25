@@ -1,0 +1,161 @@
+{
+    "metadata": {
+        "copyright": [
+            "SPDX-FileCopyrightText: Rask Project",
+            "Colors from Qt Creator's \"Light (2024)\" color scheme (tools/make-syntax-themes.py)"
+        ],
+        "license": "SPDX-License-Identifier: MIT",
+        "revision": 1,
+        "name": "Tekst Light"
+    },
+    "text-styles": {
+        "Normal": {
+            "text-color": "#0a0a0a",
+            "selected-text-color": "#0a0a0a"
+        },
+        "Keyword": {
+            "text-color": "#808000",
+            "selected-text-color": "#808000"
+        },
+        "Function": {
+            "text-color": "#00677c",
+            "selected-text-color": "#00677c"
+        },
+        "Variable": {
+            "text-color": "#092e64",
+            "selected-text-color": "#092e64"
+        },
+        "ControlFlow": {
+            "text-color": "#808000",
+            "selected-text-color": "#808000"
+        },
+        "Operator": {},
+        "BuiltIn": {
+            "text-color": "#808000",
+            "selected-text-color": "#808000"
+        },
+        "Extension": {
+            "text-color": "#ce5c00",
+            "selected-text-color": "#ce5c00"
+        },
+        "Preprocessor": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080"
+        },
+        "Attribute": {
+            "text-color": "#808000",
+            "selected-text-color": "#808000"
+        },
+        "Char": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "SpecialChar": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "String": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "VerbatimString": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "SpecialString": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "Import": {
+            "text-color": "#00677c",
+            "selected-text-color": "#00677c"
+        },
+        "DataType": {
+            "text-color": "#800080",
+            "selected-text-color": "#800080"
+        },
+        "DecVal": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080"
+        },
+        "BaseN": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080"
+        },
+        "Float": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080"
+        },
+        "Constant": {
+            "text-color": "#800080",
+            "selected-text-color": "#800080"
+        },
+        "Comment": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "Documentation": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080"
+        },
+        "Annotation": {
+            "text-color": "#0000ff",
+            "selected-text-color": "#0000ff"
+        },
+        "CommentVar": {
+            "text-color": "#0000ff",
+            "selected-text-color": "#0000ff"
+        },
+        "RegionMarker": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080"
+        },
+        "Information": {},
+        "Warning": {
+            "text-color": "#ffbe00",
+            "selected-text-color": "#ffbe00"
+        },
+        "Alert": {
+            "text-color": "#ff0000",
+            "selected-text-color": "#ff0000"
+        },
+        "Error": {
+            "text-color": "#ff0000",
+            "selected-text-color": "#ff0000"
+        },
+        "Others": {
+            "text-color": "#0a0a0a",
+            "selected-text-color": "#0a0a0a"
+        }
+    },
+    "editor-colors": {
+        "BackgroundColor": "#fcfcfc",
+        "CodeFolding": "#94caef",
+        "BracketMatching": "#ffff00",
+        "CurrentLine": "#f8f7f6",
+        "IconBorder": "#f0f0f0",
+        "IndentationLine": "#d2d2d2",
+        "LineNumbers": "#595959",
+        "CurrentLineNumber": "#12a75d",
+        "MarkBookmark": "#0000ff",
+        "MarkBreakpointActive": "#ff0000",
+        "MarkBreakpointReached": "#ffff00",
+        "MarkBreakpointDisabled": "#ff00ff",
+        "MarkExecution": "#a0a0a4",
+        "MarkWarning": "#fdbc4b",
+        "MarkError": "#ff0000",
+        "ModifiedLines": "#fdbc4b",
+        "ReplaceHighlight": "#00ff00",
+        "SavedLines": "#2ecc71",
+        "SearchHighlight": "#ffff00",
+        "TextSelection": "#cdcdcd",
+        "Separator": "#d5d5d5",
+        "SpellChecking": "#bf0303",
+        "TabMarker": "#d2d2d2",
+        "TemplateBackground": "#d6d2d0",
+        "TemplatePlaceholder": "#baf8ce",
+        "TemplateFocusedPlaceholder": "#76da98",
+        "TemplateReadOnlyPlaceholder": "#f6e6e6",
+        "WordWrapMarker": "#ededed"
+    }
+}

@@ -238,7 +238,7 @@ EditorView::EditorView(QQuickItem *parent)
     , m_search{std::make_unique<TextSearch>(&m_buffer)}
     , m_font(QStringLiteral("Menlo"), 13)
 {
-    m_highlighter->setTheme(SyntaxHighlighter::defaultTheme(false));
+    m_highlighter->setTheme(SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Light")));
     m_highlightTimer.setSingleShot(true);
     m_highlightTimer.setInterval(0);
     connect(&m_highlightTimer, &QTimer::timeout, this, &EditorView::highlightAhead);
@@ -305,15 +305,15 @@ void EditorView::applyDefinition(const KSyntaxHighlighting::Definition &definiti
     polish();
 }
 
-void EditorView::setDarkTheme(bool dark)
+void EditorView::setSyntaxTheme(const QString &name)
 {
-    if (darkTheme() == dark) {
+    if (m_syntaxTheme == name) {
         return;
     }
-    m_flags = dark ? (m_flags | DarkTheme) : (m_flags & ~DarkTheme);
-    m_highlighter->setTheme(SyntaxHighlighter::defaultTheme(dark));
+    m_syntaxTheme = name;
+    m_highlighter->setTheme(SyntaxHighlighter::themeNamed(name));
     m_rows.clear();
-    emit darkThemeChanged();
+    emit syntaxThemeChanged();
     polish();
 }
 
@@ -606,7 +606,7 @@ void EditorView::setText(const QString &text)
     m_preferredX = -1.0;
     m_widestLine = 0.0;
     // Only the edit state goes; the view's options stay.
-    m_flags &= DarkTheme | IndentWithTabs | Wrap | ShowInvisibles;
+    m_flags &= IndentWithTabs | Wrap | ShowInvisibles;
     m_contentY = 0.0;
     m_contentX = 0.0;
     emit contentXChanged();

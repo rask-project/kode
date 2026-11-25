@@ -64,6 +64,13 @@ qt_add_executable(tst_syntaxhighlighter
     ../src/editor/TextBuffer.cpp
 )
 target_include_directories(tst_syntaxhighlighter PRIVATE ../src/editor)
+qt_add_resources(tst_syntaxhighlighter syntax_themes
+    PREFIX "/tekst/syntax"
+    BASE ../assets
+    FILES
+        ../assets/themes/tekst-dark.theme
+        ../assets/themes/tekst-light.theme
+)
 target_link_libraries(tst_syntaxhighlighter PRIVATE Qt6::Gui Qt6::Test KF6::SyntaxHighlighting)
 add_test(NAME tst_syntaxhighlighter COMMAND tst_syntaxhighlighter)
 set_tests_properties(tst_syntaxhighlighter PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

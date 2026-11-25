@@ -99,8 +99,9 @@ class EditorView : public QQuickItem
     // Indent with tabs (else spaces), `indentWidth` columns per level.
     Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY indentationChanged)
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY indentationChanged)
-    // Highlight with the dark theme (else the light one).
-    Q_PROPERTY(bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged)
+    // The highlighting theme's name (see Syntaxes.lightThemes/darkThemes);
+    // plain text keeps textColor.
+    Q_PROPERTY(QString syntaxTheme READ syntaxTheme WRITE setSyntaxTheme NOTIFY syntaxThemeChanged)
 public:
     explicit EditorView(QQuickItem *parent = nullptr);
     ~EditorView() override;
@@ -165,8 +166,8 @@ public:
     [[nodiscard]] bool modified() const noexcept { return m_undoIndex != m_cleanIndex; }
     [[nodiscard]] QString syntax() const;
     void setSyntax(const QString &syntax);
-    [[nodiscard]] bool darkTheme() const noexcept { return (m_flags & DarkTheme) != 0U; }
-    void setDarkTheme(bool dark);
+    [[nodiscard]] QString syntaxTheme() const { return m_syntaxTheme; }
+    void setSyntaxTheme(const QString &name);
 
     // The whole text, lines ending with '\n'.
     Q_INVOKABLE [[nodiscard]] QString text() const { return m_buffer.toString(); }
@@ -223,7 +224,7 @@ signals:
     void canPasteChanged();
     void modifiedChanged();
     void syntaxChanged();
-    void darkThemeChanged();
+    void syntaxThemeChanged();
     void searchChanged();
     void indentationChanged();
     void layoutOptionsChanged();
@@ -314,14 +315,12 @@ private:
     static constexpr quint64 DragPending{1U << 1U};
     // A drag from this view was dropped back into it (and moved there).
     static constexpr quint64 DroppedHere{1U << 2U};
-    // Highlighting uses the dark theme.
-    static constexpr quint64 DarkTheme{1U << 3U};
     // Indent with tabs.
-    static constexpr quint64 IndentWithTabs{1U << 4U};
-    static constexpr quint64 Wrap{1U << 5U};
-    static constexpr quint64 ShowInvisibles{1U << 6U};
+    static constexpr quint64 IndentWithTabs{1U << 3U};
+    static constexpr quint64 Wrap{1U << 4U};
+    static constexpr quint64 ShowInvisibles{1U << 5U};
     // m_invisibleRects changed since the scene last took them.
-    static constexpr quint64 InvisiblesChanged{1U << 7U};
+    static constexpr quint64 InvisiblesChanged{1U << 6U};
 
     void updateMetrics();
     void textEdited();
@@ -416,6 +415,7 @@ private:
     QList<QRectF> m_invisibleRects;
     QRectF m_caretRect;
     QString m_preedit;
+    QString m_syntaxTheme;
     QFont m_font;
     QElapsedTimer m_lastDoubleClick;
     // Where a press on the selection happened, for starting a drag.

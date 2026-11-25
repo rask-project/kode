@@ -6,6 +6,7 @@
 #include <QDeadlineTimer>
 #include <QHash>
 #include <QList>
+#include <QStringList>
 #include <QTextLayout>
 
 namespace tekst
@@ -27,7 +28,10 @@ public:
     // `firstLine`); invalid when none fits.
     [[nodiscard]] static KSyntaxHighlighting::Definition detect(const QString &fileName, const QString &firstLine);
     [[nodiscard]] static KSyntaxHighlighting::Definition definitionForName(const QString &name);
-    [[nodiscard]] static KSyntaxHighlighting::Theme defaultTheme(bool dark);
+    // The theme named `name` (Tekst's own included), else the default one.
+    [[nodiscard]] static KSyntaxHighlighting::Theme themeNamed(const QString &name);
+    // The names of the themes with a dark (else light) background, sorted.
+    [[nodiscard]] static QStringList themeNames(bool dark);
     // Every definition a user can pick, sorted by section then name.
     [[nodiscard]] static QList<KSyntaxHighlighting::Definition> definitions();
 

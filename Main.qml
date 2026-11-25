@@ -98,6 +98,8 @@ ApplicationWindow {
         property int fontSize: root.defaultFontSize
         property bool wrap: false
         property bool showInvisibles: false
+        property string lightTheme: "Tekst Light"
+        property string darkTheme: "Tekst Dark"
     }
 
     Document {
@@ -298,6 +300,49 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
+            Menu {
+                id: lightThemeMenu
+
+                title: qsTr("Light Theme")
+
+                Instantiator {
+                    model: Syntaxes.lightThemes
+
+                    delegate: MenuItem {
+                        required property string modelData
+
+                        text: modelData
+                        checkable: true
+                        checked: viewSettings.lightTheme === modelData
+                        onTriggered: viewSettings.lightTheme = modelData
+                    }
+
+                    onObjectAdded: (index, object) => lightThemeMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => lightThemeMenu.removeItem(object)
+                }
+            }
+            Menu {
+                id: darkThemeMenu
+
+                title: qsTr("Dark Theme")
+
+                Instantiator {
+                    model: Syntaxes.darkThemes
+
+                    delegate: MenuItem {
+                        required property string modelData
+
+                        text: modelData
+                        checkable: true
+                        checked: viewSettings.darkTheme === modelData
+                        onTriggered: viewSettings.darkTheme = modelData
+                    }
+
+                    onObjectAdded: (index, object) => darkThemeMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => darkThemeMenu.removeItem(object)
+                }
+            }
+            MenuSeparator {}
             MenuItem {
                 action: Action {
                     text: qsTr("Bigger")
@@ -484,6 +529,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
+        editor.syntaxTheme: Appearance.dark ? viewSettings.darkTheme : viewSettings.lightTheme
         editor.wrap: viewSettings.wrap
         editor.showInvisibles: viewSettings.showInvisibles
         editor.font: Qt.font({

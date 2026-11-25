@@ -7,10 +7,12 @@
 #include <KSyntaxHighlighting/Repository>
 #include <KSyntaxHighlighting/Theme>
 
+#include <QColor>
 #include <QFileInfo>
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <utility>
 
 namespace tekst
@@ -19,11 +21,28 @@ namespace tekst
 namespace
 {
 
+// Tekst's own themes, in the app's resources (assets/themes): the
+// repository looks in <path>/themes.
+const QString themesPath{QStringLiteral(":/tekst/syntax")};
+
+std::unique_ptr<KSyntaxHighlighting::Repository> makeRepository()
+{
+    auto repository{std::make_unique<KSyntaxHighlighting::Repository>()};
+    repository->addCustomSearchPath(themesPath);
+    return repository;
+}
+
 // Loading the definitions takes a while: one repository for the process.
 KSyntaxHighlighting::Repository &repository()
 {
-    static KSyntaxHighlighting::Repository instance;
-    return instance;
+    static const std::unique_ptr<KSyntaxHighlighting::Repository> instance{makeRepository()};
+    return *instance;
+}
+
+bool isDark(const KSyntaxHighlighting::Theme &theme)
+{
+    constexpr qreal middle{0.5};
+    return QColor::fromRgba(theme.editorColor(KSyntaxHighlighting::Theme::BackgroundColor)).lightnessF() < middle;
 }
 
 // Lines highlighted between deadline checks.
@@ -89,11 +108,22 @@ KSyntaxHighlighting::Definition SyntaxHighlighter::definitionForName(const QStri
     return repository().definitionForName(name);
 }
 
-KSyntaxHighlighting::Theme SyntaxHighlighter::defaultTheme(bool dark)
+KSyntaxHighlighting::Theme SyntaxHighlighter::themeNamed(const QString &name)
 {
-    return repository().defaultTheme(
-        dark ? KSyntaxHighlighting::Repository::DarkTheme : KSyntaxHighlighting::Repository::LightTheme
-    );
+    const KSyntaxHighlighting::Theme named{repository().theme(name)};
+    return named.isValid() ? named : repository().defaultTheme();
+}
+
+QStringList SyntaxHighlighter::themeNames(bool dark)
+{
+    QStringList names;
+    for (const KSyntaxHighlighting::Theme &theme : repository().themes()) {
+        if (isDark(theme) == dark) {
+            names.append(theme.name());
+        }
+    }
+    std::ranges::sort(names, [](const QString &a, const QString &b) { return a.localeAwareCompare(b) < 0; });
+    return names;
 }
 
 QList<KSyntaxHighlighting::Definition> SyntaxHighlighter::definitions()
