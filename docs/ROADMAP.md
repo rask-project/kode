@@ -257,18 +257,23 @@ A short prototype first, to confirm the approach before investing:
 
 ### Stage 4 — `EditorView` replaces `TextEdit`
 
-- Selection (mouse, Shift + keys, double/triple click), clipboard, drag and
-  drop of text.
-- Undo/redo on the piece table (grouped by typing bursts), `Document`
-  loading and saving through `TextBuffer` instead of `QTextDocument`.
-- Input methods in full: preedit (marked text) shown inline,
-  `inputMethodQuery` for the candidate window, dead keys and emoji picker.
-- Word navigation (⌥←/→, ⌥⌫), line wrapping (soft wrap with a visual-line
-  index), horizontal scrolling when wrapping is off.
-- Gutter: line numbers and current-line highlight, drawn by the view.
+**4a — done.** Tekst edits with `EditorView` (`TextEditor.qml`: a Flickable
+around it, keeping the caret in view): selection (Shift + keys, mouse drag,
+double/triple click), clipboard, undo/redo grouped by typing bursts (a new
+line closes a group), ⌥ word and ⌘ line navigation and deletion, gutter
+with line numbers, current-line band, horizontal scrolling, preedit shown
+inline and `inputMethodQuery` for the candidate window and press-and-hold
+accents. `Document` loads and saves through the `TextBuffer`.
+`tst_editorview` covers the editing model.
+
+**4b:**
 - Accessibility: a `QAccessibleInterface` with the text and caret for
   VoiceOver.
-- Retina, font changes, light/dark colors (`SystemColors` from Stage 2).
+- Drag and drop of text; highlight selected line ends and empty lines.
+- Light/dark colors from `SystemColors` (Stage 2).
+
+Soft wrap moves to Stage 6 ("toggle line wrapping"): code is not wrapped by
+default, and wrapping needs a visual-line index of its own.
 
 **Done when:** Tekst edits with `EditorView` and nothing regresses from
 Stage 1 (round trips, IME, unsaved-changes flows).

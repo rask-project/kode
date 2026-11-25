@@ -19,16 +19,18 @@ Flickable {
 
     width: 900
     height: 700
-    contentWidth: width
+    contentWidth: Math.max(width, view.contentWidth)
     contentHeight: view.contentHeight
     clip: true
 
     EditorView {
         id: view
 
+        x: root.contentX
         y: root.contentY
         width: root.width
         height: root.height
+        contentX: root.contentX
         contentY: root.contentY
         textColor: "black"
         font.family: "Menlo"

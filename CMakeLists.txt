@@ -80,13 +80,18 @@ qt_add_qml_module(tekst
     IMPORT_PATH "${CMAKE_CURRENT_BINARY_DIR}/external/rask/qml"
     QML_FILES
         Main.qml
+        TextEditor.qml
     SOURCES
         src/Document.h
         src/Document.cpp
+        src/editor/EditorView.h
+        src/editor/EditorView.cpp
+        src/editor/TextBuffer.h
+        src/editor/TextBuffer.cpp
 )
 
 # The generated QML type registrations include the headers by their bare name.
-target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/editor)
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.

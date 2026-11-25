@@ -37,16 +37,22 @@ Guidance for AI agents working in this repository.
 - `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
   editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
   kept, written through `QSaveFile`.
-- `src/editor/` — the `EditorView` prototype (roadmap Stage 3), which will
-  replace `TextEdit`:
+- `TextEditor.qml` — the editing area: a `Flickable` around the
+  `EditorView`, scroll bars, caret kept in view, system palette colors.
+- `src/editor/` — the editing surface:
   - `TextBuffer` — piece table: original + append-only added buffer, each
     with a newline index; pieces carry their newline count; consecutive
     typing grows one piece. Lines use '\n' only.
   - `EditorView` (`QQuickItem`) — lays out the visible lines (`QTextLayout`)
     in `updatePolish()` (GUI thread), keeps rows still valid across scrolls,
-    and in `updatePaintNode()` draws one `QSGTextNode` per row
-    (`NativeRendering`) plus the caret; sits in a `Flickable` (`contentY`,
-    `contentHeight`). Nothing per frame scales with the file size.
+    and in `updatePaintNode()` draws one `QSGTextNode` per row and per line
+    number (`NativeRendering`), the current-line band and the caret; sits in
+    a `Flickable` (`contentX/Y`, `contentWidth/Height`). All text changes go
+    through `replace()`, which records undo. Nothing per frame scales with
+    the file size.
+  - Qt 6.12's `QSGTextNode::addTextLayout` takes the selection's *last
+    character* as its fourth argument, not a count as documented; call it
+    without selection arguments when nothing is selected.
 - `tools/editor-bench/` — `tekst-editor-bench` (TextEdit vs. EditorView on
   one file, in a real window) and `run.sh` (1/10/100 MB, Markdown table for
   `docs/editor-bench.md`). Benchmark Release builds only.

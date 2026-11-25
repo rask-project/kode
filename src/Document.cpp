@@ -4,7 +4,6 @@
 #include <QFileInfo>
 #include <QSaveFile>
 #include <QStringDecoder>
-#include <QTextDocument>
 
 namespace tekst
 {
@@ -34,19 +33,19 @@ std::expected<QString, QString> readText(const QString &path)
 
 Document::Document(QObject *parent) : QObject(parent) {}
 
-void Document::setTextDocument(QQuickTextDocument *textDocument)
+void Document::setEditor(EditorView *editor)
 {
-    if (m_textDocument == textDocument) {
+    if (m_editor == editor) {
         return;
     }
-    if (const QTextDocument *const previous{document()}; previous != nullptr) {
-        disconnect(previous, nullptr, this, nullptr);
+    if (m_editor != nullptr) {
+        disconnect(m_editor, nullptr, this, nullptr);
     }
-    m_textDocument = textDocument;
-    if (const QTextDocument *const current{document()}; current != nullptr) {
-        connect(current, &QTextDocument::modificationChanged, this, &Document::modifiedChanged);
+    m_editor = editor;
+    if (m_editor != nullptr) {
+        connect(m_editor, &EditorView::modifiedChanged, this, &Document::modifiedChanged);
     }
-    emit textDocumentChanged();
+    emit editorChanged();
     emit modifiedChanged();
 }
 
@@ -57,14 +56,12 @@ QString Document::fileName() const
 
 bool Document::modified() const
 {
-    const QTextDocument *const current{document()};
-    return current != nullptr && current->isModified();
+    return m_editor != nullptr && m_editor->modified();
 }
 
 bool Document::load(const QUrl &fileUrl)
 {
-    QTextDocument *const current{document()};
-    if (current == nullptr) {
+    if (m_editor == nullptr) {
         return false;
     }
     const std::expected<QString, QString> text{readText(fileUrl.toLocalFile())};
@@ -75,11 +72,9 @@ bool Document::load(const QUrl &fileUrl)
     m_lineEnding = text->contains(crlf) ? crlf : QStringLiteral("\n");
     QString lines{*text};
     lines.replace(crlf, QStringLiteral("\n"));
-    // Also resets the undo history and the modified flag.
-    current->setPlainText(lines);
-    current->setModified(false);
+    // Also clears the undo history and the modified state.
+    m_editor->setText(lines);
     setFileUrl(fileUrl);
-    emit loaded();
     return true;
 }
 
@@ -94,45 +89,32 @@ bool Document::save()
 
 bool Document::saveAs(const QUrl &fileUrl)
 {
-    QTextDocument *const current{document()};
-    if (current == nullptr) {
+    if (m_editor == nullptr) {
         return false;
     }
     if (const std::expected<void, QString> written{write(fileUrl)}; !written) {
         emit errorOccurred(written.error());
         return false;
     }
-    current->setModified(false);
+    m_editor->markSaved();
     setFileUrl(fileUrl);
     return true;
 }
 
 void Document::clear()
 {
-    QTextDocument *const current{document()};
-    if (current == nullptr) {
+    if (m_editor == nullptr) {
         return;
     }
-    current->setPlainText({});
-    current->setModified(false);
+    m_editor->setText({});
     m_lineEnding = QStringLiteral("\n");
     setFileUrl({});
-    emit loaded();
-}
-
-QTextDocument *Document::document() const
-{
-    return m_textDocument != nullptr ? m_textDocument->textDocument() : nullptr;
 }
 
 std::expected<void, QString> Document::write(const QUrl &fileUrl) const
 {
     const QString path{fileUrl.toLocalFile()};
-    // toRawText keeps non-breaking spaces (toPlainText turns them into spaces)
-    // and separates paragraphs with U+2029.
-    QString text{document()->toRawText()};
-    text.replace(QChar::ParagraphSeparator, QLatin1Char('\n'));
-    text.replace(QChar::LineSeparator, QLatin1Char('\n'));
+    QString text{m_editor->text()};
     if (m_lineEnding == crlf) {
         text.replace(QLatin1Char('\n'), crlf);
     }

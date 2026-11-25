@@ -19,6 +19,8 @@ ApplicationWindow {
     // Run once the unsaved changes are saved or discarded.
     property var pendingAction: null
     property bool closeApproved: false
+    // The editing surface, for the menus and the document.
+    readonly property EditorView editor: textEditor.editor
 
     // Saves, asking for a file when the document has none, then runs `then`.
     function save(then) {
@@ -65,7 +67,7 @@ ApplicationWindow {
     Component.onCompleted: {
         if (root.initialFile.toString() !== "")
             document.load(root.initialFile);
-        editor.forceActiveFocus();
+        root.editor.forceActiveFocus();
     }
 
     NativeWindow {
@@ -80,11 +82,7 @@ ApplicationWindow {
     Document {
         id: document
 
-        textDocument: editor.textDocument
-        onLoaded: {
-            editor.cursorPosition = 0;
-            flickable.contentY = 0;
-        }
+        editor: root.editor
         onErrorOccurred: message => {
             errorAlert.informativeText = message;
             errorAlert.open();
@@ -148,49 +146,49 @@ ApplicationWindow {
             MenuItem {
                 action: Action {
                     text: qsTr("Undo")
-                    enabled: editor.canUndo
+                    enabled: root.editor.canUndo
                     shortcut: StandardKey.Undo
-                    onTriggered: editor.undo()
+                    onTriggered: root.editor.undo()
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Redo")
-                    enabled: editor.canRedo
+                    enabled: root.editor.canRedo
                     shortcut: StandardKey.Redo
-                    onTriggered: editor.redo()
+                    onTriggered: root.editor.redo()
                 }
             }
             MenuSeparator {}
             MenuItem {
                 action: Action {
                     text: qsTr("Cut")
-                    enabled: editor.selectedText !== ""
+                    enabled: root.editor.hasSelection
                     shortcut: StandardKey.Cut
-                    onTriggered: editor.cut()
+                    onTriggered: root.editor.cut()
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Copy")
-                    enabled: editor.selectedText !== ""
+                    enabled: root.editor.hasSelection
                     shortcut: StandardKey.Copy
-                    onTriggered: editor.copy()
+                    onTriggered: root.editor.copy()
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Paste")
-                    enabled: editor.canPaste
+                    enabled: root.editor.canPaste
                     shortcut: StandardKey.Paste
-                    onTriggered: editor.paste()
+                    onTriggered: root.editor.paste()
                 }
             }
             MenuItem {
                 action: Action {
                     text: qsTr("Select All")
                     shortcut: StandardKey.SelectAll
-                    onTriggered: editor.selectAll()
+                    onTriggered: root.editor.selectAll()
                 }
             }
         }
@@ -295,46 +293,13 @@ ApplicationWindow {
         }
     }
 
-    Flickable {
-        id: flickable
-
-        // Scrolls just enough to keep the cursor in view.
-        function ensureVisible(rect) {
-            if (contentY >= rect.y)
-                contentY = rect.y;
-            else if (contentY + height <= rect.y + rect.height)
-                contentY = rect.y + rect.height - height;
-        }
+    TextEditor {
+        id: textEditor
 
         anchors.top: titleBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        contentWidth: width
-        contentHeight: editor.height
-        clip: true
-        boundsBehavior: Flickable.StopAtBounds
-
-        ScrollBar.vertical: ScrollBar {}
-
-        TextEdit {
-            id: editor
-
-            width: flickable.width
-            height: Math.max(implicitHeight, flickable.height)
-            leftPadding: 16
-            rightPadding: 16
-            topPadding: 8
-            bottomPadding: 16
-            focus: true
-            wrapMode: TextEdit.Wrap
-            font: root.editorFont
-            color: systemPalette.text
-            selectionColor: systemPalette.highlight
-            selectedTextColor: systemPalette.highlightedText
-            selectByMouse: true
-            persistentSelection: true
-            onCursorRectangleChanged: flickable.ensureVisible(cursorRectangle)
-        }
+        editor.font: root.editorFont
     }
 }
