@@ -329,7 +329,13 @@ valid, else Windows-1252), the byte order mark kept; Reopen with / Save
 with Encoding from the status bar (20 encodings: Qt's Unicode and
 Latin-1, the rest through CoreFoundation); saving refuses characters the
 encoding lacks. The status bar also shows the selection's length and the
-line ending (LF/CRLF, changeable).
+line ending (LF/CRLF, changeable). View > Wrap Lines: `WrapIndex` keeps
+each line's visual rows in chunks (estimated from the length, the font
+being monospaced, and corrected when a line is laid out), so scrolling,
+the caret and edits never walk every line; estimating 100 MB again
+(open, resize) takes 17 ms. View > Show Invisibles: dots and dashes for
+spaces and tabs, one geometry node (Qt's ShowTabsAndSpaces only draws
+through QPainter).
 
 - Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌘R, regex,
   case sensitivity, matches highlighted by the `EditorView` (search runs on

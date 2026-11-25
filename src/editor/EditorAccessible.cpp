@@ -247,12 +247,14 @@ QRect EditorAccessible::characterRect(int offset) const
     if (editor->window() == nullptr) {
         return {};
     }
-    const qsizetype line{editor->m_buffer.lineAt(offset)};
-    const qreal x{editor->textLeft() + editor->xForPosition(offset) - editor->m_contentX};
-    const qreal next{editor->textLeft() + editor->xForPosition(offset + 1) - editor->m_contentX};
-    const qreal y{editor->lineTop(line) - editor->m_contentY};
-    const QPointF topLeft{editor->mapToGlobal(QPointF{x, y})};
-    return QRectF{topLeft, QSizeF{std::max(next - x, 1.0), editor->m_lineHeight}}.toRect();
+    const QRectF here{editor->positionRect(offset)};
+    const QRectF next{editor->positionRect(std::min(qsizetype{offset} + 1, editor->m_buffer.length()))};
+    // The next character's x, when it is on the same visual line.
+    const qreal width{
+        qFuzzyCompare(next.y(), here.y()) && next.x() > here.x() ? next.x() - here.x() : editor->m_charWidth
+    };
+    const QPointF topLeft{editor->mapToGlobal(here.topLeft() - QPointF{editor->m_contentX, editor->m_contentY})};
+    return QRectF{topLeft, QSizeF{width, editor->m_lineHeight}}.toRect();
 }
 
 int EditorAccessible::offsetAtPoint(const QPoint &point) const

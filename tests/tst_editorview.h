@@ -29,4 +29,6 @@ private slots:
     void goesToLineAndColumn();
     void returnKeepsIndentation();
     void tabIndentsSelectedLines();
+    void wrappedLinesAddRowsAndMoveByRow();
+    void wrappingFollowsEditsAndNewText();
 };

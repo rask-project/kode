@@ -1,6 +1,7 @@
 #pragma once
 
 #include "TextBuffer.h"
+#include "WrapIndex.h"
 
 #include <QColor>
 #include <QElapsedTimer>
@@ -91,6 +92,10 @@ class EditorView : public QQuickItem
     // The count is final: the search is done (and not capped).
     Q_PROPERTY(bool searchComplete READ searchComplete NOTIFY searchChanged)
     Q_PROPERTY(QString searchError READ searchError NOTIFY searchChanged)
+    // Lines wrap at the view's width (no horizontal scrolling).
+    Q_PROPERTY(bool wrap READ wrap WRITE setWrap NOTIFY layoutOptionsChanged)
+    // Spaces and tabs drawn as dots and arrows.
+    Q_PROPERTY(bool showInvisibles READ showInvisibles WRITE setShowInvisibles NOTIFY layoutOptionsChanged)
     // Indent with tabs (else spaces), `indentWidth` columns per level.
     Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY indentationChanged)
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY indentationChanged)
@@ -129,6 +134,10 @@ public:
     [[nodiscard]] qint32 searchCurrent() const;
     [[nodiscard]] bool searchComplete() const;
     [[nodiscard]] QString searchError() const;
+    [[nodiscard]] bool wrap() const noexcept { return (m_flags & Wrap) != 0U; }
+    void setWrap(bool wrap);
+    [[nodiscard]] bool showInvisibles() const noexcept { return (m_flags & ShowInvisibles) != 0U; }
+    void setShowInvisibles(bool show);
     [[nodiscard]] bool indentWithTabs() const noexcept { return (m_flags & IndentWithTabs) != 0U; }
     void setIndentWithTabs(bool tabs);
     [[nodiscard]] qint32 indentWidth() const noexcept { return static_cast<qint32>(m_indentWidth); }
@@ -211,6 +220,7 @@ signals:
     void darkThemeChanged();
     void searchChanged();
     void indentationChanged();
+    void layoutOptionsChanged();
 
 protected:
     void updatePolish() override;
@@ -259,6 +269,8 @@ private:
         // The highlighting state the line starts in.
         KSyntaxHighlighting::State state;
         qreal width{0.0};
+        // Its top, relative to m_baseLine's (rows above it may wrap).
+        qreal top{0.0};
     };
     static constexpr quint64 Plain{0U};
     static constexpr quint64 Highlighted{1U};
@@ -300,6 +312,10 @@ private:
     static constexpr quint64 DarkTheme{1U << 3U};
     // Indent with tabs.
     static constexpr quint64 IndentWithTabs{1U << 4U};
+    static constexpr quint64 Wrap{1U << 5U};
+    static constexpr quint64 ShowInvisibles{1U << 6U};
+    // m_invisibleRects changed since the scene last took them.
+    static constexpr quint64 InvisiblesChanged{1U << 7U};
 
     void updateMetrics();
     void textEdited();
@@ -326,6 +342,7 @@ private:
     void layoutDecorations();
     void layoutMarks();
     void layoutMatches();
+    void layoutInvisibles();
     void setSearch(const QString &pattern, bool caseSensitive, bool regularExpression);
     // Searches a slice, then again from the event loop until done.
     void searchAhead();
@@ -337,14 +354,27 @@ private:
     void insertNewline();
     void insertTab();
     [[nodiscard]] indentation::Style indentStyle() const;
-    // The rectangle of [start, end) on `row` (relative to m_baseLine).
-    [[nodiscard]] QRectF rangeRect(const Row &row, qsizetype start, qsizetype end) const;
+    // The rectangles of columns [start, end) of `row`, one per visual line
+    // they cross (relative to m_baseLine), appended to `rects`.
+    void appendRangeRects(QList<QRectF> &rects, const Row &row, qsizetype start, qsizetype end) const;
+    void appendSelectionRects(const Row &row, qsizetype lineStart, qsizetype lineEnd);
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
-    [[nodiscard]] qreal xForPosition(qsizetype position) const;
     [[nodiscard]] qsizetype positionAt(const QPointF &point) const;
     [[nodiscard]] qreal textLeft() const;
-    // The top of `line`, in content coordinates.
-    [[nodiscard]] qreal lineTop(qsizetype line) const;
+    // Visual rows: the same as lines unless they wrap.
+    [[nodiscard]] qsizetype rowOfLine(qsizetype line) const;
+    [[nodiscard]] qsizetype lineAtRow(qsizetype row) const;
+    [[nodiscard]] qsizetype totalRows() const;
+    // How wide wrapped lines are laid out.
+    [[nodiscard]] qreal wrapWidth() const;
+    // The wrap index estimated again (width, font or text changed wholesale).
+    void resetWrap();
+    // The layout of `line` if it is laid out in view, else nullptr.
+    [[nodiscard]] const QTextLayout *laidOut(qsizetype line) const;
+    // The caret's rectangle at `position`, in content coordinates.
+    [[nodiscard]] QRectF positionRect(qsizetype position) const;
+    // The position on visual row `row` closest to `x` (text coordinates).
+    [[nodiscard]] qsizetype positionAtRow(qsizetype row, qreal x) const;
     // Tells assistive technologies about a change of text, caret or selection.
     void notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted);
     void notifyCursorChanged();
@@ -359,6 +389,7 @@ private:
     void setColor(QRgb &field, const QColor &color);
 
     TextBuffer m_buffer;
+    WrapIndex m_wrapIndex;
     std::unique_ptr<SyntaxHighlighter> m_highlighter;
     std::unique_ptr<TextSearch> m_search;
     QList<Edit> m_undo;
@@ -372,6 +403,8 @@ private:
     QList<QRectF> m_bracketRects;
     QList<QRectF> m_wordRects;
     QList<QRectF> m_matchRects;
+    // Dots for spaces and dashes for tabs, when shown.
+    QList<QRectF> m_invisibleRects;
     QRectF m_caretRect;
     QString m_preedit;
     QFont m_font;
@@ -389,6 +422,10 @@ private:
     qreal m_widestLine{0.0};
     // The x vertical moves aim for, kept across short lines.
     qreal m_preferredX{-1.0};
+    // The width lines were wrapped at (to notice it change).
+    qreal m_wrapWidth{0.0};
+    // m_baseLine's top in content coordinates.
+    qreal m_baseTop{0.0};
     qsizetype m_cursor{0};
     qsizetype m_anchor{0};
     qsizetype m_undoIndex{0};

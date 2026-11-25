@@ -17,6 +17,8 @@ set(editor_sources
     ../src/editor/TextBuffer.cpp
     ../src/editor/TextSearch.h
     ../src/editor/TextSearch.cpp
+    ../src/editor/WrapIndex.h
+    ../src/editor/WrapIndex.cpp
 )
 
 qt_add_executable(tst_document
@@ -101,3 +103,15 @@ qt_add_executable(tst_indentation
 target_include_directories(tst_indentation PRIVATE ../src/editor)
 target_link_libraries(tst_indentation PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME tst_indentation COMMAND tst_indentation)
+
+qt_add_executable(tst_wrapindex
+    tst_wrapindex.h
+    tst_wrapindex.cpp
+    ../src/editor/TextBuffer.h
+    ../src/editor/TextBuffer.cpp
+    ../src/editor/WrapIndex.h
+    ../src/editor/WrapIndex.cpp
+)
+target_include_directories(tst_wrapindex PRIVATE ../src/editor)
+target_link_libraries(tst_wrapindex PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME tst_wrapindex COMMAND tst_wrapindex)

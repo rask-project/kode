@@ -6,6 +6,9 @@
 #include <QStringList>
 #include <QTest>
 
+#include <algorithm>
+#include <iterator>
+
 namespace
 {
 
@@ -18,7 +21,8 @@ void compareLine(const tekst::TextBuffer &buffer, qsizetype line, qsizetype star
     QCOMPARE(buffer.lineAt(start), line);
 }
 
-// Every line, line start and line-of-position of `buffer` matches `reference`.
+// Every line, line start, line length and line-of-position of `buffer`
+// matches `reference`.
 void compareWithReference(const tekst::TextBuffer &buffer, const QString &reference)
 {
     QCOMPARE(buffer.toString(), reference);
@@ -31,6 +35,9 @@ void compareWithReference(const tekst::TextBuffer &buffer, const QString &refere
         start += lines.at(line).size() + 1;
     }
     QCOMPARE(buffer.lineAt(reference.size()), lines.size() - 1);
+    QList<qsizetype> lengths;
+    std::ranges::transform(lines, std::back_inserter(lengths), &QString::size);
+    QCOMPARE(buffer.lineLengths(), lengths);
 }
 
 } // namespace

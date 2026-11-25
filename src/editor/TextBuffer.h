@@ -28,6 +28,8 @@ public:
     // Length of `line` without its newline.
     [[nodiscard]] qsizetype lineLength(qsizetype line) const;
     [[nodiscard]] QString line(qsizetype line) const;
+    // Every line's length, in order, in one pass (not a lookup per line).
+    [[nodiscard]] QList<qsizetype> lineLengths() const;
     // The line `position` is on.
     [[nodiscard]] qsizetype lineAt(qsizetype position) const;
     [[nodiscard]] QString text(qsizetype position, qsizetype count) const;

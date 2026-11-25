@@ -349,4 +349,48 @@ void TestEditorView::tabIndentsSelectedLines()
     QCOMPARE(editor.text(), QStringLiteral("a\nb\nc"));
 }
 
+void TestEditorView::wrappedLinesAddRowsAndMoveByRow()
+{
+    tekst::EditorView editor;
+    // Narrow: lines wrap at the fewest columns (20).
+    editor.setWidth(10.0);
+    editor.setText(QString(45, QLatin1Char('a')) + QStringLiteral("\nb"));
+    const qreal unwrapped{editor.contentHeight()};
+    editor.setWrap(true);
+    const qreal rowHeight{editor.cursorRectangle().height()};
+    const qreal firstRow{editor.cursorRectangle().y()};
+    QCOMPARE(editor.contentHeight(), unwrapped + (2 * rowHeight));
+    QCOMPARE(editor.contentWidth(), editor.width());
+
+    QKeyEvent down{QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier};
+    QCoreApplication::sendEvent(&editor, &down);
+    QCOMPARE(editor.cursorLine(), 0);
+    QVERIFY(editor.cursorPosition() > 15 && editor.cursorPosition() <= 20);
+    QCOMPARE(editor.cursorRectangle().y(), firstRow + rowHeight);
+    QCoreApplication::sendEvent(&editor, &down);
+    QCoreApplication::sendEvent(&editor, &down);
+    QCOMPARE(editor.cursorLine(), 1);
+}
+
+void TestEditorView::wrappingFollowsEditsAndNewText()
+{
+    tekst::EditorView editor;
+    editor.setWidth(10.0);
+    editor.setText(QStringLiteral("b"));
+    const qreal oneRow{editor.contentHeight()};
+    const qreal rowHeight{editor.cursorRectangle().height()};
+    const qreal unwrapped{oneRow + rowHeight};
+    editor.setWrap(true);
+
+    // Wrapping survives replacing the text (opening a file).
+    editor.setText(QString(45, QLatin1Char('a')) + QStringLiteral("\nb"));
+    QVERIFY(editor.wrap());
+    QCOMPARE(editor.contentHeight(), unwrapped + (2 * rowHeight));
+
+    // An edit that wraps one more row.
+    editor.setCursorPosition(0);
+    editor.insert(QString(20, QLatin1Char('b')));
+    QCOMPARE(editor.contentHeight(), unwrapped + (3 * rowHeight));
+}
+
 QTEST_MAIN(TestEditorView)

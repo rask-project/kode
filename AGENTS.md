@@ -89,6 +89,15 @@ Guidance for AI agents working in this repository.
     `searchCaseSensitive`/`searchRegularExpression`, marks the matches in
     view and offers `findNext()`/`findPrevious()`/`replaceCurrent()`/
     `replaceAll()` (one edit over the matches' span: one undo).
+  - `WrapIndex` — visual rows per line when lines wrap, in chunks of
+    ~1024 lines with their sums (a line's first row and the line at a row
+    without walking every line); estimated from `TextBuffer::lineLengths()`
+    and set exactly for the lines laid out. `EditorView` goes through
+    `rowOfLine()`/`lineAtRow()`/`positionRect()`/`positionAtRow()` (the
+    identity without wrapping); each `Row` carries its `top`.
+  - Invisibles are drawn by the view (one `QSGGeometryNode`): Qt's
+    `QTextOption::ShowTabsAndSpaces` only affects `QPainter` drawing, not
+    `glyphRuns()`.
   - `Indentation` — free functions: the style (tabs/spaces, width),
     what Tab inserts, block indent/outdent and detecting the style from
     the first lines; `EditorView` applies them (`indent()`, `outdent()`,
@@ -104,7 +113,7 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`), run offscreen with
+  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).

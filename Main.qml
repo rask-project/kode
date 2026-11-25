@@ -96,6 +96,8 @@ ApplicationWindow {
         category: "view"
 
         property int fontSize: root.defaultFontSize
+        property bool wrap: false
+        property bool showInvisibles: false
     }
 
     Document {
@@ -279,6 +281,23 @@ ApplicationWindow {
         Menu {
             title: qsTr("View")
 
+            MenuItem {
+                action: Action {
+                    text: qsTr("Wrap Lines")
+                    checkable: true
+                    checked: viewSettings.wrap
+                    onTriggered: viewSettings.wrap = checked
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Show Invisibles")
+                    checkable: true
+                    checked: viewSettings.showInvisibles
+                    onTriggered: viewSettings.showInvisibles = checked
+                }
+            }
+            MenuSeparator {}
             MenuItem {
                 action: Action {
                     text: qsTr("Bigger")
@@ -465,6 +484,8 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
+        editor.wrap: viewSettings.wrap
+        editor.showInvisibles: viewSettings.showInvisibles
         editor.font: Qt.font({
             family: root.editorFont.family,
             pointSize: viewSettings.fontSize

@@ -20,6 +20,8 @@
 #include <QMimeData>
 #include <QQuickWindow>
 #include <QSGClipNode>
+#include <QSGFlatColorMaterial>
+#include <QSGGeometryNode>
 #include <QSGRectangleNode>
 #include <QSGTextNode>
 #include <QStyleHints>
@@ -75,6 +77,7 @@ public:
     QSGClipNode *textClip{nullptr};
     QSGTransformNode *content{nullptr};
     QSGNode *marksLayer{nullptr};
+    QSGGeometryNode *invisibles{nullptr};
     QSGNode *selectionLayer{nullptr};
     QSGNode *textLayer{nullptr};
     QSGRectangleNode *caret{nullptr};
@@ -172,6 +175,46 @@ void resizeRectangles(QQuickWindow *window, QSGNode *parent, QList<QSGRectangleN
         parent->removeChildNode(rectangle.get());
     }
 }
+// A geometry node drawing rectangles in one color: one draw call for many.
+std::unique_ptr<QSGGeometryNode> makeRectanglesNode()
+{
+    auto node{std::make_unique<QSGGeometryNode>()};
+    auto geometry{std::make_unique<QSGGeometry>(QSGGeometry::defaultAttributes_Point2D(), 0)};
+    geometry->setDrawingMode(QSGGeometry::DrawTriangles);
+    node->setGeometry(geometry.release());
+    node->setFlag(QSGNode::OwnsGeometry);
+    auto material{std::make_unique<QSGFlatColorMaterial>()};
+    node->setMaterial(material.release());
+    node->setFlag(QSGNode::OwnsMaterial);
+    return node;
+}
+
+// Two triangles per rectangle.
+void setRectangles(QSGGeometryNode *node, const QList<QRectF> &rects, const QColor &color)
+{
+    QSGGeometry *const geometry{node->geometry()};
+    geometry->allocate(static_cast<int>(rects.size() * 6));
+    QSGGeometry::Point2D *vertex{geometry->vertexDataAsPoint2D()};
+    const std::span vertices{vertex, static_cast<std::size_t>(rects.size() * 6)};
+    std::size_t index{0};
+    for (const QRectF &rect : rects) {
+        const auto left{static_cast<float>(rect.left())};
+        const auto top{static_cast<float>(rect.top())};
+        const auto right{static_cast<float>(rect.right())};
+        const auto bottom{static_cast<float>(rect.bottom())};
+        for (const auto &[x, y] :
+             {std::pair{left, top}, {right, top}, {left, bottom}, {right, top}, {right, bottom}, {left, bottom}}) {
+            vertices[index++].set(x, y);
+        }
+    }
+    node->markDirty(QSGNode::DirtyGeometry);
+    auto *const material{static_cast<QSGFlatColorMaterial *>(node->material())};
+    if (material->color() != color) {
+        material->setColor(color);
+        node->markDirty(QSGNode::DirtyMaterial);
+    }
+}
+
 // Shows `rects` in `color` with the rectangles of `nodes` under `parent`.
 void syncRectangles(
     QQuickWindow *window,
@@ -231,9 +274,8 @@ void EditorView::setFont(const QFont &font)
     m_rows.clear();
     m_numbers.clear();
     emit fontChanged();
-    emit contentSizeChanged();
-    emit cursorChanged();
-    polish();
+    // Columns per row changed too.
+    resetWrap();
 }
 
 QString EditorView::syntax() const
@@ -276,6 +318,14 @@ void EditorView::setDarkTheme(bool dark)
 
 void EditorView::textReplaced(qsizetype position, const QString &removed, const QString &inserted)
 {
+    if (wrap()) {
+        m_wrapIndex.linesReplaced(
+            m_buffer,
+            m_buffer.lineAt(position),
+            removed.count(QLatin1Char('\n')),
+            inserted.count(QLatin1Char('\n'))
+        );
+    }
     m_highlighter
         ->linesReplaced(m_buffer.lineAt(position), removed.count(QLatin1Char('\n')), inserted.count(QLatin1Char('\n')));
     notifyTextChanged(position, removed, inserted);
@@ -287,6 +337,8 @@ void EditorView::setColor(QRgb &field, const QColor &color)
         return;
     }
     field = color.rgba();
+    // The invisibles take their color with their geometry.
+    m_flags |= InvisiblesChanged;
     emit colorsChanged();
     update();
 }
@@ -367,9 +419,103 @@ qreal EditorView::textLeft() const
     return gutterWidth() + padding;
 }
 
-qreal EditorView::lineTop(qsizetype line) const
+qsizetype EditorView::rowOfLine(qsizetype line) const
 {
-    return topPadding + (static_cast<qreal>(line) * m_lineHeight);
+    return wrap() ? m_wrapIndex.rowOf(line) : line;
+}
+
+qsizetype EditorView::lineAtRow(qsizetype row) const
+{
+    return wrap() ? m_wrapIndex.lineAt(row) : std::clamp(row, qsizetype{0}, m_buffer.lineCount() - 1);
+}
+
+qsizetype EditorView::totalRows() const
+{
+    return wrap() ? m_wrapIndex.totalRows() : m_buffer.lineCount();
+}
+
+qreal EditorView::wrapWidth() const
+{
+    constexpr qreal fewestColumns{20.0};
+    return std::max(fewestColumns * m_charWidth, width() - textLeft() - padding);
+}
+
+void EditorView::resetWrap()
+{
+    m_wrapWidth = wrapWidth();
+    m_rows.clear();
+    if (wrap()) {
+        m_wrapIndex.reset(m_buffer, static_cast<qsizetype>(std::floor(m_wrapWidth / m_charWidth)));
+    }
+    emit contentSizeChanged();
+    emit cursorChanged();
+    polish();
+}
+
+void EditorView::setWrap(bool wrap)
+{
+    if (this->wrap() == wrap) {
+        return;
+    }
+    m_flags = wrap ? (m_flags | Wrap) : (m_flags & ~Wrap);
+    emit layoutOptionsChanged();
+    resetWrap();
+}
+
+void EditorView::setShowInvisibles(bool show)
+{
+    if (showInvisibles() == show) {
+        return;
+    }
+    m_flags = show ? (m_flags | ShowInvisibles) : (m_flags & ~ShowInvisibles);
+    m_rows.clear();
+    emit layoutOptionsChanged();
+    polish();
+}
+
+const QTextLayout *EditorView::laidOut(qsizetype line) const
+{
+    const auto row{std::ranges::find_if(m_rows, [line](const Row &candidate) { return candidate.line == line; })};
+    return row != m_rows.end() ? row->layout.get() : nullptr;
+}
+
+QRectF EditorView::positionRect(qsizetype position) const
+{
+    const qsizetype line{m_buffer.lineAt(position)};
+    qsizetype column{position - m_buffer.lineStart(line)};
+    if (!m_preedit.isEmpty() && position == m_cursor) {
+        column += m_preeditCursor;
+    }
+    std::unique_ptr<QTextLayout> owned;
+    const QTextLayout *layout{laidOut(line)};
+    if (layout == nullptr) {
+        owned = layoutLine(line);
+        layout = owned.get();
+    }
+    const QTextLine textLine{layout->lineForTextPosition(static_cast<int>(column))};
+    const qsizetype row{rowOfLine(line) + (textLine.isValid() ? textLine.lineNumber() : 0)};
+    const qreal x{textLine.isValid() ? textLine.cursorToX(static_cast<int>(column)) : 0.0};
+    return {textLeft() + x, topPadding + (static_cast<qreal>(row) * m_lineHeight), caretWidth, m_lineHeight};
+}
+
+qsizetype EditorView::positionAtRow(qsizetype row, qreal x) const
+{
+    row = std::clamp(row, qsizetype{0}, totalRows() - 1);
+    const qsizetype line{lineAtRow(row)};
+    std::unique_ptr<QTextLayout> owned;
+    const QTextLayout *layout{laidOut(line)};
+    if (layout == nullptr) {
+        owned = layoutLine(line);
+        layout = owned.get();
+    }
+    const qsizetype visualLine{std::clamp(row - rowOfLine(line), qsizetype{0}, qsizetype{layout->lineCount()} - 1)};
+    const QTextLine textLine{layout->lineAt(static_cast<int>(visualLine))};
+    qsizetype column{textLine.xToCursor(x, QTextLine::CursorBetweenCharacters)};
+    // The end of a wrapped row is the start of the next one: stay on this one.
+    if (visualLine + 1 < layout->lineCount() && column >= textLine.textStart() + textLine.textLength()) {
+        column = textLine.textStart() + textLine.textLength() - 1;
+    }
+    return m_buffer.lineStart(line) + column;
 }
 
 void EditorView::notifyTextChanged(qsizetype position, const QString &removed, const QString &inserted)
@@ -398,12 +544,12 @@ void EditorView::notifyCursorChanged()
 
 qreal EditorView::contentWidth() const
 {
-    return textLeft() + m_widestLine + m_charWidth + padding;
+    return wrap() ? width() : textLeft() + m_widestLine + m_charWidth + padding;
 }
 
 qreal EditorView::contentHeight() const
 {
-    return topPadding + (static_cast<qreal>(m_buffer.lineCount()) * m_lineHeight) + padding;
+    return topPadding + (static_cast<qreal>(totalRows()) * m_lineHeight) + padding;
 }
 
 void EditorView::setCursorPosition(qint64 position)
@@ -423,13 +569,7 @@ qint32 EditorView::cursorColumn() const
 
 QRectF EditorView::cursorRectangle() const
 {
-    const qsizetype line{m_buffer.lineAt(m_cursor)};
-    return {
-        textLeft() + xForPosition(m_cursor),
-        topPadding + (static_cast<qreal>(line) * m_lineHeight),
-        caretWidth,
-        m_lineHeight
-    };
+    return positionRect(m_cursor);
 }
 
 bool EditorView::canPaste()
@@ -443,6 +583,9 @@ void EditorView::setText(const QString &text)
 {
     m_buffer = TextBuffer{text};
     m_highlighter->reset();
+    if (wrap()) {
+        m_wrapIndex.reset(m_buffer, static_cast<qsizetype>(std::floor(m_wrapWidth / m_charWidth)));
+    }
     m_undo.clear();
     m_undoIndex = 0;
     m_cleanIndex = 0;
@@ -451,7 +594,8 @@ void EditorView::setText(const QString &text)
     m_preedit.clear();
     m_preferredX = -1.0;
     m_widestLine = 0.0;
-    m_flags &= DarkTheme | IndentWithTabs;
+    // Only the edit state goes; the view's options stay.
+    m_flags &= DarkTheme | IndentWithTabs | Wrap | ShowInvisibles;
     m_contentY = 0.0;
     m_contentX = 0.0;
     emit contentXChanged();
@@ -678,11 +822,11 @@ void EditorView::moveCaret(qsizetype position, Select select)
 
 void EditorView::moveVertically(qsizetype lines, Select select)
 {
-    const qsizetype line{m_buffer.lineAt(m_cursor)};
-    const qsizetype target{std::clamp(line + lines, qsizetype{0}, m_buffer.lineCount() - 1)};
-    const qreal preferredX{m_preferredX >= 0.0 ? m_preferredX : xForPosition(m_cursor)};
-    const std::unique_ptr<QTextLayout> layout{layoutLine(target)};
-    moveCaret(m_buffer.lineStart(target) + layout->lineAt(0).xToCursor(preferredX), select);
+    // By visual rows, aiming for the same x.
+    const QRectF caret{positionRect(m_cursor)};
+    const qreal preferredX{m_preferredX >= 0.0 ? m_preferredX : caret.x() - textLeft()};
+    const auto row{static_cast<qsizetype>(std::lround((caret.y() - topPadding) / m_lineHeight))};
+    moveCaret(positionAtRow(row + lines, preferredX), select);
     m_preferredX = preferredX;
 }
 
@@ -1002,8 +1146,8 @@ void EditorView::updateMetrics()
 
 qsizetype EditorView::firstVisibleLine() const
 {
-    const auto line{static_cast<qsizetype>(std::floor((m_contentY - topPadding) / m_lineHeight))};
-    return std::clamp(line - overscan, qsizetype{0}, m_buffer.lineCount() - 1);
+    const auto row{static_cast<qsizetype>(std::floor((m_contentY - topPadding) / m_lineHeight))};
+    return std::clamp(lineAtRow(std::max(row, qsizetype{0})) - overscan, qsizetype{0}, m_buffer.lineCount() - 1);
 }
 
 qsizetype EditorView::lastVisibleLine() const
@@ -1037,8 +1181,11 @@ EditorView::layoutText(const QString &text, qsizetype preeditColumn, const QList
 {
     auto layout{std::make_unique<QTextLayout>(text, m_font)};
     QTextOption option;
-    option.setWrapMode(QTextOption::NoWrap);
+    option.setWrapMode(wrap() ? QTextOption::WrapAtWordBoundaryOrAnywhere : QTextOption::NoWrap);
     option.setTabStopDistance(static_cast<qreal>(m_indentWidth) * m_charWidth);
+    if (showInvisibles()) {
+        option.setFlags(QTextOption::ShowTabsAndSpaces);
+    }
     layout->setTextOption(option);
     // The input method's composition, shown in the text, underlined.
     if (preeditColumn >= 0) {
@@ -1054,10 +1201,13 @@ EditorView::layoutText(const QString &text, qsizetype preeditColumn, const QList
     }
     layout->setCacheEnabled(true);
     layout->beginLayout();
-    QTextLine textLine{layout->createLine()};
-    if (textLine.isValid()) {
-        textLine.setLineWidth(noWrapWidth);
-        textLine.setPosition({0.0, 0.0});
+    // Every visual line one line height below the last.
+    const qreal lineWidth{wrap() ? m_wrapWidth : noWrapWidth};
+    qreal y{0.0};
+    for (QTextLine textLine{layout->createLine()}; textLine.isValid(); textLine = layout->createLine()) {
+        textLine.setLineWidth(lineWidth);
+        textLine.setPosition({0.0, y});
+        y += m_lineHeight;
     }
     layout->endLayout();
     return layout;
@@ -1068,32 +1218,16 @@ std::unique_ptr<QTextLayout> EditorView::layoutNumber(qsizetype line) const
     return layoutText(QString::number(line + 1), -1);
 }
 
-qreal EditorView::xForPosition(qsizetype position) const
-{
-    const qsizetype line{m_buffer.lineAt(position)};
-    qsizetype column{position - m_buffer.lineStart(line)};
-    if (!m_preedit.isEmpty() && position == m_cursor) {
-        column += m_preeditCursor;
-    }
-    const auto row{std::ranges::find_if(m_rows, [line](const Row &candidate) { return candidate.line == line; })};
-    if (row != m_rows.end()) {
-        return row->layout->lineAt(0).cursorToX(static_cast<int>(column));
-    }
-    return layoutLine(line)->lineAt(0).cursorToX(static_cast<int>(column));
-}
-
 qsizetype EditorView::positionAt(const QPointF &point) const
 {
-    const auto line{static_cast<qsizetype>(std::floor((point.y() + m_contentY - topPadding) / m_lineHeight))};
-    if (line < 0) {
+    const auto row{static_cast<qsizetype>(std::floor((point.y() + m_contentY - topPadding) / m_lineHeight))};
+    if (row < 0) {
         return 0;
     }
-    if (line >= m_buffer.lineCount()) {
+    if (row >= totalRows()) {
         return m_buffer.length();
     }
-    const qreal x{point.x() + m_contentX - textLeft()};
-    const std::unique_ptr<QTextLayout> layout{layoutLine(line)};
-    return m_buffer.lineStart(line) + layout->lineAt(0).xToCursor(x, QTextLine::CursorBetweenCharacters);
+    return positionAtRow(row, point.x() + m_contentX - textLeft());
 }
 
 EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
@@ -1142,9 +1276,17 @@ void EditorView::layoutRows()
 {
     // Lay out the lines in view, reusing the rows (and numbers) already laid
     // out: a row is found again by its text, wherever its line moved.
+    if (wrap() && !qFuzzyCompare(m_wrapWidth, wrapWidth())) {
+        resetWrap();
+    }
     const qsizetype first{firstVisibleLine()};
     const qsizetype count{std::min(visibleLineCount(), m_buffer.lineCount() - first)};
     const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
+    const qsizetype baseRow{rowOfLine(first)};
+    // Down to this row (overscan included): wrapped lines take several.
+    const qsizetype lastRow{
+        static_cast<qsizetype>(std::floor((m_contentY + height() - topPadding) / m_lineHeight)) + overscan
+    };
     // Highlight up to the view, unless that takes long: the rest comes later.
     if (!m_highlighter->advance(first + count, QDeadlineTimer{highlightInLayout}) ||
         !m_highlighter->isReady(std::min(first + count + highlightLookahead, m_buffer.lineCount()))) {
@@ -1154,13 +1296,23 @@ void EditorView::layoutRows()
     std::vector<Number> numbers;
     rows.reserve(static_cast<std::size_t>(count));
     numbers.reserve(static_cast<std::size_t>(count));
-    for (qsizetype line{first}; line < first + count; ++line) {
-        rows.push_back(takeRow(line, cursorLine));
+    qsizetype rowsAbove{0};
+    for (qsizetype line{first}; line < m_buffer.lineCount() && baseRow + rowsAbove <= lastRow; ++line) {
+        Row row{takeRow(line, cursorLine)};
+        row.top = static_cast<qreal>(rowsAbove) * m_lineHeight;
+        const qsizetype visualLines{row.layout->lineCount()};
+        // Measured: the estimate (and the rows below it) corrected.
+        if (wrap() && m_wrapIndex.rows(line) != visualLines) {
+            m_wrapIndex.setRows(line, visualLines);
+        }
+        rowsAbove += visualLines;
+        rows.push_back(std::move(row));
         numbers.push_back(takeNumber(line));
     }
     m_rows = std::move(rows);
     m_numbers = std::move(numbers);
     m_baseLine = first;
+    m_baseTop = topPadding + (static_cast<qreal>(baseRow) * m_lineHeight);
 }
 
 void EditorView::highlightAhead()
@@ -1189,37 +1341,65 @@ void EditorView::layoutDecorations()
     const qsizetype caret{m_dropPosition >= 0 ? m_dropPosition : m_cursor};
     const qsizetype cursorLine{m_buffer.lineAt(caret)};
     for (const Row &row : m_rows) {
-        const qreal y{static_cast<qreal>(row.line - m_baseLine) * m_lineHeight};
         const qsizetype lineStart{m_buffer.lineStart(row.line)};
         const qsizetype lineEnd{lineStart + m_buffer.lineLength(row.line)};
-        const QTextLine textLine{row.layout->lineAt(0)};
         if (row.line == cursorLine) {
             qsizetype column{caret - lineStart};
             if (!m_preedit.isEmpty() && m_dropPosition < 0) {
                 column += m_preeditCursor;
             }
-            m_caretRect = {textLine.cursorToX(static_cast<int>(column)), y, caretWidth, m_lineHeight};
+            const QTextLine textLine{row.layout->lineForTextPosition(static_cast<int>(column))};
+            m_caretRect = {
+                textLine.cursorToX(static_cast<int>(column)),
+                row.top + (static_cast<qreal>(textLine.lineNumber()) * m_lineHeight),
+                caretWidth,
+                m_lineHeight
+            };
         }
-        if (!hasSelection() || selectionEnd() <= lineStart || selectionStart() > lineEnd) {
-            continue;
-        }
-        const qreal from{textLine.cursorToX(static_cast<int>(std::max(selectionStart(), lineStart) - lineStart))};
-        qreal to{textLine.cursorToX(static_cast<int>(std::min(selectionEnd(), lineEnd) - lineStart))};
-        if (selectionEnd() > lineEnd) {
-            to += m_charWidth / 2.0;
-        }
-        if (to > from) {
-            m_selectionRects.append({from, y, to - from, m_lineHeight});
+        if (hasSelection() && selectionEnd() > lineStart && selectionStart() <= lineEnd) {
+            appendSelectionRects(row, lineStart, lineEnd);
         }
     }
 }
 
-QRectF EditorView::rangeRect(const Row &row, qsizetype start, qsizetype end) const
+void EditorView::appendSelectionRects(const Row &row, qsizetype lineStart, qsizetype lineEnd)
 {
-    const QTextLine textLine{row.layout->lineAt(0)};
-    const qreal from{textLine.cursorToX(static_cast<int>(start))};
-    const qreal to{textLine.cursorToX(static_cast<int>(end))};
-    return {from, static_cast<qreal>(row.line - m_baseLine) * m_lineHeight, to - from, m_lineHeight};
+    // One rectangle per visual line, past the text when the line's end is
+    // selected too.
+    const qsizetype from{std::max(selectionStart(), lineStart) - lineStart};
+    const qsizetype to{std::min(selectionEnd(), lineEnd) - lineStart};
+    const bool pastEnd{selectionEnd() > lineEnd};
+    for (qint32 index{0}; index < row.layout->lineCount(); ++index) {
+        const QTextLine textLine{row.layout->lineAt(index)};
+        const qsizetype start{std::max(from, qsizetype{textLine.textStart()})};
+        const qsizetype end{std::min(to, qsizetype{textLine.textStart()} + textLine.textLength())};
+        const bool last{index + 1 == row.layout->lineCount()};
+        if (start > end || (start == end && !(last && pastEnd))) {
+            continue;
+        }
+        const qreal left{textLine.cursorToX(static_cast<int>(start))};
+        qreal right{textLine.cursorToX(static_cast<int>(end))};
+        if (last && pastEnd) {
+            right += m_charWidth / 2.0;
+        }
+        m_selectionRects.append({left, row.top + (static_cast<qreal>(index) * m_lineHeight), right - left, m_lineHeight}
+        );
+    }
+}
+
+void EditorView::appendRangeRects(QList<QRectF> &rects, const Row &row, qsizetype start, qsizetype end) const
+{
+    for (qint32 index{0}; index < row.layout->lineCount(); ++index) {
+        const QTextLine textLine{row.layout->lineAt(index)};
+        const qsizetype from{std::max(start, qsizetype{textLine.textStart()})};
+        const qsizetype to{std::min(end, qsizetype{textLine.textStart()} + textLine.textLength())};
+        if (from >= to) {
+            continue;
+        }
+        const qreal left{textLine.cursorToX(static_cast<int>(from))};
+        const qreal right{textLine.cursorToX(static_cast<int>(to))};
+        rects.append({left, row.top + (static_cast<qreal>(index) * m_lineHeight), right - left, m_lineHeight});
+    }
 }
 
 void EditorView::layoutMatches()
@@ -1239,7 +1419,37 @@ void EditorView::layoutMatches()
         }
         const Row &row{m_rows.at(static_cast<std::size_t>(line - m_rows.front().line))};
         const qsizetype column{match.start - m_buffer.lineStart(line)};
-        m_matchRects.append(rangeRect(row, column, column + match.length));
+        appendRangeRects(m_matchRects, row, column, column + match.length);
+    }
+}
+
+void EditorView::layoutInvisibles()
+{
+    // Rows keep their place while the view scrolls: only a layout changes them.
+    QList<QRectF> rects;
+    if (showInvisibles()) {
+        const qreal dot{std::max(1.5, std::round(m_charWidth * 0.2))};
+        for (const Row &row : m_rows) {
+            for (qsizetype column{0}; column < row.text.size(); ++column) {
+                const QChar character{row.text.at(column)};
+                if (character != QLatin1Char(' ') && character != QLatin1Char('\t')) {
+                    continue;
+                }
+                const QTextLine textLine{row.layout->lineForTextPosition(static_cast<int>(column))};
+                const qreal left{textLine.cursorToX(static_cast<int>(column))};
+                const qreal right{textLine.cursorToX(static_cast<int>(column + 1))};
+                const qreal middle{row.top + ((textLine.lineNumber() + 0.5) * m_lineHeight)};
+                if (character == QLatin1Char(' ')) {
+                    rects.append({((left + right) / 2.0) - (dot / 2.0), middle - (dot / 2.0), dot, dot});
+                } else {
+                    rects.append({left + dot, middle - 0.5, std::max(dot, right - left - (2.0 * dot)), 1.0});
+                }
+            }
+        }
+    }
+    if (rects != m_invisibleRects) {
+        m_invisibleRects = std::move(rects);
+        m_flags |= InvisiblesChanged;
     }
 }
 
@@ -1263,7 +1473,7 @@ void EditorView::layoutMarks()
             const auto row{rowAt(line)};
             if (row != m_rows.end()) {
                 const qsizetype column{position - m_buffer.lineStart(line)};
-                m_bracketRects.append(rangeRect(*row, column, column + 1));
+                appendRangeRects(m_bracketRects, *row, column, column + 1);
             }
         }
     }
@@ -1278,7 +1488,7 @@ void EditorView::layoutMarks()
     const QStringView wordText{QStringView{cursorRow->text}.sliced(word.start, word.end - word.start)};
     for (const Row &row : m_rows) {
         for (const matching::Range &found : matching::wholeWords(row.text, wordText)) {
-            m_wordRects.append(rangeRect(row, found.start, found.end));
+            appendRangeRects(m_wordRects, row, found.start, found.end);
         }
     }
 }
@@ -1289,6 +1499,7 @@ void EditorView::updatePolish()
     layoutRows();
     layoutDecorations();
     layoutMatches();
+    layoutInvisibles();
     layoutMarks();
     if (m_widestLine > widestBefore) {
         emit contentSizeChanged();
@@ -1314,12 +1525,15 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->textClip = clip.get();
         created->content = content.get();
         created->marksLayer = marksLayer.get();
+        auto invisibles{makeRectanglesNode()};
+        created->invisibles = invisibles.get();
         created->selectionLayer = selectionLayer.get();
         created->textLayer = textLayer.get();
         created->caret = caret.get();
         created->gutter = gutter.get();
         content->appendChildNode(marksLayer.release());
         content->appendChildNode(selectionLayer.release());
+        content->appendChildNode(invisibles.release());
         content->appendChildNode(textLayer.release());
         content->appendChildNode(caret.release());
         clip->appendChildNode(content.release());
@@ -1332,7 +1546,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     // Scrolling moves the two transforms; the nodes inside move only when
     // their line does, and are filled only when they first show.
     const qreal gutter{gutterWidth()};
-    const qreal baseY{topPadding + (static_cast<qreal>(m_baseLine) * m_lineHeight) - m_contentY};
+    const qreal baseY{m_baseTop - m_contentY};
     setClipRect(node->textClip, {gutter, 0.0, std::max(0.0, width() - gutter), height()});
     setTranslation(node->content, {textLeft() - m_contentX, baseY});
     setTranslation(node->gutter, {0.0, baseY});
@@ -1340,8 +1554,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     const QColor text{textColor()};
     QHash<quint64, Shown> rows;
     for (const Row &row : m_rows) {
-        const qreal y{static_cast<qreal>(row.line - m_baseLine) * m_lineHeight};
-        placeText(window, node->textLayer, node->rows, rows, row.id, row.layout.get(), text, {0.0, y});
+        placeText(window, node->textLayer, node->rows, rows, row.id, row.layout.get(), text, {0.0, row.top});
     }
     removeText(node->textLayer, node->rows);
     node->rows = std::move(rows);
@@ -1349,8 +1562,10 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     const qsizetype cursorLine{m_buffer.lineAt(m_cursor)};
     const QColor numberColor{lineNumberColor()};
     QHash<quint64, Shown> numbers;
-    for (const Number &number : m_numbers) {
-        const qreal y{static_cast<qreal>(number.line - m_baseLine) * m_lineHeight};
+    // Numbers and rows are laid out in step: a number sits at its row's top.
+    for (std::size_t index{0}; index < m_numbers.size(); ++index) {
+        const Number &number{m_numbers.at(index)};
+        const qreal y{m_rows.at(index).top};
         const QColor color{number.line == cursorLine ? text : numberColor};
         placeText(
             window,
@@ -1366,6 +1581,10 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     removeText(node->gutter, node->numbers);
     node->numbers = std::move(numbers);
 
+    if ((m_flags & InvisiblesChanged) != 0U) {
+        setRectangles(node->invisibles, m_invisibleRects, lineNumberColor());
+        m_flags &= ~InvisiblesChanged;
+    }
     syncRectangles(window, node->marksLayer, node->matches, m_matchRects, matchColor());
     syncRectangles(window, node->marksLayer, node->words, m_wordRects, wordColor());
     syncRectangles(window, node->marksLayer, node->brackets, m_bracketRects, bracketColor());
@@ -1559,12 +1778,7 @@ QVariant EditorView::inputMethodQuery(Qt::InputMethodQuery query) const
     case Qt::ImCursorRectangle:
         return cursorRectangle().translated(-m_contentX, -m_contentY);
     case Qt::ImAnchorRectangle:
-        return QRectF{
-            textLeft() + xForPosition(m_anchor) - m_contentX,
-            topPadding + (static_cast<qreal>(m_buffer.lineAt(m_anchor)) * m_lineHeight) - m_contentY,
-            caretWidth,
-            m_lineHeight
-        };
+        return positionRect(m_anchor).translated(-m_contentX, -m_contentY);
     case Qt::ImSurroundingText:
         return m_buffer.line(line);
     case Qt::ImCursorPosition:

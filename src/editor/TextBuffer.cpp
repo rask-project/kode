@@ -114,6 +114,27 @@ qsizetype TextBuffer::lineLength(qsizetype line) const
     return end - start;
 }
 
+QList<qsizetype> TextBuffer::lineLengths() const
+{
+    QList<qsizetype> lengths;
+    lengths.reserve(lineCount());
+    qsizetype current{0};
+    for (const Piece &piece : m_pieces) {
+        const QList<qsizetype> &newlines{buffer(piece.source).newlines};
+        // The piece's newlines, as offsets into its buffer.
+        const auto first{std::ranges::lower_bound(newlines, piece.start)};
+        qsizetype from{piece.start};
+        for (auto newline{first}; newline != newlines.cend() && *newline < piece.start + piece.length; ++newline) {
+            lengths.append(current + (*newline - from));
+            current = 0;
+            from = *newline + 1;
+        }
+        current += piece.start + piece.length - from;
+    }
+    lengths.append(current);
+    return lengths;
+}
+
 QString TextBuffer::line(qsizetype line) const
 {
     return text(lineStart(line), lineLength(line));

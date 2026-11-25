@@ -19,6 +19,8 @@ qt_add_qml_module(tekst_editor_bench
         ../../src/editor/Indentation.cpp
         ../../src/editor/Matching.h
         ../../src/editor/Matching.cpp
+        ../../src/editor/WrapIndex.h
+        ../../src/editor/WrapIndex.cpp
         ../../src/editor/TextSearch.h
         ../../src/editor/TextSearch.cpp
         ../../src/editor/SyntaxHighlighter.h
