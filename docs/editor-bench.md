@@ -54,6 +54,31 @@ What the columns are:
 - At 1 MB both keep up with the display; the difference there is opening
   (15×) and memory (40×).
 
+## Scene graph update cost
+
+After the prototype, `EditorView` stopped rebuilding its scene every frame
+(Stage 4): each line is a `QSGTextNode` placed by its own matrix inside a
+transform that carries the scroll (relative to the first line laid out, so
+coordinates stay small in huge files); a line's node is found again by its
+row (rows are reused by their text, wherever an edit moved them) and filled
+only when it first shows; line numbers likewise; the selection is drawn as
+rectangles behind the text. "Update" is from the end of animations to the
+end of synchronization: polishing (layout) plus `updatePaintNode`.
+
+| EditorView | Size (MB) | Keystroke update avg (ms) | Keystroke update max (ms) | Scroll jump update avg (ms) | Scroll jump update max (ms) |
+|---|---:|---:|---:|---:|---:|
+| Before | 1 | 1.13 | 1.98 | 1.63 | 2.97 |
+| Before | 10 | 1.21 | 1.89 | 1.62 | 3.67 |
+| Before | 100 | 1.30 | 1.80 | 1.64 | 3.71 |
+| After | 1 | 0.32 | 0.71 | 1.13 | 3.60 |
+| After | 10 | 0.30 | 0.79 | 1.02 | 3.22 |
+| After | 100 | 0.36 | 0.75 | 1.11 | 2.90 |
+
+A keystroke now lays out one line instead of every line in view (≈ 4×
+less work). The scroll test jumps to unrelated parts of the file, where
+every line in view is new; scrolling through lines already laid out only
+changes a matrix.
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal

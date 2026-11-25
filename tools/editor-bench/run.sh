@@ -3,6 +3,7 @@
 # prints a Markdown table (paste it into docs/editor-bench.md).
 #
 # Usage: tools/editor-bench/run.sh [BUILD_DIR]
+#        MODES="editorview" tools/editor-bench/run.sh …   (one editor only)
 # The files are made from Tekst's and rask's sources, repeated, in
 # $TMPDIR/tekst-bench. Each case runs in its own process and window.
 set -euo pipefail
@@ -24,10 +25,10 @@ for mb in 1 10 100; do
     while (($(stat -f %z "$file") < mb * 1024 * 1024)); do cat "$seed" >>"$file"; done
 done
 
-echo "| Editor | Size (MB) | Open to first frame (ms) | Keystroke work avg (ms) | Keystroke work max (ms) | Keystroke to screen max (ms) | Scroll work avg (ms) | Scroll work max (ms) | Memory (MB) |"
+echo "| Editor | Size (MB) | Open to first frame (ms) | Keystroke update avg (ms) | Keystroke update max (ms) | Keystroke to screen max (ms) | Scroll update avg (ms) | Scroll update max (ms) | Memory (MB) |"
 echo "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
 for mb in 1 10 100; do
-    for mode in textedit editorview; do
+    for mode in ${MODES:-textedit editorview}; do
         read -r m size open kavg kmax kframe savg smax rss <<<"$("$BENCH" "$mode" "$DIR/code-${mb}mb.txt")"
         echo "| $m | $size | $open | $kavg | $kmax | $kframe | $savg | $smax | $rss |"
     done

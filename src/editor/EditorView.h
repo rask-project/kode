@@ -149,12 +149,23 @@ private:
         qsizetype cursorAfter{0};
     };
 
-    // A laid out line in view, with its number.
+    // A laid out line in view. Rows are found again by their text (and
+    // `variant`), not their line number: an edit above a line moves it but
+    // keeps its layout, and its scene graph node (matched by `id`).
     struct Row {
+        quint64 id{0};
         qsizetype line{-1};
-        quint64 revision{0};
+        // 0, or the preedit generation for the line showing a composition.
+        quint64 variant{0};
+        QString text;
         std::unique_ptr<QTextLayout> layout;
-        std::unique_ptr<QTextLayout> number;
+        qreal width{0.0};
+    };
+
+    // A laid out line number in view, found again by its line.
+    struct Number {
+        qsizetype line{-1};
+        std::unique_ptr<QTextLayout> layout;
         qreal width{0.0};
     };
 
@@ -190,7 +201,11 @@ private:
     [[nodiscard]] bool handleDeletion(const QKeyEvent *event);
     [[nodiscard]] qsizetype firstVisibleLine() const;
     [[nodiscard]] qsizetype visibleLineCount() const;
+    [[nodiscard]] QString displayText(qsizetype line) const;
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutLine(qsizetype line) const;
+    [[nodiscard]] std::unique_ptr<QTextLayout> layoutText(const QString &text, qsizetype preeditColumn) const;
+    void layoutRows();
+    void layoutDecorations();
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
     [[nodiscard]] qreal xForPosition(qsizetype position) const;
     [[nodiscard]] qsizetype positionAt(const QPointF &point) const;
@@ -201,6 +216,12 @@ private:
     QList<Edit> m_undo;
     // Move-only rows: std::vector (QList needs copyable elements).
     std::vector<Row> m_rows;
+    std::vector<Number> m_numbers;
+    // Set by updatePolish() for updatePaintNode(), relative to m_baseLine's
+    // top (so coordinates stay small in huge files): the selection, one
+    // rectangle per line, and the caret.
+    QList<QRectF> m_selectionRects;
+    QRectF m_caretRect;
     QString m_preedit;
     QFont m_font;
     QElapsedTimer m_lastDoubleClick;
@@ -219,8 +240,11 @@ private:
     // The undo index when the text matched the file; -1: never again.
     qsizetype m_cleanIndex{0};
     qsizetype m_preeditCursor{0};
-    // Bumped by every change of text or preedit: rows laid out before are stale.
-    quint64 m_revision{1};
+    // The first line laid out; the scene is placed relative to it.
+    qsizetype m_baseLine{0};
+    quint64 m_nextRowId{1};
+    // Bumped when the composition changes, so its line is laid out again.
+    quint64 m_preeditGeneration{1};
     Colors m_colors;
     quint32 m_flags{0U};
 };

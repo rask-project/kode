@@ -43,16 +43,21 @@ Guidance for AI agents working in this repository.
   - `TextBuffer` — piece table: original + append-only added buffer, each
     with a newline index; pieces carry their newline count; consecutive
     typing grows one piece. Lines use '\n' only.
-  - `EditorView` (`QQuickItem`) — lays out the visible lines (`QTextLayout`)
-    in `updatePolish()` (GUI thread), keeps rows still valid across scrolls,
-    and in `updatePaintNode()` draws one `QSGTextNode` per row and per line
-    number (`NativeRendering`), the current-line band and the caret; sits in
-    a `Flickable` (`contentX/Y`, `contentWidth/Height`). All text changes go
-    through `replace()`, which records undo. Nothing per frame scales with
-    the file size.
-  - Qt 6.12's `QSGTextNode::addTextLayout` takes the selection's *last
-    character* as its fourth argument, not a count as documented; call it
-    without selection arguments when nothing is selected.
+  - `EditorView` (`QQuickItem`) — sits in a `Flickable` (`contentX/Y`,
+    `contentWidth/Height`); all text changes go through `replace()`, which
+    records undo. `updatePolish()` (GUI thread) lays out the lines in view
+    (`QTextLayout`), reusing rows by their *text* (an edit above a line moves
+    it without laying it out again) and line numbers by line, and computes
+    the selection rectangles and the caret, relative to the first line laid
+    out. `updatePaintNode()` only syncs: two transforms carry the scroll
+    (text area and gutter); each row is a `QSGTextNode` (`NativeRendering`)
+    keyed by the row's id, filled once and then only moved by its matrix;
+    the selection is `QSGRectangleNode`s behind the text. Scrolling within
+    the lines laid out does not polish at all. Nothing per frame scales with
+    the file size; a keystroke lays out one line.
+  - Keep scene coordinates small: positions are relative to the first line
+    laid out, never `line × lineHeight` (float vertices lose precision past
+    a few million pixels).
 - `tools/editor-bench/` — `tekst-editor-bench` (TextEdit vs. EditorView on
   one file, in a real window) and `run.sh` (1/10/100 MB, Markdown table for
   `docs/editor-bench.md`). Benchmark Release builds only.

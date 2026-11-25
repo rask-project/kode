@@ -1,15 +1,15 @@
 // Measures one editor on one file and prints one line of results:
 //
 //   tekst-editor-bench textedit|editorview FILE
-//       mode size_mb open_ms key_work_avg key_work_max key_frame_max
-//       scroll_work_avg scroll_work_max rss_delta_mb
+//       mode size_mb open_ms key_update_avg key_update_max key_frame_max
+//       scroll_update_avg scroll_update_max rss_delta_mb
 //   tekst-editor-bench try FILE     opens FILE in EditorView to try it by hand
 //
 // "open" is from handing the text to the editor to its first frame on
 // screen. For a keystroke in the middle of the text and for a jump of the
-// view, "work" is until that frame is rendered (afterRendering: the editor's
-// own cost), "frame" until it is on screen (frameSwapped, which waits for the
-// display: 16.7 ms at 60 Hz when nothing is late). Reading and decoding the
+// view, "update" is the scene's update for that frame (see Frame: the
+// editor's own cost), "frame" until it is on screen (frameSwapped, which
+// waits for the display: 16.7 ms at 60 Hz when nothing is late). Reading and decoding the
 // file happen before the clock starts, the same for both editors.
 #include <QElapsedTimer>
 #include <QEventLoop>
@@ -45,22 +45,40 @@ qreal residentMegabytes()
     return result == KERN_SUCCESS ? static_cast<qreal>(info.resident_size) / (1024.0 * 1024.0) : 0.0;
 }
 
-// When the next frame was rendered and put on screen, in ms of `timer`.
+// The next frame, in ms of `timer`: how long the scene took to update
+// (from the end of animations, on the GUI thread, through polishing the
+// items and synchronizing their nodes, to the end of synchronization: the
+// editor's own cost, layout and scene graph included) and when the frame was
+// on screen.
 struct Frame {
-    qreal workMs{-1.0};
+    qreal updateMs{-1.0};
     qreal frameMs{-1.0};
 };
 
 // Waits for the next frame `window` puts on screen; frameMs < 0 on timeout.
 Frame waitForFrame(QQuickWindow &window, const QElapsedTimer &timer)
 {
-    // afterRendering comes from the render thread.
-    std::atomic<qint64> rendered{-1};
-    const QMetaObject::Connection renderedConnection{QObject::connect(
+    std::atomic<qint64> animated{-1};
+    std::atomic<qint64> synchronized{-1};
+    const QMetaObject::Connection animatedConnection{QObject::connect(
         &window,
-        &QQuickWindow::afterRendering,
+        &QQuickWindow::afterAnimating,
         &window,
-        [&rendered, &timer] { rendered.store(timer.nsecsElapsed()); },
+        [&animated, &timer] {
+            qint64 none{-1};
+            animated.compare_exchange_strong(none, timer.nsecsElapsed());
+        },
+        Qt::DirectConnection
+    )};
+    // From the render thread.
+    const QMetaObject::Connection synchronizedConnection{QObject::connect(
+        &window,
+        &QQuickWindow::afterSynchronizing,
+        &window,
+        [&synchronized, &timer] {
+            qint64 none{-1};
+            synchronized.compare_exchange_strong(none, timer.nsecsElapsed());
+        },
         Qt::DirectConnection
     )};
     QEventLoop loop;
@@ -71,12 +89,13 @@ Frame waitForFrame(QQuickWindow &window, const QElapsedTimer &timer)
     window.update();
     timeout.start(frameTimeoutMs);
     const bool swapped{loop.exec() == 0};
-    QObject::disconnect(renderedConnection);
+    QObject::disconnect(animatedConnection);
+    QObject::disconnect(synchronizedConnection);
     if (!swapped) {
         return {};
     }
     return {
-        .workMs = static_cast<qreal>(rendered.load()) / 1.0e6,
+        .updateMs = static_cast<qreal>(synchronized.load() - animated.load()) / 1.0e6,
         .frameMs = static_cast<qreal>(timer.nsecsElapsed()) / 1.0e6
     };
 }
@@ -145,7 +164,7 @@ int main(int argc, char *argv[])
 
     QMetaObject::invokeMethod(root, "prepareTyping");
     waitForFrame(view, timer);
-    QList<qreal> keyWork;
+    QList<qreal> keyUpdate;
     QList<qreal> keyFrame;
     for (qint32 i{0}; i < keystrokes; ++i) {
         QKeyEvent press{QEvent::KeyPress, Qt::Key_A, Qt::NoModifier, QStringLiteral("a")};
@@ -154,16 +173,16 @@ int main(int argc, char *argv[])
         QCoreApplication::sendEvent(&view, &press);
         QCoreApplication::sendEvent(&view, &release);
         const Frame frame{waitForFrame(view, timer)};
-        keyWork.append(frame.workMs);
+        keyUpdate.append(frame.updateMs);
         keyFrame.append(frame.frameMs);
     }
 
-    QList<qreal> scrollWork;
+    QList<qreal> scrollUpdate;
     for (qint32 i{0}; i < scrollSteps; ++i) {
         const qreal fraction{static_cast<qreal>((i * 37) % scrollSteps) / static_cast<qreal>(scrollSteps)};
         timer.restart();
         QMetaObject::invokeMethod(root, "scrollTo", Q_ARG(QVariant, fraction));
-        scrollWork.append(waitForFrame(view, timer).workMs);
+        scrollUpdate.append(waitForFrame(view, timer).updateMs);
     }
 
     std::printf(
@@ -171,11 +190,11 @@ int main(int argc, char *argv[])
         qPrintable(mode),
         sizeMegabytes,
         opened.frameMs,
-        average(keyWork),
-        *std::ranges::max_element(keyWork),
+        average(keyUpdate),
+        *std::ranges::max_element(keyUpdate),
         *std::ranges::max_element(keyFrame),
-        average(scrollWork),
-        *std::ranges::max_element(scrollWork),
+        average(scrollUpdate),
+        *std::ranges::max_element(scrollUpdate),
         rssDelta
     );
     return 0;
