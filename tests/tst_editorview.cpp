@@ -393,4 +393,22 @@ void TestEditorView::wrappingFollowsEditsAndNewText()
     QCOMPARE(editor.contentHeight(), unwrapped + (3 * rowHeight));
 }
 
+void TestEditorView::relayoutKeepsTheTopLine()
+{
+    tekst::EditorView editor;
+    editor.setWidth(10.0);
+    editor.setText(QString(45, QLatin1Char('a')).append(QLatin1Char('\n')).repeated(100));
+    const qreal top{editor.cursorRectangle().y()};
+    const qreal rowHeight{editor.cursorRectangle().height()};
+    // Line 50 at the top, the caret far above it.
+    editor.setContentY(top + (50 * rowHeight));
+    const QSignalSpy scrolls{&editor, &tekst::EditorView::scrollRequested};
+    const QSignalSpy caretMoves{&editor, &tekst::EditorView::caretMoved};
+    editor.setWrap(true);
+    // Each line now takes three rows; the view follows line 50, not the caret.
+    QCOMPARE(scrolls.count(), 1);
+    QCOMPARE(scrolls.first().first().toReal(), top + (150 * rowHeight));
+    QCOMPARE(caretMoves.count(), 0);
+}
+
 QTEST_MAIN(TestEditorView)

@@ -53,7 +53,10 @@ Guidance for AI agents working in this repository.
   (`Popup.Native`) of `Syntaxes` (C++ singleton, `src/Syntaxes.*`: the
   definitions by section).
 - `TextEditor.qml` — the editing area: a `Flickable` around the
-  `EditorView`, scroll bars, caret kept in view, colors from `SystemColors`.
+  `EditorView`, scroll bars, colors from `SystemColors`. It scrolls to the
+  caret on `caretMoved` (navigation, edits) and to `scrollRequested` after a
+  relayout (width, font, wrapping), which keeps the top line in place —
+  not on `cursorChanged`, which a relayout emits too.
 - `src/editor/` — the editing surface:
   - `TextBuffer` — piece table: original + append-only added buffer, each
     with a newline index; pieces carry their newline count; consecutive

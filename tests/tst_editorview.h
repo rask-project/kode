@@ -31,4 +31,5 @@ private slots:
     void tabIndentsSelectedLines();
     void wrappedLinesAddRowsAndMoveByRow();
     void wrappingFollowsEditsAndNewText();
+    void relayoutKeepsTheTopLine();
 };

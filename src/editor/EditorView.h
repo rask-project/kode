@@ -212,6 +212,12 @@ signals:
     void contentSizeChanged();
     void textChanged();
     void cursorChanged();
+    // The caret moved (navigation, an edit, new text): unlike cursorChanged,
+    // not for a relayout under it. What to keep in view.
+    void caretMoved();
+    // A relayout (width, font, wrapping) moved the lines: scroll to
+    // `contentY` to keep the line that was at the top there.
+    void scrollRequested(qreal contentY);
     void selectionChanged();
     void undoStateChanged();
     void canPasteChanged();
@@ -367,8 +373,11 @@ private:
     [[nodiscard]] qsizetype totalRows() const;
     // How wide wrapped lines are laid out.
     [[nodiscard]] qreal wrapWidth() const;
-    // The wrap index estimated again (width, font or text changed wholesale).
-    void resetWrap();
+    // The wrap index estimated again (width, font or wrapping changed),
+    // keeping `anchorLine` at the top of the view.
+    void resetWrap(qsizetype anchorLine);
+    // The line at the top of the view.
+    [[nodiscard]] qsizetype topLine() const;
     // The layout of `line` if it is laid out in view, else nullptr.
     [[nodiscard]] const QTextLayout *laidOut(qsizetype line) const;
     // The caret's rectangle at `position`, in content coordinates.

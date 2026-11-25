@@ -268,6 +268,7 @@ void EditorView::setFont(const QFont &font)
     if (m_font == font) {
         return;
     }
+    const qsizetype anchor{topLine()};
     m_font = font;
     updateMetrics();
     m_widestLine = 0.0;
@@ -275,7 +276,7 @@ void EditorView::setFont(const QFont &font)
     m_numbers.clear();
     emit fontChanged();
     // Columns per row changed too.
-    resetWrap();
+    resetWrap(anchor);
 }
 
 QString EditorView::syntax() const
@@ -440,7 +441,13 @@ qreal EditorView::wrapWidth() const
     return std::max(fewestColumns * m_charWidth, width() - textLeft() - padding);
 }
 
-void EditorView::resetWrap()
+qsizetype EditorView::topLine() const
+{
+    const auto row{static_cast<qsizetype>(std::floor((m_contentY - topPadding) / m_lineHeight))};
+    return lineAtRow(std::max(row, qsizetype{0}));
+}
+
+void EditorView::resetWrap(qsizetype anchorLine)
 {
     m_wrapWidth = wrapWidth();
     m_rows.clear();
@@ -449,6 +456,9 @@ void EditorView::resetWrap()
     }
     emit contentSizeChanged();
     emit cursorChanged();
+    if (anchorLine > 0) {
+        emit scrollRequested(topPadding + (static_cast<qreal>(rowOfLine(anchorLine)) * m_lineHeight));
+    }
     polish();
 }
 
@@ -457,9 +467,10 @@ void EditorView::setWrap(bool wrap)
     if (this->wrap() == wrap) {
         return;
     }
+    const qsizetype anchor{topLine()};
     m_flags = wrap ? (m_flags | Wrap) : (m_flags & ~Wrap);
     emit layoutOptionsChanged();
-    resetWrap();
+    resetWrap(anchor);
 }
 
 void EditorView::setShowInvisibles(bool show)
@@ -795,6 +806,7 @@ void EditorView::textEdited()
     emit textChanged();
     emit contentSizeChanged();
     emit cursorChanged();
+    emit caretMoved();
     polish();
 }
 
@@ -813,6 +825,7 @@ void EditorView::moveCaret(qsizetype position, Select select)
     m_cursor = position;
     m_anchor = anchor;
     emit cursorChanged();
+    emit caretMoved();
     if (selectionWasVisible || hasSelection()) {
         emit selectionChanged();
     }
@@ -1277,7 +1290,7 @@ void EditorView::layoutRows()
     // Lay out the lines in view, reusing the rows (and numbers) already laid
     // out: a row is found again by its text, wherever its line moved.
     if (wrap() && !qFuzzyCompare(m_wrapWidth, wrapWidth())) {
-        resetWrap();
+        resetWrap(topLine());
     }
     const qsizetype first{firstVisibleLine()};
     const qsizetype count{std::min(visibleLineCount(), m_buffer.lineCount() - first)};
@@ -1759,6 +1772,7 @@ void EditorView::inputMethodEvent(QInputMethodEvent *event)
         m_preeditCursor = preeditCursor;
         ++m_preeditGeneration;
         emit cursorChanged();
+        emit caretMoved();
         polish();
     }
     event->accept();
