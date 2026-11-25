@@ -98,8 +98,9 @@ ApplicationWindow {
         property int fontSize: root.defaultFontSize
         property bool wrap: false
         property bool showInvisibles: false
-        property string lightTheme: "Tekst Light"
-        property string darkTheme: "Tekst Dark"
+        // The editor's theme, whatever the appearance; until one is chosen,
+        // Tekst Light or Tekst Dark to match it.
+        property string theme
     }
 
     Document {
@@ -301,45 +302,24 @@ ApplicationWindow {
             }
             MenuSeparator {}
             Menu {
-                id: lightThemeMenu
+                id: themeMenu
 
-                title: qsTr("Light Theme")
+                title: qsTr("Theme")
 
                 Instantiator {
-                    model: Syntaxes.lightThemes
+                    model: Syntaxes.themes
 
                     delegate: MenuItem {
                         required property string modelData
 
                         text: modelData
                         checkable: true
-                        checked: viewSettings.lightTheme === modelData
-                        onTriggered: viewSettings.lightTheme = modelData
+                        checked: root.editor.syntaxTheme === modelData
+                        onTriggered: viewSettings.theme = modelData
                     }
 
-                    onObjectAdded: (index, object) => lightThemeMenu.insertItem(index, object)
-                    onObjectRemoved: (index, object) => lightThemeMenu.removeItem(object)
-                }
-            }
-            Menu {
-                id: darkThemeMenu
-
-                title: qsTr("Dark Theme")
-
-                Instantiator {
-                    model: Syntaxes.darkThemes
-
-                    delegate: MenuItem {
-                        required property string modelData
-
-                        text: modelData
-                        checkable: true
-                        checked: viewSettings.darkTheme === modelData
-                        onTriggered: viewSettings.darkTheme = modelData
-                    }
-
-                    onObjectAdded: (index, object) => darkThemeMenu.insertItem(index, object)
-                    onObjectRemoved: (index, object) => darkThemeMenu.removeItem(object)
+                    onObjectAdded: (index, object) => themeMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => themeMenu.removeItem(object)
                 }
             }
             MenuSeparator {}
@@ -529,7 +509,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
-        editor.syntaxTheme: Appearance.dark ? viewSettings.darkTheme : viewSettings.lightTheme
+        editor.syntaxTheme: viewSettings.theme !== "" ? viewSettings.theme : (Appearance.dark ? "Tekst Dark" : "Tekst Light")
         editor.wrap: viewSettings.wrap
         editor.showInvisibles: viewSettings.showInvisibles
         editor.font: Qt.font({

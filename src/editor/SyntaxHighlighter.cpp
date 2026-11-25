@@ -7,11 +7,11 @@
 #include <KSyntaxHighlighting/Repository>
 #include <KSyntaxHighlighting/Theme>
 
-#include <QColor>
 #include <QFileInfo>
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <memory>
 #include <utility>
 
@@ -37,12 +37,6 @@ KSyntaxHighlighting::Repository &repository()
 {
     static const std::unique_ptr<KSyntaxHighlighting::Repository> instance{makeRepository()};
     return *instance;
-}
-
-bool isDark(const KSyntaxHighlighting::Theme &theme)
-{
-    constexpr qreal middle{0.5};
-    return QColor::fromRgba(theme.editorColor(KSyntaxHighlighting::Theme::BackgroundColor)).lightnessF() < middle;
 }
 
 // Lines highlighted between deadline checks.
@@ -114,14 +108,10 @@ KSyntaxHighlighting::Theme SyntaxHighlighter::themeNamed(const QString &name)
     return named.isValid() ? named : repository().defaultTheme();
 }
 
-QStringList SyntaxHighlighter::themeNames(bool dark)
+QStringList SyntaxHighlighter::themeNames()
 {
     QStringList names;
-    for (const KSyntaxHighlighting::Theme &theme : repository().themes()) {
-        if (isDark(theme) == dark) {
-            names.append(theme.name());
-        }
-    }
+    std::ranges::transform(repository().themes(), std::back_inserter(names), &KSyntaxHighlighting::Theme::name);
     std::ranges::sort(names, [](const QString &a, const QString &b) { return a.localeAwareCompare(b) < 0; });
     return names;
 }

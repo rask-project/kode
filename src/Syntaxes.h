@@ -16,15 +16,13 @@ class Syntaxes : public QObject
     QML_ELEMENT
     QML_SINGLETON
     Q_PROPERTY(QStringList sections READ sections CONSTANT)
-    // The highlighting themes for the light and the dark appearance.
-    Q_PROPERTY(QStringList lightThemes READ lightThemes CONSTANT)
-    Q_PROPERTY(QStringList darkThemes READ darkThemes CONSTANT)
+    // Every highlighting theme, light and dark ones together.
+    Q_PROPERTY(QStringList themes READ themes CONSTANT)
 public:
     explicit Syntaxes(QObject *parent = nullptr);
 
     [[nodiscard]] QStringList sections() const;
-    [[nodiscard]] static QStringList lightThemes() { return SyntaxHighlighter::themeNames(false); }
-    [[nodiscard]] static QStringList darkThemes() { return SyntaxHighlighter::themeNames(true); }
+    [[nodiscard]] static QStringList themes() { return SyntaxHighlighter::themeNames(); }
     // The names in `section`, sorted.
     Q_INVOKABLE [[nodiscard]] QStringList names(const QString &section) const;
 };

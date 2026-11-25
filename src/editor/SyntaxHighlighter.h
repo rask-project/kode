@@ -30,8 +30,8 @@ public:
     [[nodiscard]] static KSyntaxHighlighting::Definition definitionForName(const QString &name);
     // The theme named `name` (Tekst's own included), else the default one.
     [[nodiscard]] static KSyntaxHighlighting::Theme themeNamed(const QString &name);
-    // The names of the themes with a dark (else light) background, sorted.
-    [[nodiscard]] static QStringList themeNames(bool dark);
+    // The names of every theme, sorted.
+    [[nodiscard]] static QStringList themeNames();
     // Every definition a user can pick, sorted by section then name.
     [[nodiscard]] static QList<KSyntaxHighlighting::Definition> definitions();
 

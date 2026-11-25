@@ -99,8 +99,8 @@ class EditorView : public QQuickItem
     // Indent with tabs (else spaces), `indentWidth` columns per level.
     Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY indentationChanged)
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY indentationChanged)
-    // The highlighting theme's name (see Syntaxes.lightThemes/darkThemes);
-    // plain text keeps textColor.
+    // The highlighting theme's name (see Syntaxes.themes); plain text keeps
+    // textColor.
     Q_PROPERTY(QString syntaxTheme READ syntaxTheme WRITE setSyntaxTheme NOTIFY syntaxThemeChanged)
 public:
     explicit EditorView(QQuickItem *parent = nullptr);

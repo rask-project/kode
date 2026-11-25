@@ -307,9 +307,10 @@ comments (today matched like any other).
   ahead of the visible lines, off the GUI thread for large files.
 - Formats applied to the visible lines' `QTextLayout`s.
 - Language detection by extension/shebang, selector in the status bar.
-- Done: light/dark themes following `Appearance` — a light and a dark
-  theme chosen in View (the 30 KDE themes and Tekst's own), Tekst Light
-  and Tekst Dark by default: Qt Creator's Light/Dark (2024) colors
+- Done: highlighting themes — one theme for the editor, whatever the
+  system's appearance, chosen in View > Theme among the 30 KDE themes and
+  Tekst's own (until one is chosen, Tekst Light or Tekst Dark to match the
+  appearance); Qt Creator's Light/Dark (2024) colors
   converted by `tools/make-syntax-themes.py`. Plain text keeps the system
   color; KSyntaxHighlighting is syntactic, so the colors Qt Creator gets
   from clangd/QmlJS (fields, parameters, locals, QML ids) need a language

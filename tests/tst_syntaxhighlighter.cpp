@@ -114,9 +114,10 @@ void TestSyntaxHighlighter::stopsAtTheDeadline()
 void TestSyntaxHighlighter::loadsTekstThemes()
 {
     QCOMPARE(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Dark")).name(), QStringLiteral("Tekst Dark"));
-    QVERIFY(tekst::SyntaxHighlighter::themeNames(true).contains(QStringLiteral("Tekst Dark")));
-    QVERIFY(tekst::SyntaxHighlighter::themeNames(false).contains(QStringLiteral("Tekst Light")));
-    QVERIFY(!tekst::SyntaxHighlighter::themeNames(true).contains(QStringLiteral("Tekst Light")));
+    const QStringList names{tekst::SyntaxHighlighter::themeNames()};
+    QVERIFY(names.contains(QStringLiteral("Tekst Dark")));
+    QVERIFY(names.contains(QStringLiteral("Tekst Light")));
+    QVERIFY(names.contains(QStringLiteral("Dracula")));
 }
 
 void TestSyntaxHighlighter::tekstDarkColorsKeywords()
