@@ -91,7 +91,9 @@ Guidance for AI agents working in this repository.
     from a zero timer ahead of the view); `linesReplaced()` after an edit
     keeps the old states aligned so highlighting stops at the first line
     that ends as before. `EditorView` rows are reused only with the same
-    start state; `syntax`/`detectSyntax()`/`darkTheme` drive it.
+    start state; `syntax`/`detectSyntax()`/`syntaxTheme` drive it. Only themes
+    with a light and a dark version ("X Light"/"X Dark") are offered, by
+    family (`themeFamilies()`); the appearance picks the version (`themeName()`).
   - `TextSearch` — find over the `TextBuffer`, line by line in slices
     (`advance()` with a deadline, from a zero timer in the view), matches
     sorted and capped at 100 000; the view binds `searchPattern`/

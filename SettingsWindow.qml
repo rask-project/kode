@@ -124,13 +124,13 @@ Window {
                 }
                 FormRow {
                     label: qsTr("Theme")
-                    detail: qsTr("Colors for the syntax")
+                    detail: qsTr("Light or dark as the appearance")
 
                     ComboBox {
                         focusPolicy: Qt.TabFocus
                         Layout.preferredWidth: 180
                         model: Syntaxes.themes
-                        currentIndex: Syntaxes.themes.indexOf(Preferences.theme !== "" ? Preferences.theme : (Appearance.dark ? "Tekst Dark" : "Tekst Light"))
+                        currentIndex: Syntaxes.themes.indexOf(Syntaxes.themeFamily(Preferences.theme))
                         onActivated: index => Preferences.theme = Syntaxes.themes[index]
                     }
                 }

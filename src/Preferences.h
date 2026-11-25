@@ -23,7 +23,7 @@ class Preferences : public QObject
     Q_PROPERTY(qint32 largestFontSize READ largestFontSize CONSTANT)
     // The editor's font: fontFamily at fontSize.
     Q_PROPERTY(QFont font READ font NOTIFY changed)
-    // A highlighting theme's name; empty: Tekst Light or Dark, as the appearance.
+    // A highlighting theme family; its light or dark theme follows the appearance.
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
     Q_PROPERTY(bool wrap READ wrap WRITE setWrap NOTIFY changed)
     Q_PROPERTY(bool showInvisibles READ showInvisibles WRITE setShowInvisibles NOTIFY changed)

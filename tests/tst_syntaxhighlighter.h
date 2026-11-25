@@ -14,5 +14,6 @@ private slots:
     void incrementalMatchesFull();
     void stopsAtTheDeadline();
     void loadsTekstThemes();
+    void offersOnlyLightAndDarkPairs();
     void tekstDarkColorsKeywords();
 };

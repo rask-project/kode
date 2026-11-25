@@ -302,7 +302,7 @@ ApplicationWindow {
 
                         text: modelData
                         checkable: true
-                        checked: root.editor.syntaxTheme === modelData
+                        checked: Syntaxes.themeFamily(Preferences.theme) === modelData
                         onTriggered: Preferences.theme = modelData
                     }
 
@@ -509,7 +509,7 @@ ApplicationWindow {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
-        editor.syntaxTheme: Preferences.theme !== "" ? Preferences.theme : (Appearance.dark ? "Tekst Dark" : "Tekst Light")
+        editor.syntaxTheme: Syntaxes.themeName(Preferences.theme, Appearance.dark)
         editor.wrap: Preferences.wrap
         editor.showInvisibles: Preferences.showInvisibles
         editor.font: Preferences.font

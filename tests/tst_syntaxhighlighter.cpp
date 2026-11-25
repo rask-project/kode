@@ -114,10 +114,19 @@ void TestSyntaxHighlighter::stopsAtTheDeadline()
 void TestSyntaxHighlighter::loadsTekstThemes()
 {
     QCOMPARE(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Dark")).name(), QStringLiteral("Tekst Dark"));
-    const QStringList names{tekst::SyntaxHighlighter::themeNames()};
-    QVERIFY(names.contains(QStringLiteral("Tekst Dark")));
-    QVERIFY(names.contains(QStringLiteral("Tekst Light")));
-    QVERIFY(names.contains(QStringLiteral("Dracula")));
+}
+
+void TestSyntaxHighlighter::offersOnlyLightAndDarkPairs()
+{
+    const QStringList families{tekst::SyntaxHighlighter::themeFamilies()};
+    QVERIFY(families.contains(QStringLiteral("Tekst")));
+    QVERIFY(families.contains(QStringLiteral("Solarized")));
+    QVERIFY(!families.contains(QStringLiteral("Dracula")));
+    QVERIFY(!families.contains(QStringLiteral("Vim")));
+    QCOMPARE(tekst::SyntaxHighlighter::themeName(QStringLiteral("Solarized"), true), QStringLiteral("Solarized Dark"));
+    QCOMPARE(tekst::SyntaxHighlighter::themeFamily(QStringLiteral("GitHub Light")), QStringLiteral("GitHub"));
+    QCOMPARE(tekst::SyntaxHighlighter::themeName(QStringLiteral("Dracula"), false), QStringLiteral("Tekst Light"));
+    QCOMPARE(tekst::SyntaxHighlighter::themeName({}, true), QStringLiteral("Tekst Dark"));
 }
 
 void TestSyntaxHighlighter::tekstDarkColorsKeywords()

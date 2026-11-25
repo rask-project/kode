@@ -24,6 +24,8 @@ namespace
 // Tekst's own themes, in the app's resources (assets/themes): the
 // repository looks in <path>/themes.
 const QString themesPath{QStringLiteral(":/tekst/syntax")};
+const QString lightSuffix{QStringLiteral(" Light")};
+const QString darkSuffix{QStringLiteral(" Dark")};
 
 std::unique_ptr<KSyntaxHighlighting::Repository> makeRepository()
 {
@@ -108,12 +110,36 @@ KSyntaxHighlighting::Theme SyntaxHighlighter::themeNamed(const QString &name)
     return named.isValid() ? named : repository().defaultTheme();
 }
 
-QStringList SyntaxHighlighter::themeNames()
+QStringList SyntaxHighlighter::themeFamilies()
 {
     QStringList names;
     std::ranges::transform(repository().themes(), std::back_inserter(names), &KSyntaxHighlighting::Theme::name);
-    std::ranges::sort(names, [](const QString &a, const QString &b) { return a.localeAwareCompare(b) < 0; });
-    return names;
+    QStringList families;
+    for (const QString &name : names) {
+        if (!name.endsWith(lightSuffix)) {
+            continue;
+        }
+        QString family{name.chopped(lightSuffix.size())};
+        if (names.contains(family + darkSuffix)) {
+            families.emplace_back(std::move(family));
+        }
+    }
+    std::ranges::sort(families, [](const QString &a, const QString &b) { return a.localeAwareCompare(b) < 0; });
+    return families;
+}
+
+QString SyntaxHighlighter::themeFamily(const QString &name)
+{
+    const QStringList families{themeFamilies()};
+    const auto family{std::ranges::find_if(families, [&name](const QString &family) {
+        return name == family || name == family + lightSuffix || name == family + darkSuffix;
+    })};
+    return family != families.end() ? *family : QStringLiteral("Tekst");
+}
+
+QString SyntaxHighlighter::themeName(const QString &name, bool dark)
+{
+    return themeFamily(name) + (dark ? darkSuffix : lightSuffix);
 }
 
 QList<KSyntaxHighlighting::Definition> SyntaxHighlighter::definitions()
