@@ -23,4 +23,7 @@ private slots:
     void accessibleSelection();
     void accessibleBoundaries();
     void accessibleEditingIsUndoable();
+    void findNextSelectsMatches();
+    void findWraps();
+    void replaceAllIsOneUndo();
 };

@@ -13,6 +13,8 @@ set(editor_sources
     ../src/editor/SyntaxHighlighter.cpp
     ../src/editor/TextBuffer.h
     ../src/editor/TextBuffer.cpp
+    ../src/editor/TextSearch.h
+    ../src/editor/TextSearch.cpp
 )
 
 qt_add_executable(tst_document
@@ -71,3 +73,15 @@ qt_add_executable(tst_matching
 target_include_directories(tst_matching PRIVATE ../src/editor)
 target_link_libraries(tst_matching PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME tst_matching COMMAND tst_matching)
+
+qt_add_executable(tst_textsearch
+    tst_textsearch.h
+    tst_textsearch.cpp
+    ../src/editor/TextBuffer.h
+    ../src/editor/TextBuffer.cpp
+    ../src/editor/TextSearch.h
+    ../src/editor/TextSearch.cpp
+)
+target_include_directories(tst_textsearch PRIVATE ../src/editor)
+target_link_libraries(tst_textsearch PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME tst_textsearch COMMAND tst_textsearch)

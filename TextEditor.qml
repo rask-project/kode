@@ -12,10 +12,12 @@ Flickable {
     // Scrolls just enough to show `rect` (content coordinates); horizontally,
     // the gutter covers the left of the viewport.
     function ensureVisible(rect) {
+        // The horizontal scroll bar covers the bottom of the viewport.
+        const visibleHeight = height - (horizontalBar.visible ? horizontalBar.height : 0);
         if (contentY > rect.y)
             contentY = rect.y;
-        else if (contentY + height < rect.y + rect.height)
-            contentY = rect.y + rect.height - height;
+        else if (contentY + visibleHeight < rect.y + rect.height)
+            contentY = rect.y + rect.height - visibleHeight;
         const left = contentX + view.gutterWidth;
         if (left > rect.x)
             contentX = Math.max(0, rect.x - view.gutterWidth - 24);
@@ -29,7 +31,9 @@ Flickable {
     boundsBehavior: Flickable.StopAtBounds
 
     ScrollBar.vertical: ScrollBar {}
-    ScrollBar.horizontal: ScrollBar {}
+    ScrollBar.horizontal: ScrollBar {
+        id: horizontalBar
+    }
 
     EditorView {
         id: view
@@ -50,6 +54,7 @@ Flickable {
         lineNumberColor: SystemColors.tertiaryLabel
         bracketColor: Qt.alpha(SystemColors.controlAccent, 0.35)
         wordColor: Qt.alpha(SystemColors.text, 0.1)
+        matchColor: Qt.alpha(SystemColors.findHighlight, 0.45)
         darkTheme: Appearance.dark
         onCursorRectangleChanged: root.ensureVisible(cursorRectangle)
     }

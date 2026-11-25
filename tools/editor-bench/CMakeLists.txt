@@ -17,6 +17,8 @@ qt_add_qml_module(tekst_editor_bench
         ../../src/editor/EditorView.cpp
         ../../src/editor/Matching.h
         ../../src/editor/Matching.cpp
+        ../../src/editor/TextSearch.h
+        ../../src/editor/TextSearch.cpp
         ../../src/editor/SyntaxHighlighter.h
         ../../src/editor/SyntaxHighlighter.cpp
 )

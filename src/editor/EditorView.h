@@ -27,6 +27,7 @@ namespace tekst
 
 class EditorAccessible;
 class SyntaxHighlighter;
+class TextSearch;
 
 // The editing surface: a TextBuffer drawn by laying out and rendering only
 // the lines in view (one QSGTextNode per line and per line number), with
@@ -48,6 +49,8 @@ class EditorView : public QQuickItem
     Q_PROPERTY(QColor bracketColor READ bracketColor WRITE setBracketColor NOTIFY colorsChanged)
     // Behind the word at the caret and its other occurrences in view.
     Q_PROPERTY(QColor wordColor READ wordColor WRITE setWordColor NOTIFY colorsChanged)
+    // Behind the matches of the search.
+    Q_PROPERTY(QColor matchColor READ matchColor WRITE setMatchColor NOTIFY colorsChanged)
     Q_PROPERTY(qreal contentX READ contentX WRITE setContentX NOTIFY contentXChanged)
     Q_PROPERTY(qreal contentY READ contentY WRITE setContentY NOTIFY contentYChanged)
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
@@ -71,6 +74,18 @@ class EditorView : public QQuickItem
     Q_PROPERTY(bool modified READ modified NOTIFY modifiedChanged)
     // The highlighting definition's name; empty: plain text.
     Q_PROPERTY(QString syntax READ syntax WRITE setSyntax NOTIFY syntaxChanged)
+    // Find: what to search for (empty: no search) and how; the matches are
+    // marked and findNext()/findPrevious() select them.
+    Q_PROPERTY(QString searchPattern READ searchPattern WRITE setSearchPattern NOTIFY searchChanged)
+    Q_PROPERTY(bool searchCaseSensitive READ searchCaseSensitive WRITE setSearchCaseSensitive NOTIFY searchChanged)
+    Q_PROPERTY(bool searchRegularExpression READ searchRegularExpression WRITE setSearchRegularExpression NOTIFY
+                   searchChanged)
+    Q_PROPERTY(qint32 searchMatchCount READ searchMatchCount NOTIFY searchChanged)
+    // The selected match, from 0; -1: the selection is not a match.
+    Q_PROPERTY(qint32 searchCurrent READ searchCurrent NOTIFY searchChanged)
+    // The count is final: the search is done (and not capped).
+    Q_PROPERTY(bool searchComplete READ searchComplete NOTIFY searchChanged)
+    Q_PROPERTY(QString searchError READ searchError NOTIFY searchChanged)
     // Highlight with the dark theme (else the light one).
     Q_PROPERTY(bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged)
 public:
@@ -94,6 +109,18 @@ public:
     void setBracketColor(const QColor &color);
     [[nodiscard]] QColor wordColor() const { return QColor::fromRgba(m_colors.word); }
     void setWordColor(const QColor &color);
+    [[nodiscard]] QColor matchColor() const { return QColor::fromRgba(m_colors.match); }
+    void setMatchColor(const QColor &color);
+    [[nodiscard]] QString searchPattern() const;
+    void setSearchPattern(const QString &pattern);
+    [[nodiscard]] bool searchCaseSensitive() const;
+    void setSearchCaseSensitive(bool caseSensitive);
+    [[nodiscard]] bool searchRegularExpression() const;
+    void setSearchRegularExpression(bool regularExpression);
+    [[nodiscard]] qint32 searchMatchCount() const;
+    [[nodiscard]] qint32 searchCurrent() const;
+    [[nodiscard]] bool searchComplete() const;
+    [[nodiscard]] QString searchError() const;
     [[nodiscard]] qreal contentX() const noexcept { return m_contentX; }
     void setContentX(qreal contentX);
     [[nodiscard]] qreal contentY() const noexcept { return m_contentY; }
@@ -138,6 +165,15 @@ public:
     Q_INVOKABLE void markSaved();
     // Picks the syntax for a file named `fileName` (or by its shebang).
     Q_INVOKABLE void detectSyntax(const QString &fileName);
+    // Select the next (previous) match after (before) the caret, wrapping;
+    // false when there is none.
+    Q_INVOKABLE bool findNext();
+    Q_INVOKABLE bool findPrevious();
+    // Replaces the selected match (else finds the next one first) and finds
+    // the next; with a regular expression, $0…$9 stand for its captures.
+    Q_INVOKABLE void replaceCurrent(const QString &replacement);
+    // Replaces every match, as one undoable edit; returns how many.
+    Q_INVOKABLE qint32 replaceAll(const QString &replacement);
 
 signals:
     void fontChanged();
@@ -153,6 +189,7 @@ signals:
     void modifiedChanged();
     void syntaxChanged();
     void darkThemeChanged();
+    void searchChanged();
 
 protected:
     void updatePolish() override;
@@ -226,16 +263,17 @@ private:
         QRgb lineNumber{0x66000000U};
         QRgb bracket{0x403d8bffU};
         QRgb word{0x1a000000U};
+        QRgb match{0x66ffd60aU};
     };
 
     // The next typing may merge into the last edit.
-    static constexpr quint32 MergeOpen{1U << 0U};
+    static constexpr quint64 MergeOpen{1U << 0U};
     // The press was on the selection: a drag may start from it.
-    static constexpr quint32 DragPending{1U << 1U};
+    static constexpr quint64 DragPending{1U << 1U};
     // A drag from this view was dropped back into it (and moved there).
-    static constexpr quint32 DroppedHere{1U << 2U};
+    static constexpr quint64 DroppedHere{1U << 2U};
     // Highlighting uses the dark theme.
-    static constexpr quint32 DarkTheme{1U << 3U};
+    static constexpr quint64 DarkTheme{1U << 3U};
 
     void updateMetrics();
     void textEdited();
@@ -261,6 +299,11 @@ private:
     [[nodiscard]] Number takeNumber(qsizetype line);
     void layoutDecorations();
     void layoutMarks();
+    void layoutMatches();
+    void setSearch(const QString &pattern, bool caseSensitive, bool regularExpression);
+    // Searches a slice, then again from the event loop until done.
+    void searchAhead();
+    void selectMatch(qsizetype index);
     // The rectangle of [start, end) on `row` (relative to m_baseLine).
     [[nodiscard]] QRectF rangeRect(const Row &row, qsizetype start, qsizetype end) const;
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
@@ -284,6 +327,7 @@ private:
 
     TextBuffer m_buffer;
     std::unique_ptr<SyntaxHighlighter> m_highlighter;
+    std::unique_ptr<TextSearch> m_search;
     QList<Edit> m_undo;
     // Move-only rows: std::vector (QList needs copyable elements).
     std::vector<Row> m_rows;
@@ -294,6 +338,7 @@ private:
     QList<QRectF> m_selectionRects;
     QList<QRectF> m_bracketRects;
     QList<QRectF> m_wordRects;
+    QList<QRectF> m_matchRects;
     QRectF m_caretRect;
     QString m_preedit;
     QFont m_font;
@@ -301,6 +346,7 @@ private:
     // Where a press on the selection happened, for starting a drag.
     QPointF m_pressPoint;
     QTimer m_highlightTimer;
+    QTimer m_searchTimer;
     qreal m_contentX{0.0};
     qreal m_contentY{0.0};
     qreal m_lineHeight{16.0};
@@ -325,7 +371,7 @@ private:
     // (above Plain and Highlighted).
     quint64 m_preeditGeneration{2};
     Colors m_colors;
-    quint32 m_flags{0U};
+    quint64 m_flags{0U};
 };
 
 } // namespace tekst

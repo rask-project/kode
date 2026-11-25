@@ -29,7 +29,7 @@ Guidance for AI agents working in this repository.
   together.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
-  `Rask.Platform` (`Appearance`, `SystemColors`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
+  `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls` (`SearchBar`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
   `AboutQtDialog`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
@@ -76,6 +76,12 @@ Guidance for AI agents working in this repository.
     keeps the old states aligned so highlighting stops at the first line
     that ends as before. `EditorView` rows are reused only with the same
     start state; `syntax`/`detectSyntax()`/`darkTheme` drive it.
+  - `TextSearch` — find over the `TextBuffer`, line by line in slices
+    (`advance()` with a deadline, from a zero timer in the view), matches
+    sorted and capped at 100 000; the view binds `searchPattern`/
+    `searchCaseSensitive`/`searchRegularExpression`, marks the matches in
+    view and offers `findNext()`/`findPrevious()`/`replaceCurrent()`/
+    `replaceAll()` (one edit over the matches' span: one undo).
   - `Matching` — free functions for the marks drawn behind the text: the
     bracket pairing with the one at the caret (bounded line scan), the
     word at the caret and its whole-word occurrences in the rows in view.
@@ -87,7 +93,7 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch, `tst_matching`), run offscreen with
+  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).

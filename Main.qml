@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
 
+import Rask.Controls
 import Rask.Dialogs
 import Rask.Platform
 import Rask.Window
@@ -30,6 +31,13 @@ ApplicationWindow {
         } else if (document.save() && then) {
             then();
         }
+    }
+
+    // Shows the find bar (with the replace row when `replacing`), focused.
+    function showSearch(replacing) {
+        searchBar.replacing = replacing;
+        searchBar.visible = true;
+        searchBar.focusFind();
     }
 
     // Runs `action` now, or after the user saves or discards the changes.
@@ -191,6 +199,49 @@ ApplicationWindow {
                     onTriggered: root.editor.selectAll()
                 }
             }
+            MenuSeparator {}
+            Menu {
+                title: qsTr("Find")
+
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Find…")
+                        shortcut: StandardKey.Find
+                        onTriggered: root.showSearch(false)
+                    }
+                }
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Find and Replace…")
+                        shortcut: "Alt+Ctrl+F"
+                        onTriggered: root.showSearch(true)
+                    }
+                }
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Find Next")
+                        enabled: root.editor.searchMatchCount > 0
+                        shortcut: StandardKey.FindNext
+                        onTriggered: root.editor.findNext()
+                    }
+                }
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Find Previous")
+                        enabled: root.editor.searchMatchCount > 0
+                        shortcut: StandardKey.FindPrevious
+                        onTriggered: root.editor.findPrevious()
+                    }
+                }
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Use Selection for Find")
+                        enabled: root.editor.hasSelection
+                        shortcut: "Ctrl+E"
+                        onTriggered: searchBar.text = root.editor.selectedText()
+                    }
+                }
+            }
         }
         // English on purpose: Qt moves these into the app menu by matching "About".
         Menu {
@@ -293,10 +344,49 @@ ApplicationWindow {
         }
     }
 
+    SearchBar {
+        id: searchBar
+
+        anchors.top: titleBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: visible ? implicitHeight : 0
+        visible: false
+        matchCount: root.editor.searchMatchCount
+        currentMatch: root.editor.searchCurrent
+        complete: root.editor.searchComplete
+        error: root.editor.searchError
+        onNext: root.editor.findNext()
+        onPrevious: root.editor.findPrevious()
+        onReplace: root.editor.replaceCurrent(replacementText)
+        onReplaceAll: root.editor.replaceAll(replacementText)
+        onDone: {
+            visible = false;
+            root.editor.forceActiveFocus();
+        }
+    }
+
+    // The editor searches for what the bar holds while it shows.
+    Binding {
+        target: root.editor
+        property: "searchPattern"
+        value: searchBar.visible ? searchBar.text : ""
+    }
+    Binding {
+        target: root.editor
+        property: "searchCaseSensitive"
+        value: searchBar.caseSensitive
+    }
+    Binding {
+        target: root.editor
+        property: "searchRegularExpression"
+        value: searchBar.regularExpression
+    }
+
     TextEditor {
         id: textEditor
 
-        anchors.top: titleBar.bottom
+        anchors.top: searchBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top

@@ -263,4 +263,45 @@ void TestEditorView::accessibleEditingIsUndoable()
     QCOMPARE(editor.text(), QStringLiteral("hello"));
 }
 
+void TestEditorView::findNextSelectsMatches()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("one two one\none"));
+    editor.setSearchPattern(QStringLiteral("one"));
+    QCOMPARE(editor.searchMatchCount(), 3);
+    QVERIFY(editor.searchComplete());
+    QVERIFY(editor.findNext());
+    QCOMPARE(editor.searchCurrent(), 0);
+    QVERIFY(editor.findNext());
+    QCOMPARE(editor.selectionStart(), 8);
+    QCOMPARE(editor.searchCurrent(), 1);
+}
+
+void TestEditorView::findWraps()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("one two one\none"));
+    editor.setSearchPattern(QStringLiteral("one"));
+    editor.select(12, 15);
+    QCOMPARE(editor.searchCurrent(), 2);
+    QVERIFY(editor.findNext());
+    QCOMPARE(editor.searchCurrent(), 0);
+    QVERIFY(editor.findPrevious());
+    QCOMPARE(editor.searchCurrent(), 2);
+}
+
+void TestEditorView::replaceAllIsOneUndo()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("a1 b2\nc3"));
+    editor.setSearchRegularExpression(true);
+    editor.setSearchPattern(QStringLiteral("([a-z])(\\d)"));
+    QCOMPARE(editor.replaceAll(QStringLiteral("$2$1")), 3);
+    QCOMPARE(editor.text(), QStringLiteral("1a 2b\n3c"));
+    QCOMPARE(editor.searchMatchCount(), 0);
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("a1 b2\nc3"));
+    QCOMPARE(editor.searchMatchCount(), 3);
+}
+
 QTEST_MAIN(TestEditorView)

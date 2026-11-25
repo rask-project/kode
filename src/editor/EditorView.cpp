@@ -3,6 +3,7 @@
 #include "EditorAccessible.h"
 #include "Matching.h"
 #include "SyntaxHighlighter.h"
+#include "TextSearch.h"
 
 #include <KSyntaxHighlighting/Definition>
 #include <KSyntaxHighlighting/Theme>
@@ -46,6 +47,8 @@ constexpr qreal noWrapWidth{1.0e7};
 constexpr std::chrono::milliseconds highlightInLayout{4};
 constexpr std::chrono::milliseconds highlightSlice{3};
 constexpr qsizetype highlightLookahead{1000};
+// Find: a slice of the search.
+constexpr std::chrono::milliseconds searchSlice{3};
 
 using matching::isWordCharacter;
 
@@ -78,6 +81,7 @@ public:
     QList<QSGRectangleNode *> selection;
     QList<QSGRectangleNode *> brackets;
     QList<QSGRectangleNode *> words;
+    QList<QSGRectangleNode *> matches;
     QHash<quint64, Shown> rows;
     QHash<qsizetype, Shown> numbers;
 };
@@ -187,12 +191,18 @@ void syncRectangles(
 EditorView::EditorView(QQuickItem *parent)
     : QQuickItem(parent)
     , m_highlighter{std::make_unique<SyntaxHighlighter>(&m_buffer)}
+    , m_search{std::make_unique<TextSearch>(&m_buffer)}
     , m_font(QStringLiteral("Menlo"), 13)
 {
     m_highlighter->setTheme(SyntaxHighlighter::defaultTheme(false));
     m_highlightTimer.setSingleShot(true);
     m_highlightTimer.setInterval(0);
     connect(&m_highlightTimer, &QTimer::timeout, this, &EditorView::highlightAhead);
+    m_searchTimer.setSingleShot(true);
+    m_searchTimer.setInterval(0);
+    connect(&m_searchTimer, &QTimer::timeout, this, &EditorView::searchAhead);
+    // The selected match follows the selection.
+    connect(this, &EditorView::selectionChanged, this, &EditorView::searchChanged);
     setFlag(ItemHasContents);
     setFlag(ItemAcceptsInputMethod);
     setFlag(ItemIsFocusScope);
@@ -313,6 +323,11 @@ void EditorView::setBracketColor(const QColor &color)
 void EditorView::setWordColor(const QColor &color)
 {
     setColor(m_colors.word, color);
+}
+
+void EditorView::setMatchColor(const QColor &color)
+{
+    setColor(m_colors.match, color);
 }
 
 void EditorView::setContentX(qreal contentX)
@@ -628,6 +643,10 @@ void EditorView::paste()
 
 void EditorView::textEdited()
 {
+    if (m_search->isActive()) {
+        m_search->restart();
+        searchAhead();
+    }
     emit textChanged();
     emit contentSizeChanged();
     emit cursorChanged();
@@ -695,6 +714,159 @@ qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
         --column;
     }
     return lineStart + column;
+}
+
+// --- find ---------------------------------------------------------------------
+
+QString EditorView::searchPattern() const
+{
+    return m_search->pattern();
+}
+
+void EditorView::setSearchPattern(const QString &pattern)
+{
+    setSearch(pattern, m_search->caseSensitive(), m_search->regularExpression());
+}
+
+bool EditorView::searchCaseSensitive() const
+{
+    return m_search->caseSensitive();
+}
+
+void EditorView::setSearchCaseSensitive(bool caseSensitive)
+{
+    setSearch(m_search->pattern(), caseSensitive, m_search->regularExpression());
+}
+
+bool EditorView::searchRegularExpression() const
+{
+    return m_search->regularExpression();
+}
+
+void EditorView::setSearchRegularExpression(bool regularExpression)
+{
+    setSearch(m_search->pattern(), m_search->caseSensitive(), regularExpression);
+}
+
+qint32 EditorView::searchMatchCount() const
+{
+    return static_cast<qint32>(m_search->matches().size());
+}
+
+qint32 EditorView::searchCurrent() const
+{
+    if (!hasSelection()) {
+        return -1;
+    }
+    return static_cast<qint32>(m_search->indexOf(selectionStart(), selectionEnd() - selectionStart()));
+}
+
+bool EditorView::searchComplete() const
+{
+    return m_search->isDone() && !m_search->isCapped();
+}
+
+QString EditorView::searchError() const
+{
+    return m_search->error();
+}
+
+void EditorView::setSearch(const QString &pattern, bool caseSensitive, bool regularExpression)
+{
+    if (pattern == m_search->pattern() && caseSensitive == m_search->caseSensitive() &&
+        regularExpression == m_search->regularExpression()) {
+        return;
+    }
+    m_search->setQuery(pattern, caseSensitive, regularExpression);
+    searchAhead();
+}
+
+void EditorView::searchAhead()
+{
+    if (!m_search->advance(QDeadlineTimer{searchSlice})) {
+        m_searchTimer.start();
+    }
+    emit searchChanged();
+    polish();
+}
+
+void EditorView::selectMatch(qsizetype index)
+{
+    const TextSearch::Match &match{m_search->matches().at(index)};
+    select(match.start, match.start + match.length);
+}
+
+bool EditorView::findNext()
+{
+    if (!m_search->isActive()) {
+        return false;
+    }
+    const qsizetype from{hasSelection() ? selectionStart() + 1 : m_cursor};
+    qsizetype index{m_search->indexFrom(from)};
+    if (index == m_search->matches().size() && !m_search->isDone()) {
+        m_search->advance(QDeadlineTimer{QDeadlineTimer::Forever});
+        emit searchChanged();
+        index = m_search->indexFrom(from);
+    }
+    if (m_search->matches().isEmpty()) {
+        return false;
+    }
+    selectMatch(index == m_search->matches().size() ? 0 : index);
+    return true;
+}
+
+bool EditorView::findPrevious()
+{
+    if (!m_search->isActive()) {
+        return false;
+    }
+    const qsizetype index{m_search->indexFrom(hasSelection() ? selectionStart() : m_cursor) - 1};
+    if (index < 0 && !m_search->isDone()) {
+        // Wrapping to the last match: find them all first.
+        m_search->advance(QDeadlineTimer{QDeadlineTimer::Forever});
+        emit searchChanged();
+    }
+    if (m_search->matches().isEmpty()) {
+        return false;
+    }
+    selectMatch(index < 0 ? m_search->matches().size() - 1 : index);
+    return true;
+}
+
+void EditorView::replaceCurrent(const QString &replacement)
+{
+    const qint32 current{searchCurrent()};
+    if (current < 0) {
+        findNext();
+        return;
+    }
+    const TextSearch::Match match{m_search->matches().at(current)};
+    replace(match.start, match.length, m_search->replacementFor(match, replacement), false);
+    findNext();
+}
+
+qint32 EditorView::replaceAll(const QString &replacement)
+{
+    if (!m_search->isActive()) {
+        return 0;
+    }
+    m_search->advance(QDeadlineTimer{QDeadlineTimer::Forever});
+    const QList<TextSearch::Match> matches{m_search->matches()};
+    if (matches.isEmpty()) {
+        return 0;
+    }
+    // One edit over the span of the matches, so one undo.
+    const qsizetype start{matches.front().start};
+    const qsizetype end{matches.back().start + matches.back().length};
+    QString text;
+    qsizetype done{start};
+    for (const TextSearch::Match &match : matches) {
+        text.append(m_buffer.text(done, match.start - done));
+        text.append(m_search->replacementFor(match, replacement));
+        done = match.start + match.length;
+    }
+    replace(start, end - start, text, false);
+    return static_cast<qint32>(matches.size());
 }
 
 // --- layout and drawing -----------------------------------------------------
@@ -928,6 +1100,27 @@ QRectF EditorView::rangeRect(const Row &row, qsizetype start, qsizetype end) con
     return {from, static_cast<qreal>(row.line - m_baseLine) * m_lineHeight, to - from, m_lineHeight};
 }
 
+void EditorView::layoutMatches()
+{
+    // The search's matches in the rows laid out (each on one line).
+    m_matchRects.clear();
+    if (m_rows.empty() || !m_search->isActive()) {
+        return;
+    }
+    const qsizetype first{m_buffer.lineStart(m_rows.front().line)};
+    const QList<TextSearch::Match> &matches{m_search->matches()};
+    for (qsizetype index{m_search->indexFrom(first)}; index < matches.size(); ++index) {
+        const TextSearch::Match &match{matches.at(index)};
+        const qsizetype line{m_buffer.lineAt(match.start)};
+        if (line > m_rows.back().line) {
+            break;
+        }
+        const Row &row{m_rows.at(static_cast<std::size_t>(line - m_rows.front().line))};
+        const qsizetype column{match.start - m_buffer.lineStart(line)};
+        m_matchRects.append(rangeRect(row, column, column + match.length));
+    }
+}
+
 void EditorView::layoutMarks()
 {
     // The bracket at the caret and its pair, and the word at the caret with
@@ -973,6 +1166,7 @@ void EditorView::updatePolish()
     const qreal widestBefore{m_widestLine};
     layoutRows();
     layoutDecorations();
+    layoutMatches();
     layoutMarks();
     if (m_widestLine > widestBefore) {
         emit contentSizeChanged();
@@ -1050,6 +1244,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     removeText(node->gutter, node->numbers);
     node->numbers = std::move(numbers);
 
+    syncRectangles(window, node->marksLayer, node->matches, m_matchRects, matchColor());
     syncRectangles(window, node->marksLayer, node->words, m_wordRects, wordColor());
     syncRectangles(window, node->marksLayer, node->brackets, m_bracketRects, bracketColor());
     syncRectangles(window, node->selectionLayer, node->selection, m_selectionRects, selectionColor());
