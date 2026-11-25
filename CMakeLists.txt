@@ -80,8 +80,11 @@ qt_add_qml_module(tekst
     # For qmllint and qmlcachegen: where rask's modules are built.
     IMPORT_PATH "${CMAKE_CURRENT_BINARY_DIR}/external/rask/qml"
     QML_FILES
+        EditorPane.qml
+        EditorWindow.qml
         GoToLine.qml
         Main.qml
+        PaneLayout.qml
         SettingsWindow.qml
         StatusBar.qml
         TextEditor.qml
@@ -90,8 +93,12 @@ qt_add_qml_module(tekst
         src/Document.cpp
         src/Preferences.h
         src/Preferences.cpp
+        src/Session.h
+        src/Session.cpp
         src/Syntaxes.h
         src/Syntaxes.cpp
+        src/TabManager.h
+        src/TabManager.cpp
         src/TextCodec.h
         src/TextCodec.cpp
         src/editor/EditorAccessible.h
@@ -130,7 +137,7 @@ target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
-set_property(SOURCE main.cpp src/Document.cpp src/Preferences.cpp src/Syntaxes.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
+set_property(SOURCE main.cpp src/Document.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/TabManager.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
     src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/TextSearch.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
@@ -164,6 +171,7 @@ target_link_libraries(tekst
         Qt6::QuickControls2
         Qt6::QuickDialogs2
         KF6::SyntaxHighlighting
+        Rask::Application
         Rask::Controls
         Rask::Platform
         Rask::Window
@@ -172,7 +180,7 @@ target_link_libraries(tekst
 )
 
 # Before the bundle is signed below: its signature covers the libraries.
-rask_embed_libraries(tekst LIBRARIES KF6::SyntaxHighlighting Rask::Controls Rask::Platform Rask::Window Rask::Dialogs)
+rask_embed_libraries(tekst LIBRARIES KF6::SyntaxHighlighting Rask::Application Rask::Controls Rask::Platform Rask::Window Rask::Dialogs)
 
 install(TARGETS tekst
     BUNDLE DESTINATION .

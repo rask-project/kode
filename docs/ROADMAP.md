@@ -106,7 +106,7 @@ holds the library's rules), consumed by the apps as a **git submodule**
 | **`Rask.Dialogs`** | `AboutDialog` (system About panel), `AboutQtDialog`, `Alert` (`NSAlert`, sheet when given a window — e.g. Save / Don't Save / Cancel); later a text prompt for Konsoll | konsoll |
 | **`Rask.Application`** | `QuitGuard` (the app asks before quitting), configurable `DockMenu`, `RecentDocuments` (`NSDocumentController` → native "Open Recent" menu), `FileOpenHandler` (`QFileOpenEvent`, Finder's "Open With") | konsoll + new |
 | **`Rask.Updater`** | `Updater` singleton (Sparkle, beta channel, "Check for Updates…") + `RaskSparkle.cmake` + `rask_sparkle_plist_keys()`; later `update-appcast.py` | konsoll |
-| **`Rask.Controls`** | `SidebarLayout`, `SidebarItem`, `FormGroup`, `FormRow` (done; icons come from each app); `TabStrip`, `TabButton`, `ToolButton`, `SearchBar`, `Menu`, `MenuItem` (later) | konsoll (generalized) |
+| **`Rask.Controls`** | `SidebarLayout`, `SidebarItem`, `FormGroup`, `FormRow` (done; icons come from each app), `SearchBar`, `TabStrip` (done); `ToolButton`, `Menu`, `MenuItem` (later) | konsoll (generalized) |
 | **`Rask.Style`** | Qt Quick Controls style for macOS (extends `QtQuick.Controls.macOS`) | metronom `MacStyle` |
 | `cmake/RaskApp.cmake` | `rask_version_from_git()`, `rask_bundle_version()`, `rask_macos_bundle()` (Info.plist, embedding and signing the `Rask.*` libraries, prune, icons) | konsoll + metronom |
 
@@ -125,7 +125,9 @@ section 3), not all at once.
   embedded by `rask_embed_libraries()`) and **`Rask.Controls`** (the
   System Settings controls: `SidebarLayout`, `SidebarItem`, `FormGroup`,
   `FormRow`), with example apps, tests and CI.
-- `SystemColors` in `Rask.Platform` is done (Stage 2); the rest come as the
+- `SystemColors` in `Rask.Platform` is done (Stage 2); `Rask.Application`,
+  `TabStrip` and `NativeWindow`'s document properties (Stages 7–8, `rask`
+  0.2.0); the rest come as the
   stages below need them.
 
 ### Migrating the existing apps
@@ -363,7 +365,17 @@ wrapping, invisibles, the indentation for new documents), bound to the
 
 ---
 
-### Stage 7 — macOS document integration
+### Stage 7 — macOS document integration — done
+
+Done together with Stage 8's tabs, and splits like Konsoll's: every window
+holds tabs, each a tree of split panes (`TabManager`); a pane is one
+document. `NativeWindow` got `representedFile` and `documentEdited` (with
+the tab strip in the title bar the proxy icon itself is hidden, as AppKit
+hides it with the title); `Rask.Application` has `QuitGuard`,
+`FileOpenHandler` and `RecentDocuments` (an Open Recent menu in File, the
+system's list for the Dock); windows and their documents reopen from
+`Session` (not a `WindowState` in `Rask.Window`: geometry is saved with the
+tabs).
 
 - Multiple windows, one per document (⌘N opens a new window); window
   controller in `Main.qml`.
@@ -382,7 +394,16 @@ wrapping, invisibles, the indentation for new documents), bound to the
 
 ---
 
-### Stage 8 — Tabs
+### Stage 8 — Tabs — done (with Stage 7)
+
+`TabStrip` in `Rask.Controls` (from Konsoll: wrapping rows, drag to reorder,
+drag out to another window or a new one, close button, modified dot).
+⌘T new tab, ⇧⌘[ / ⇧⌘] and Control-Tab to move between tabs, ⌘1…9; Move
+Tab to New Window / to another window; splits: ⌘D side by side, ⇧⌘D one
+above the other, panes dragged by their header beside another pane, into
+the tab strip or out to a new window. ⌘W closes the active pane (then its
+tab, then the window), ⌥⌘W the tab, ⇧⌘W the window. Konsoll still has its
+own strip.
 
 - **`Rask.Controls`**: extract generic `TabStrip`/`TabButton` from Konsoll
   (tab model, drag to reorder, close button, modified indicator, respecting

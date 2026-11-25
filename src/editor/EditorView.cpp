@@ -1584,6 +1584,8 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->appendChildNode(clip.release());
         created->appendChildNode(gutter.release());
         node = created.release();
+        // A new window (the view moved to another one) starts without nodes.
+        m_flags |= InvisiblesChanged;
     }
 
     // Scrolling moves the two transforms; the nodes inside move only when
@@ -1924,7 +1926,8 @@ void EditorView::setDropPosition(qsizetype position)
 
 void EditorView::dragEnterEvent(QDragEnterEvent *event)
 {
-    if (!event->mimeData()->hasText()) {
+    // Files dropped on the window open; only text is inserted.
+    if (!event->mimeData()->hasText() || event->mimeData()->hasUrls()) {
         event->ignore();
         return;
     }

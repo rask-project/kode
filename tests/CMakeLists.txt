@@ -133,3 +133,14 @@ target_include_directories(tst_preferences PRIVATE ../src)
 target_link_libraries(tst_preferences PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)
 add_test(NAME tst_preferences COMMAND tst_preferences)
 set_tests_properties(tst_preferences PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_tabmanager
+    tst_tabmanager.h
+    tst_tabmanager.cpp
+    ../src/TabManager.h
+    ../src/TabManager.cpp
+)
+target_include_directories(tst_tabmanager PRIVATE ../src)
+target_link_libraries(tst_tabmanager PRIVATE Qt6::Qml Qt6::Test)
+add_test(NAME tst_tabmanager COMMAND tst_tabmanager)
+set_tests_properties(tst_tabmanager PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

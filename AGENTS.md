@@ -30,19 +30,50 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
-  `AboutQtDialog`). Changes to those go to the `rask` repository first, then
+  (`SearchBar`, `TabStrip`, the Settings controls), `Rask.Dialogs`
+  (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
+  (`QuitGuard`, `FileOpenHandler`, `RecentDocuments`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
   from the command line (`initialFile`) to `Tekst.Main`.
-- `Main.qml` — the editor window: title bar drawn under the transparent
-  AppKit one, a `TextEdit` in a `Flickable` (not `TextArea`: the macOS style
-  draws it as a bordered field), the menu bar, file dialogs and the
-  "Save changes?" sheet.
+- `Main.qml` — the app root (no window of its own): the window list,
+  opening files (a file already open is shown; an untouched new document
+  is replaced), moving tabs and panes between windows (drop targets under a
+  global point, tearing off into a new window), the session (`Session`,
+  saved on quit and when the last window closes, reopened at launch), the
+  quit review (`QuitGuard`: each window's unsaved panes in turn) and the
+  app-wide Settings and About windows. Like Konsoll's `Main.qml`.
+- `EditorWindow.qml` — a window: `TabStrip` in the title bar, a
+  `StackLayout` of `PaneLayout`s (one per tab), the menus, the file dialogs
+  and the "Save changes?" sheet (`review()` asks about each modified pane
+  in turn), files dropped on it, the drop indicator and preview of a
+  dragged pane. Menu actions go to the active pane.
+- `EditorPane.qml` — one document: `Document`, `TextEditor`, `SearchBar`,
+  `GoToLine`, `StatusBar`, and a header while its tab is split (close,
+  name, dragged to move the pane). Made by `TabManager` in the engine's root
+  context, it moves between windows: it never refers to its window (sheets
+  use `Window.window`; saving and reviews go to the window by signals).
+- `PaneLayout.qml` — a tab's tree as nested `SplitView`s; each leaf is a
+  slot the leaf's pane is reparented into, so rebuilding keeps documents.
+- `src/TabManager.{h,cpp}` — `TabManager` (one per window), `Tab`,
+  `PaneNode`: tabs as binary split trees (from Konsoll's `TerminalManager`);
+  leaves own their pane (`deleteLater`: a pane may close from its own
+  signal); split, close, move a pane beside another or into a tab of its
+  own, move tabs, in or across managers; `state()`/`restore()` save the
+  layout with each pane's file (post-order, no recursion). Panes are read
+  through their `title`, `modified` and `fileUrl` properties; the default
+  pane is `Tekst.EditorPane`, made from the module (an inline `Component`
+  is bound to its file's context under `ComponentBehavior: Bound`).
+- `src/Session.{h,cpp}` — `Session` (QML singleton): the windows to reopen
+  (geometry, tabs, files) in QSettings `session/windows`.
 - `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
   `EditorView` and saves it back through `QSaveFile`, keeping its encoding,
   byte order mark and line ending (changing them marks it modified);
-  `reopen()` reads it again in another encoding.
+  `reopen()` reads it again in another encoding. A `QFileSystemWatcher` on
+  the file and its folder (a file replaced by renaming comes back there)
+  reloads a change made elsewhere when nothing is unsaved (keeping the
+  caret), else emits `changedOnDisk()`; its own saves are told apart by the
+  modification time and size.
 - `src/TextCodec.{h,cpp}` — detecting, decoding and encoding a file's
   bytes: Qt for UTF-8/16 and Latin-1 (no ICU in this Qt), CoreFoundation
   (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest.
@@ -124,9 +155,11 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`), run offscreen with
+  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`,
+  `tst_preferences`, `tst_tabmanager` with stand-in panes), run offscreen with
   `ctest`; the sources under test are compiled into each test.
-- `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
+- `cmake/` — `Info.plist.in` (with the document types the Finder offers
+  Tekst for), `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).
 - `assets/` — app icon: `tekst.icon` (Icon Composer document), `tekst.svg`,
   `tekst.png`, `tekst.icns`. All generated by `tools/make-app-icons.py`

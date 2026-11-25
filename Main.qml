@@ -1,418 +1,253 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import QtQuick.Controls
-import QtQuick.Dialogs
 
-import Rask.Controls
+import Rask.Application
 import Rask.Dialogs
-import Rask.Platform
-import Rask.Window
 
 import Tekst
 
-ApplicationWindow {
-    id: root
+// The app: its windows (EditorWindow), opening files in them, moving tabs
+// and panes between them, the session reopened at launch and the review of
+// unsaved documents before quitting. One Settings window for all of them.
+Item {
+    id: app
 
     // A file given on the command line, opened at start.
     required property url initialFile
-    // Run once the unsaved changes are saved or discarded.
-    property var pendingAction: null
-    property bool closeApproved: false
-    // The editing surface, for the menus and the fileDocument.
-    readonly property EditorView editor: textEditor.editor
 
-    // Saves, asking for a file when the document has none, then runs `then`.
-    function save(then) {
-        if (fileDocument.fileUrl.toString() === "") {
-            saveDialog.then = then;
-            saveDialog.open();
-        } else if (fileDocument.save() && then) {
-            then();
+    property list<EditorWindow> windows: []
+    property EditorWindow lastActiveWindow: null
+
+    function openWindow(state: var): EditorWindow {
+        const window = windowComponent.createObject(app) as EditorWindow;
+        app.windows.push(window);
+        if (state) {
+            window.tabs.restore(state.tabs);
+            if (state.width > 0) {
+                window.x = state.x;
+                window.y = state.y;
+                window.width = state.width;
+                window.height = state.height;
+            }
+        }
+        if (window.tabs.tabs.length === 0)
+            window.newTab();
+        if (state && state.visibility === "fullscreen")
+            window.showFullScreen();
+        else if (state && state.visibility === "maximized")
+            window.showMaximized();
+        else
+            window.show();
+        window.raise();
+        window.requestActivate();
+        app.lastActiveWindow = window;
+        return window;
+    }
+
+    // The pane showing `file` in any window, or null.
+    function paneWithFile(file: url): EditorPane {
+        for (const window of app.windows) {
+            const pane = window.allPanes().find(candidate => candidate.fileUrl.toString() === file.toString());
+            if (pane)
+                return pane;
+        }
+        return null;
+    }
+
+    // Each file in a tab of `window` (the last active one, or a new one),
+    // in place of an untouched new document; a file already open is shown.
+    function openFiles(files: list<url>, window: EditorWindow) {
+        for (const file of files) {
+            const open = app.paneWithFile(file);
+            if (open) {
+                app.showPane(open);
+                continue;
+            }
+            const target = window ?? app.lastActiveWindow ?? app.openWindow(null);
+            const pane = target.activePane && target.activePane.untouched ? target.activePane : target.newTab();
+            if (pane)
+                pane.open(file);
+            target.raise();
+            target.requestActivate();
         }
     }
 
-    // Shows the find bar (with the replace row when `replacing`), focused.
-    function showSearch(replacing) {
-        searchBar.replacing = replacing;
-        searchBar.visible = true;
-        searchBar.focusFind();
+    function windowOf(pane: EditorPane): EditorWindow {
+        return app.windows.find(window => window.tabs.tabOf(pane) >= 0) ?? null;
     }
 
-    // Runs `action` now, or after the user saves or discards the changes.
-    function confirmThen(action) {
-        if (!fileDocument.modified) {
-            action();
+    function showPane(pane: EditorPane) {
+        const window = app.windowOf(pane);
+        if (!window)
+            return;
+        window.tabs.activatePane(pane);
+        window.raise();
+        window.requestActivate();
+    }
+
+    function noteActiveWindow(window: EditorWindow) {
+        app.lastActiveWindow = window;
+    }
+
+    function windowClosed(window: EditorWindow) {
+        // The last window closing ends the app: it is what reopens next time.
+        if (app.windows.length === 1 && !QuitGuard.quitting)
+            app.saveSession();
+        const index = app.windows.indexOf(window);
+        if (index >= 0)
+            app.windows.splice(index, 1);
+        if (app.lastActiveWindow === window)
+            app.lastActiveWindow = app.windows.length > 0 ? app.windows[app.windows.length - 1] : null;
+        // Settings would otherwise keep the app running without an editor.
+        if (app.windows.length === 0)
+            settingsWindow.close();
+        Qt.callLater(() => window.destroy());
+    }
+
+    function saveSession() {
+        Session.save(app.windows.map(window => window.state()));
+    }
+
+    // Moves the tab at `index` of `source` to `target` (a new window when
+    // null) at `targetIndex` (the end when negative); its documents stay as
+    // they are. A source left without tabs closes.
+    function moveTab(source: EditorWindow, index: int, target: EditorWindow, targetIndex: int): EditorWindow {
+        const newWindow = target === null;
+        if (newWindow) {
+            target = windowComponent.createObject(app) as EditorWindow;
+            app.windows.push(target);
+            target.width = source.width;
+            target.height = source.height;
+        }
+        const position = targetIndex < 0 ? target.tabs.tabs.length : targetIndex;
+        if (!source.tabs.moveTabTo(index, target.tabs, position)) {
+            if (newWindow)
+                target.close();
+            return null;
+        }
+        target.show();
+        target.raise();
+        target.requestActivate();
+        return target;
+    }
+
+    // The window under a global point; `preferred` wins where windows overlap.
+    function windowAtGlobal(globalX: real, globalY: real, preferred: EditorWindow): EditorWindow {
+        const contains = window => window.visible && window.visibility !== Window.Minimized && globalX >= window.x && globalX < window.x + window.width && globalY >= window.y && globalY < window.y + window.height;
+        if (preferred && contains(preferred))
+            return preferred;
+        return app.windows.find(contains) ?? null;
+    }
+
+    // A tab dragged out of `source` and released at a global point joins the
+    // window under it, or tears off into a new window placed there.
+    function dropTab(source: EditorWindow, index: int, globalX: real, globalY: real) {
+        const target = app.windows.find(window => window !== source && window === app.windowAtGlobal(globalX, globalY, null)) ?? null;
+        if (target) {
+            app.moveTab(source, index, target, target.tabInsertionIndexAtGlobal(globalX, globalY));
             return;
         }
-        root.pendingAction = action;
-        saveAlert.open();
-    }
-
-    width: 900
-    height: 640
-    minimumWidth: 400
-    minimumHeight: 240
-    visible: true
-    // Feeds the Window menu and the window switcher; the title bar is drawn below.
-    title: fileDocument.fileName + " — Tekst"
-    flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
-    color: "transparent"
-    // ApplicationWindow pads its content by the safe area; the title bar draws there itself.
-    topPadding: 0
-
-    onClosing: close => {
-        if (root.closeApproved || !fileDocument.modified)
+        // A lone tab torn off would just be its window again.
+        if (source.tabs.tabs.length < 2)
             return;
-        close.accepted = false;
-        root.confirmThen(() => {
-            root.closeApproved = true;
-            root.close();
-        });
+        const window = app.moveTab(source, index, null, 0);
+        if (window && window.visibility === Window.Windowed) {
+            window.x = globalX - 100;
+            window.y = globalY - 18;
+        }
     }
 
-    Component.onCompleted: {
-        if (root.initialFile.toString() !== "")
-            fileDocument.load(root.initialFile);
-        root.editor.forceActiveFocus();
+    // Where a pane dragged out of `source` to a global point lands.
+    function paneDropAt(pane: EditorPane, source: EditorWindow, globalX: real, globalY: real): var {
+        const target = app.windowAtGlobal(globalX, globalY, source);
+        let drop = target ? target.paneDropTarget(globalX, globalY, pane) : null;
+        // A window's only pane already is its own tab there.
+        if (drop && drop.kind === "tab" && target === source && source.tabs.paneCount < 2)
+            drop = null;
+        return {
+            window: target,
+            drop: drop
+        };
     }
 
-    NativeWindow {
-        id: nativeWindow
+    function hoverPane(pane: EditorPane, source: EditorWindow, globalX: real, globalY: real) {
+        const at = app.paneDropAt(pane, source, globalX, globalY);
+        app.windows.forEach(window => window.showPaneDrop(window === at.window ? at.drop : null));
+    }
 
-        window: root
-        color: Appearance.dark ? "#1e1e1e" : "#fbfbfb"
-        alpha: Preferences.windowOpacity
-        blur: Preferences.windowBlur
-        unifiedToolbar: root.visibility !== Window.FullScreen
+    function clearPaneDrops() {
+        app.windows.forEach(window => window.showPaneDrop(null));
+    }
+
+    // A pane released at a global point: beside the pane under it (in this
+    // or another window), into a tab strip as a tab of its own, or torn off
+    // into a new window placed there.
+    function dropPane(pane: EditorPane, source: EditorWindow, globalX: real, globalY: real) {
+        app.clearPaneDrops();
+        const at = app.paneDropAt(pane, source, globalX, globalY);
+        if (at.window) {
+            if (!at.drop)
+                return;
+            const moved = at.drop.kind === "pane" ? source.tabs.movePane(pane, at.window.tabs, at.drop.pane, at.drop.edge) : source.tabs.movePaneToTab(pane, at.window.tabs, at.drop.index);
+            if (moved && at.window !== source) {
+                at.window.raise();
+                at.window.requestActivate();
+            }
+            return;
+        }
+        if (source.tabs.paneCount < 2)
+            return;
+        const window = windowComponent.createObject(app) as EditorWindow;
+        app.windows.push(window);
+        window.width = source.width;
+        window.height = source.height;
+        window.x = globalX - 100;
+        window.y = globalY - 18;
+        if (!source.tabs.movePaneToTab(pane, window.tabs, 0)) {
+            window.close();
+            return;
+        }
+        window.show();
+        window.raise();
+        window.requestActivate();
+    }
+
+    // Reviews each window's unsaved documents in turn, then quits.
+    function reviewWindows(index: int) {
+        if (index >= app.windows.length) {
+            app.saveSession();
+            QuitGuard.quit();
+            return;
+        }
+        const window = app.windows[index];
+        window.review(window.allPanes(), () => app.reviewWindows(index + 1));
+    }
+
+    function showSettings() {
+        settingsWindow.show();
+        settingsWindow.raise();
+        settingsWindow.requestActivate();
+    }
+
+    function showAbout() {
+        aboutDialog.open();
+    }
+
+    function showAboutQt() {
+        aboutQtDialog.open();
+    }
+
+    Component {
+        id: windowComponent
+
+        EditorWindow {
+            app: app
+        }
     }
 
     SettingsWindow {
         id: settingsWindow
-    }
-
-    Document {
-        id: fileDocument
-
-        editor: root.editor
-        onErrorOccurred: message => {
-            errorAlert.informativeText = message;
-            errorAlert.open();
-        }
-    }
-
-    SystemPalette {
-        id: systemPalette
-
-        colorGroup: root.active ? SystemPalette.Active : SystemPalette.Inactive
-    }
-
-    menuBar: MenuBar {
-        Menu {
-            title: qsTr("File")
-
-            MenuItem {
-                action: Action {
-                    text: qsTr("New")
-                    shortcut: StandardKey.New
-                    onTriggered: root.confirmThen(() => fileDocument.clear())
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Open…")
-                    shortcut: StandardKey.Open
-                    onTriggered: root.confirmThen(() => openDialog.open())
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Save")
-                    shortcut: StandardKey.Save
-                    onTriggered: root.save(null)
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Save As…")
-                    shortcut: StandardKey.SaveAs
-                    onTriggered: {
-                        saveDialog.then = null;
-                        saveDialog.open();
-                    }
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Close")
-                    shortcut: StandardKey.Close
-                    onTriggered: root.close()
-                }
-            }
-        }
-        Menu {
-            title: qsTr("Edit")
-
-            MenuItem {
-                action: Action {
-                    text: qsTr("Undo")
-                    enabled: root.editor.canUndo
-                    shortcut: StandardKey.Undo
-                    onTriggered: root.editor.undo()
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Redo")
-                    enabled: root.editor.canRedo
-                    shortcut: StandardKey.Redo
-                    onTriggered: root.editor.redo()
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Cut")
-                    enabled: root.editor.hasSelection
-                    shortcut: StandardKey.Cut
-                    onTriggered: root.editor.cut()
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Copy")
-                    enabled: root.editor.hasSelection
-                    shortcut: StandardKey.Copy
-                    onTriggered: root.editor.copy()
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Paste")
-                    enabled: root.editor.canPaste
-                    shortcut: StandardKey.Paste
-                    onTriggered: root.editor.paste()
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Select All")
-                    shortcut: StandardKey.SelectAll
-                    onTriggered: root.editor.selectAll()
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Shift Right")
-                    shortcut: "Ctrl+]"
-                    onTriggered: root.editor.indent()
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Shift Left")
-                    shortcut: "Ctrl+["
-                    onTriggered: root.editor.outdent()
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Go to Line…")
-                    shortcut: "Ctrl+L"
-                    onTriggered: goToLine.open()
-                }
-            }
-            Menu {
-                title: qsTr("Find")
-
-                MenuItem {
-                    action: Action {
-                        text: qsTr("Find…")
-                        shortcut: StandardKey.Find
-                        onTriggered: root.showSearch(false)
-                    }
-                }
-                MenuItem {
-                    action: Action {
-                        text: qsTr("Find and Replace…")
-                        shortcut: "Ctrl+R"
-                        onTriggered: root.showSearch(true)
-                    }
-                }
-                MenuItem {
-                    action: Action {
-                        text: qsTr("Find Next")
-                        enabled: root.editor.searchMatchCount > 0
-                        shortcut: StandardKey.FindNext
-                        onTriggered: root.editor.findNext()
-                    }
-                }
-                MenuItem {
-                    action: Action {
-                        text: qsTr("Find Previous")
-                        enabled: root.editor.searchMatchCount > 0
-                        shortcut: StandardKey.FindPrevious
-                        onTriggered: root.editor.findPrevious()
-                    }
-                }
-                MenuItem {
-                    action: Action {
-                        text: qsTr("Use Selection for Find")
-                        enabled: root.editor.hasSelection
-                        shortcut: "Ctrl+E"
-                        onTriggered: searchBar.text = root.editor.selectedText()
-                    }
-                }
-            }
-        }
-        Menu {
-            title: qsTr("View")
-
-            MenuItem {
-                action: Action {
-                    text: qsTr("Wrap Lines")
-                    checkable: true
-                    checked: Preferences.wrap
-                    onTriggered: Preferences.wrap = checked
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Show Invisibles")
-                    checkable: true
-                    checked: Preferences.showInvisibles
-                    onTriggered: Preferences.showInvisibles = checked
-                }
-            }
-            MenuSeparator {}
-            Menu {
-                id: themeMenu
-
-                title: qsTr("Theme")
-
-                Instantiator {
-                    model: Syntaxes.themes
-
-                    delegate: MenuItem {
-                        required property string modelData
-
-                        text: modelData
-                        checkable: true
-                        checked: Syntaxes.themeFamily(Preferences.theme) === modelData
-                        onTriggered: Preferences.theme = modelData
-                    }
-
-                    onObjectAdded: (index, object) => themeMenu.insertItem(index, object)
-                    onObjectRemoved: (index, object) => themeMenu.removeItem(object)
-                }
-            }
-            MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Bigger")
-                    shortcut: StandardKey.ZoomIn
-                    enabled: Preferences.fontSize < Preferences.largestFontSize
-                    onTriggered: Preferences.fontSize += 1
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Smaller")
-                    shortcut: StandardKey.ZoomOut
-                    enabled: Preferences.fontSize > Preferences.smallestFontSize
-                    onTriggered: Preferences.fontSize -= 1
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Actual Size")
-                    shortcut: "Ctrl+0"
-                    enabled: Preferences.fontSize !== Preferences.defaultFontSize
-                    onTriggered: Preferences.fontSize = Preferences.defaultFontSize
-                }
-            }
-        }
-        // English on purpose: Qt moves these into the app menu by matching
-        // "Settings" and "About".
-        Menu {
-            title: qsTr("Help")
-
-            MenuItem {
-                action: Action {
-                    text: "Settings…"
-                    shortcut: StandardKey.Preferences
-                    onTriggered: {
-                        settingsWindow.show();
-                        settingsWindow.raise();
-                        settingsWindow.requestActivate();
-                    }
-                }
-            }
-            MenuItem {
-                text: "About Tekst"
-                onTriggered: aboutDialog.open()
-            }
-            MenuItem {
-                text: "About Qt"
-                onTriggered: aboutQtDialog.open()
-            }
-        }
-    }
-
-    FileDialog {
-        id: openDialog
-
-        title: qsTr("Open")
-        fileMode: FileDialog.OpenFile
-        onAccepted: fileDocument.load(selectedFile)
-    }
-
-    FileDialog {
-        id: saveDialog
-
-        // Run after a successful save (closing, opening another file…).
-        property var then: null
-
-        title: qsTr("Save As")
-        fileMode: FileDialog.SaveFile
-        selectedFile: fileDocument.fileUrl
-        onAccepted: {
-            const then = saveDialog.then;
-            saveDialog.then = null;
-            if (fileDocument.saveAs(selectedFile) && then)
-                then();
-        }
-        onRejected: saveDialog.then = null
-    }
-
-    Alert {
-        id: saveAlert
-
-        window: root
-        style: Alert.Warning
-        text: qsTr("Do you want to save the changes made to “%1”?").arg(fileDocument.fileName)
-        informativeText: qsTr("Your changes will be lost if you don’t save them.")
-        buttons: [qsTr("Save"), qsTr("Don’t Save"), qsTr("Cancel")]
-        onFinished: button => {
-            const action = root.pendingAction;
-            root.pendingAction = null;
-            if (button === 0)
-                root.save(action);
-            else if (button === 1)
-                action();
-        }
-    }
-
-    Alert {
-        id: errorAlert
-
-        window: root
-        style: Alert.Critical
-        text: qsTr("The document could not be opened or saved.")
     }
 
     AboutDialog {
@@ -425,106 +260,28 @@ ApplicationWindow {
         id: aboutQtDialog
     }
 
-    // The title bar: the document's name, with the window buttons on its left.
-    Item {
-        id: titleBar
+    Connections {
+        target: FileOpenHandler
 
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Math.max(root.SafeArea.margins.top, 40)
-
-        TapHandler {
-            onDoubleTapped: nativeWindow.titleBarDoubleClicked()
-        }
-
-        Label {
-            anchors.centerIn: parent
-            width: Math.min(implicitWidth, parent.width - 2 * 90)
-            text: fileDocument.modified ? qsTr("%1 — Edited").arg(fileDocument.fileName) : fileDocument.fileName
-            color: systemPalette.windowText
-            opacity: root.active ? 1 : 0.5
-            font.weight: Font.DemiBold
-            elide: Text.ElideMiddle
+        function onFilesOpened(files: list<url>) {
+            app.openFiles(files, null);
         }
     }
 
-    SearchBar {
-        id: searchBar
+    Connections {
+        target: QuitGuard
 
-        anchors.top: titleBar.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: visible ? implicitHeight : 0
-        visible: false
-        matchCount: root.editor.searchMatchCount
-        currentMatch: root.editor.searchCurrent
-        complete: root.editor.searchComplete
-        error: root.editor.searchError
-        onNext: root.editor.findNext()
-        onPrevious: root.editor.findPrevious()
-        onReplace: root.editor.replaceCurrent(replacementText)
-        onReplaceAll: root.editor.replaceAll(replacementText)
-        onDone: {
-            visible = false;
-            root.editor.forceActiveFocus();
+        function onQuitRequested() {
+            app.reviewWindows(0);
         }
     }
 
-    GoToLine {
-        id: goToLine
-
-        x: (root.width - width) / 2
-        y: titleBar.height + 8
-        onAccepted: target => {
-            if (root.editor.goToLine(target)) {
-                goToLine.close();
-                textEditor.center(root.editor.cursorRectangle);
-            }
-        }
-        onClosed: root.editor.forceActiveFocus()
-    }
-
-    // The editor searches for what the bar holds while it shows.
-    Binding {
-        target: root.editor
-        property: "searchPattern"
-        value: searchBar.visible ? searchBar.text : ""
-    }
-    Binding {
-        target: root.editor
-        property: "searchCaseSensitive"
-        value: searchBar.caseSensitive
-    }
-    Binding {
-        target: root.editor
-        property: "searchRegularExpression"
-        value: searchBar.regularExpression
-    }
-
-    TextEditor {
-        id: textEditor
-
-        anchors.top: searchBar.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: statusBar.top
-        editor.syntaxTheme: Syntaxes.themeName(Preferences.theme, Appearance.dark)
-        editor.wrap: Preferences.wrap
-        editor.showInvisibles: Preferences.showInvisibles
-        editor.font: Preferences.font
-        editor.defaultIndentWithTabs: Preferences.indentWithTabs
-        editor.defaultIndentWidth: Preferences.indentWidth
-    }
-
-    StatusBar {
-        id: statusBar
-
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        editor: root.editor
-        document: fileDocument
-        onReopenRequested: encoding => root.confirmThen(() => fileDocument.reopen(encoding))
+    Component.onCompleted: {
+        for (const state of Session.windows())
+            app.openWindow(state);
+        if (app.initialFile.toString() !== "")
+            app.openFiles([app.initialFile], null);
+        if (app.windows.length === 0)
+            app.openWindow(null);
     }
 }
