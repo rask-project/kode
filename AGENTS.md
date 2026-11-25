@@ -138,8 +138,11 @@ open build/Qt_6_12_0_for_macOS_Debug/Tekst.app
 ```
 
 `tools/format-code.sh` and clang-tidy cover Tekst's own files; `external/rask`
-follows its own `AGENTS.md`. Lint QML with the rask modules on the import
-path: `qmllint -I build/…/qml -I build/… -I build/…/external/rask/qml Main.qml`.
+follows its own `AGENTS.md`. Lint QML with the build's target, which lints
+every QML module (Tekst's, the benchmark's, rask's) with their import paths
+and resources: `cmake --build build/Qt_6_12_0_for_macOS_Debug --target
+all_qmllint` — keep it free of warnings. Running `qmllint` on a file by hand
+misses the `Tekst` module's context (its C++ types show as "not found").
 
 Qt Creator opens the project directly with the matching kit.
 

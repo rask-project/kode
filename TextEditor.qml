@@ -62,6 +62,6 @@ Flickable {
         wordColor: Qt.alpha(SystemColors.text, 0.1)
         matchColor: Qt.alpha(SystemColors.findHighlight, 0.45)
         darkTheme: Appearance.dark
-        onCursorRectangleChanged: root.ensureVisible(cursorRectangle)
+        onCursorRectangleChanged: root.ensureVisible(view.cursorRectangle)
     }
 }
