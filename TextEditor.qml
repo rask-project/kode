@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Basic as Basic
 import Rask.Platform
 
 // The editing area: an EditorView filling a Flickable's viewport, with
@@ -36,23 +37,56 @@ Flickable {
     clip: true
     boundsBehavior: Flickable.StopAtBounds
 
-    ScrollBar.vertical: ScrollBar {}
-    ScrollBar.horizontal: ScrollBar {
+    // Basic's scroll bars: no track, only a handle that shows while
+    // scrolling (the macOS style draws a track and is not meant to be
+    // customized).
+    ScrollBar.vertical: Basic.ScrollBar {
+        id: verticalBar
+
+        contentItem: ScrollHandle {
+            bar: verticalBar
+        }
+    }
+    ScrollBar.horizontal: Basic.ScrollBar {
         id: horizontalBar
+
+        contentItem: ScrollHandle {
+            bar: horizontalBar
+        }
+    }
+
+    component ScrollHandle: Rectangle {
+        required property Basic.ScrollBar bar
+
+        implicitWidth: 7
+        implicitHeight: 7
+        radius: 3.5
+        color: Qt.alpha(SystemColors.label, bar.pressed ? 0.5 : 0.3)
+        opacity: bar.active && bar.size < 1.0 ? 1.0 : 0.0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 200
+            }
+        }
     }
 
     EditorView {
         id: view
 
+        Accessible.role: Accessible.EditableText
+        Accessible.name: qsTr("Editor")
+
         x: root.contentX
         y: root.contentY
+
         width: root.width
         height: root.height
+
         contentX: root.contentX
         contentY: root.contentY
         focus: true
-        Accessible.role: Accessible.EditableText
-        Accessible.name: qsTr("Editor")
+
         textColor: SystemColors.text
         selectionColor: Window.active ? SystemColors.selectedTextBackground : SystemColors.unemphasizedSelectedTextBackground
         caretColor: SystemColors.textInsertionPoint
@@ -62,6 +96,7 @@ Flickable {
         wordColor: Qt.alpha(SystemColors.text, 0.1)
         matchColor: Qt.alpha(SystemColors.findHighlight, 0.45)
         darkTheme: Appearance.dark
+
         onCaretMoved: root.ensureVisible(view.cursorRectangle)
         onScrollRequested: contentY => root.contentY = Math.max(0, Math.min(contentY, root.contentHeight - root.height))
     }
