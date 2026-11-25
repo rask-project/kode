@@ -108,7 +108,7 @@ holds the library's rules), consumed by the apps as a **git submodule**
 | **`Rask.Dialogs`** | `AboutDialog` (system About panel), `AboutQtDialog`, `Alert` (`NSAlert`, sheet when given a window — e.g. Save / Don't Save / Cancel); later a text prompt for Konsoll | konsoll |
 | **`Rask.Application`** | `QuitGuard` (the app asks before quitting), configurable `DockMenu`, `RecentDocuments` (`NSDocumentController` → native "Open Recent" menu), `FileOpenHandler` (`QFileOpenEvent`, Finder's "Open With") | konsoll + new |
 | **`Rask.Updater`** | `Updater` singleton (Sparkle, beta channel, "Check for Updates…") + `RaskSparkle.cmake` + `rask_sparkle_plist_keys()`; later `update-appcast.py` | konsoll |
-| **`Rask.Controls`** | `SidebarLayout`, `SidebarItem`, `FormGroup`, `FormRow`, badge icons (done); `TabStrip`, `TabButton`, `ToolButton`, `SearchBar`, `Menu`, `MenuItem` (later) | konsoll (generalized) |
+| **`Rask.Controls`** | `SidebarLayout`, `SidebarItem`, `FormGroup`, `FormRow` (done; icons come from each app); `TabStrip`, `TabButton`, `ToolButton`, `SearchBar`, `Menu`, `MenuItem` (later) | konsoll (generalized) |
 | **`Rask.Style`** | Qt Quick Controls style for macOS (extends `QtQuick.Controls.macOS`) | metronom `MacStyle` |
 | `cmake/RaskApp.cmake` | `rask_version_from_git()`, `rask_bundle_version()`, `rask_macos_bundle()` (Info.plist, embedding and signing the `Rask.*` libraries, prune, icons) | konsoll + metronom |
 
