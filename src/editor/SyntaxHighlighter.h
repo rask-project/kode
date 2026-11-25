@@ -28,6 +28,8 @@ public:
     [[nodiscard]] static KSyntaxHighlighting::Definition detect(const QString &fileName, const QString &firstLine);
     [[nodiscard]] static KSyntaxHighlighting::Definition definitionForName(const QString &name);
     [[nodiscard]] static KSyntaxHighlighting::Theme defaultTheme(bool dark);
+    // Every definition a user can pick, sorted by section then name.
+    [[nodiscard]] static QList<KSyntaxHighlighting::Definition> definitions();
 
     void setDefinition(const KSyntaxHighlighting::Definition &definition) override;
     void setTheme(const KSyntaxHighlighting::Theme &theme) override;

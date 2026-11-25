@@ -42,6 +42,9 @@ Guidance for AI agents working in this repository.
 - `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
   editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
   kept, written through `QSaveFile`.
+- `StatusBar.qml` — line and column, and the syntax with a native menu
+  (`Popup.Native`) of `Syntaxes` (C++ singleton, `src/Syntaxes.*`: the
+  definitions by section).
 - `TextEditor.qml` — the editing area: a `Flickable` around the
   `EditorView`, scroll bars, caret kept in view, colors from `SystemColors`.
 - `src/editor/` — the editing surface:
@@ -73,6 +76,9 @@ Guidance for AI agents working in this repository.
     keeps the old states aligned so highlighting stops at the first line
     that ends as before. `EditorView` rows are reused only with the same
     start state; `syntax`/`detectSyntax()`/`darkTheme` drive it.
+  - `Matching` — free functions for the marks drawn behind the text: the
+    bracket pairing with the one at the caret (bounded line scan), the
+    word at the caret and its whole-word occurrences in the rows in view.
   - Keep scene coordinates small: positions are relative to the first line
     laid out, never `line × lineHeight` (float vertices lose precision past
     a few million pixels).
@@ -81,7 +87,7 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch), run offscreen with
+  randomized edits against highlighting from scratch, `tst_matching`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).

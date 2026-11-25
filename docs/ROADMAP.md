@@ -293,9 +293,12 @@ configure time and embedded; `SyntaxHighlighter` keeps each line's end
 state, highlights in 3 ms slices ahead of the view and after an edit only
 until a line ends as before; rows carry their start state; detection by
 file name and shebang; Breeze light/dark following `Appearance`
-(`docs/editor-bench.md`). Left: the selector in the status bar, bracket
-matching and the current-word highlight, and off-thread highlighting if
-large files need it.
+(`docs/editor-bench.md`). Then: a status bar (line and column, the
+syntax with a native menu of every definition by section), the bracket
+pairing with the one at the caret and the word at the caret with its
+occurrences in view marked behind the text. Left: off-thread
+highlighting if large files need it, and brackets inside strings and
+comments (today matched like any other).
 
 - **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes;
   QtCore/QtGui only) through `AbstractHighlighter`, line by line: each line

@@ -81,14 +81,19 @@ qt_add_qml_module(tekst
     IMPORT_PATH "${CMAKE_CURRENT_BINARY_DIR}/external/rask/qml"
     QML_FILES
         Main.qml
+        StatusBar.qml
         TextEditor.qml
     SOURCES
         src/Document.h
         src/Document.cpp
+        src/Syntaxes.h
+        src/Syntaxes.cpp
         src/editor/EditorAccessible.h
         src/editor/EditorAccessible.cpp
         src/editor/EditorView.h
         src/editor/EditorView.cpp
+        src/editor/Matching.h
+        src/editor/Matching.cpp
         src/editor/SyntaxHighlighter.h
         src/editor/SyntaxHighlighter.cpp
         src/editor/TextBuffer.h
@@ -100,8 +105,8 @@ target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
-set_property(SOURCE main.cpp src/Document.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
-    src/editor/SyntaxHighlighter.cpp
+set_property(SOURCE main.cpp src/Document.cpp src/Syntaxes.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
+    src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
 # Debug builds get a bundle id of their own, so they don't share macOS

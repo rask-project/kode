@@ -7,6 +7,8 @@ set(editor_sources
     ../src/editor/EditorAccessible.cpp
     ../src/editor/EditorView.h
     ../src/editor/EditorView.cpp
+    ../src/editor/Matching.h
+    ../src/editor/Matching.cpp
     ../src/editor/SyntaxHighlighter.h
     ../src/editor/SyntaxHighlighter.cpp
     ../src/editor/TextBuffer.h
@@ -57,3 +59,15 @@ target_include_directories(tst_syntaxhighlighter PRIVATE ../src/editor)
 target_link_libraries(tst_syntaxhighlighter PRIVATE Qt6::Gui Qt6::Test KF6::SyntaxHighlighting)
 add_test(NAME tst_syntaxhighlighter COMMAND tst_syntaxhighlighter)
 set_tests_properties(tst_syntaxhighlighter PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_matching
+    tst_matching.h
+    tst_matching.cpp
+    ../src/editor/Matching.h
+    ../src/editor/Matching.cpp
+    ../src/editor/TextBuffer.h
+    ../src/editor/TextBuffer.cpp
+)
+target_include_directories(tst_matching PRIVATE ../src/editor)
+target_link_libraries(tst_matching PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME tst_matching COMMAND tst_matching)

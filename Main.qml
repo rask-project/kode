@@ -299,7 +299,16 @@ ApplicationWindow {
         anchors.top: titleBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.bottom: statusBar.top
         editor.font: root.editorFont
+    }
+
+    StatusBar {
+        id: statusBar
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        editor: root.editor
     }
 }

@@ -48,6 +48,8 @@ Flickable {
         caretColor: SystemColors.textInsertionPoint
         currentLineColor: Qt.alpha(SystemColors.text, 0.05)
         lineNumberColor: SystemColors.tertiaryLabel
+        bracketColor: Qt.alpha(SystemColors.controlAccent, 0.35)
+        wordColor: Qt.alpha(SystemColors.text, 0.1)
         darkTheme: Appearance.dark
         onCursorRectangleChanged: root.ensureVisible(cursorRectangle)
     }

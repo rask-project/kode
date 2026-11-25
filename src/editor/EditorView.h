@@ -44,6 +44,10 @@ class EditorView : public QQuickItem
     Q_PROPERTY(QColor caretColor READ caretColor WRITE setCaretColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor currentLineColor READ currentLineColor WRITE setCurrentLineColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor lineNumberColor READ lineNumberColor WRITE setLineNumberColor NOTIFY colorsChanged)
+    // Behind the bracket at the caret and the one it pairs with.
+    Q_PROPERTY(QColor bracketColor READ bracketColor WRITE setBracketColor NOTIFY colorsChanged)
+    // Behind the word at the caret and its other occurrences in view.
+    Q_PROPERTY(QColor wordColor READ wordColor WRITE setWordColor NOTIFY colorsChanged)
     Q_PROPERTY(qreal contentX READ contentX WRITE setContentX NOTIFY contentXChanged)
     Q_PROPERTY(qreal contentY READ contentY WRITE setContentY NOTIFY contentYChanged)
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
@@ -86,6 +90,10 @@ public:
     void setCurrentLineColor(const QColor &color);
     [[nodiscard]] QColor lineNumberColor() const { return QColor::fromRgba(m_colors.lineNumber); }
     void setLineNumberColor(const QColor &color);
+    [[nodiscard]] QColor bracketColor() const { return QColor::fromRgba(m_colors.bracket); }
+    void setBracketColor(const QColor &color);
+    [[nodiscard]] QColor wordColor() const { return QColor::fromRgba(m_colors.word); }
+    void setWordColor(const QColor &color);
     [[nodiscard]] qreal contentX() const noexcept { return m_contentX; }
     void setContentX(qreal contentX);
     [[nodiscard]] qreal contentY() const noexcept { return m_contentY; }
@@ -216,6 +224,8 @@ private:
         QRgb caret{0xff3d8bffU};
         QRgb currentLine{0x0a000000U};
         QRgb lineNumber{0x66000000U};
+        QRgb bracket{0x403d8bffU};
+        QRgb word{0x1a000000U};
     };
 
     // The next typing may merge into the last edit.
@@ -250,6 +260,9 @@ private:
     [[nodiscard]] Row takeRow(qsizetype line, qsizetype cursorLine);
     [[nodiscard]] Number takeNumber(qsizetype line);
     void layoutDecorations();
+    void layoutMarks();
+    // The rectangle of [start, end) on `row` (relative to m_baseLine).
+    [[nodiscard]] QRectF rangeRect(const Row &row, qsizetype start, qsizetype end) const;
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
     [[nodiscard]] qreal xForPosition(qsizetype position) const;
     [[nodiscard]] qsizetype positionAt(const QPointF &point) const;
@@ -279,6 +292,8 @@ private:
     // top (so coordinates stay small in huge files): the selection, one
     // rectangle per line, and the caret.
     QList<QRectF> m_selectionRects;
+    QList<QRectF> m_bracketRects;
+    QList<QRectF> m_wordRects;
     QRectF m_caretRect;
     QString m_preedit;
     QFont m_font;

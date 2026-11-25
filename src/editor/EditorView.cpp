@@ -1,6 +1,7 @@
 #include "EditorView.h"
 
 #include "EditorAccessible.h"
+#include "Matching.h"
 #include "SyntaxHighlighter.h"
 
 #include <KSyntaxHighlighting/Definition>
@@ -46,10 +47,10 @@ constexpr std::chrono::milliseconds highlightInLayout{4};
 constexpr std::chrono::milliseconds highlightSlice{3};
 constexpr qsizetype highlightLookahead{1000};
 
-bool isWordCharacter(QChar character)
-{
-    return character.isLetterOrNumber() || character == QLatin1Char('_');
-}
+using matching::isWordCharacter;
+
+// How far the bracket matching the one at the caret is searched for.
+constexpr qsizetype bracketSearchLines{2000};
 
 // What a text node shows: refilled only when its color changes (the layout
 // behind a key never changes).
@@ -59,7 +60,7 @@ struct Shown {
 };
 
 // The scene graph side. Children, bottom to top: the current-line band, the
-// clip of the text area (with `content`: selection, rows, caret) and the
+// clip of the text area (with `content`: marks, selection, rows, caret) and the
 // line numbers (`gutter`). Both transforms carry the scroll, relative to the
 // first line laid out; each text node sits at its line inside them. All
 // owned by this node.
@@ -69,11 +70,14 @@ public:
     QSGRectangleNode *currentLine{nullptr};
     QSGClipNode *textClip{nullptr};
     QSGTransformNode *content{nullptr};
+    QSGNode *marksLayer{nullptr};
     QSGNode *selectionLayer{nullptr};
     QSGNode *textLayer{nullptr};
     QSGRectangleNode *caret{nullptr};
     QSGTransformNode *gutter{nullptr};
     QList<QSGRectangleNode *> selection;
+    QList<QSGRectangleNode *> brackets;
+    QList<QSGRectangleNode *> words;
     QHash<quint64, Shown> rows;
     QHash<qsizetype, Shown> numbers;
 };
@@ -161,6 +165,21 @@ void resizeRectangles(QQuickWindow *window, QSGNode *parent, QList<QSGRectangleN
     while (nodes.size() > count) {
         const std::unique_ptr<QSGRectangleNode> rectangle{nodes.takeLast()};
         parent->removeChildNode(rectangle.get());
+    }
+}
+// Shows `rects` in `color` with the rectangles of `nodes` under `parent`.
+void syncRectangles(
+    QQuickWindow *window,
+    QSGNode *parent,
+    QList<QSGRectangleNode *> &nodes,
+    const QList<QRectF> &rects,
+    const QColor &color
+)
+{
+    resizeRectangles(window, parent, nodes, rects.size());
+    for (qsizetype i{0}; i < rects.size(); ++i) {
+        nodes.at(i)->setRect(rects.at(i));
+        nodes.at(i)->setColor(color);
     }
 }
 } // namespace
@@ -284,6 +303,16 @@ void EditorView::setCurrentLineColor(const QColor &color)
 void EditorView::setLineNumberColor(const QColor &color)
 {
     setColor(m_colors.lineNumber, color);
+}
+
+void EditorView::setBracketColor(const QColor &color)
+{
+    setColor(m_colors.bracket, color);
+}
+
+void EditorView::setWordColor(const QColor &color)
+{
+    setColor(m_colors.word, color);
 }
 
 void EditorView::setContentX(qreal contentX)
@@ -891,11 +920,60 @@ void EditorView::layoutDecorations()
     }
 }
 
+QRectF EditorView::rangeRect(const Row &row, qsizetype start, qsizetype end) const
+{
+    const QTextLine textLine{row.layout->lineAt(0)};
+    const qreal from{textLine.cursorToX(static_cast<int>(start))};
+    const qreal to{textLine.cursorToX(static_cast<int>(end))};
+    return {from, static_cast<qreal>(row.line - m_baseLine) * m_lineHeight, to - from, m_lineHeight};
+}
+
+void EditorView::layoutMarks()
+{
+    // The bracket at the caret and its pair, and the word at the caret with
+    // its other occurrences, in the rows laid out.
+    m_bracketRects.clear();
+    m_wordRects.clear();
+    if (hasSelection() || !m_preedit.isEmpty() || m_dropPosition >= 0) {
+        return;
+    }
+    const auto rowAt{[this](qsizetype line) {
+        return std::ranges::find_if(m_rows, [line](const Row &row) { return row.line == line; });
+    }};
+    if (const std::optional<matching::BracketPair> pair{
+            matching::matchingBracket(m_buffer, m_cursor, bracketSearchLines)
+        }) {
+        for (const qsizetype position : {pair->bracket, pair->match}) {
+            const qsizetype line{m_buffer.lineAt(position)};
+            const auto row{rowAt(line)};
+            if (row != m_rows.end()) {
+                const qsizetype column{position - m_buffer.lineStart(line)};
+                m_bracketRects.append(rangeRect(*row, column, column + 1));
+            }
+        }
+    }
+    const auto cursorRow{rowAt(m_buffer.lineAt(m_cursor))};
+    if (cursorRow == m_rows.end()) {
+        return;
+    }
+    const matching::Range word{matching::wordAt(cursorRow->text, m_cursor - m_buffer.lineStart(cursorRow->line))};
+    if (word.end == word.start) {
+        return;
+    }
+    const QStringView wordText{QStringView{cursorRow->text}.sliced(word.start, word.end - word.start)};
+    for (const Row &row : m_rows) {
+        for (const matching::Range &found : matching::wholeWords(row.text, wordText)) {
+            m_wordRects.append(rangeRect(row, found.start, found.end));
+        }
+    }
+}
+
 void EditorView::updatePolish()
 {
     const qreal widestBefore{m_widestLine};
     layoutRows();
     layoutDecorations();
+    layoutMarks();
     if (m_widestLine > widestBefore) {
         emit contentSizeChanged();
     }
@@ -911,6 +989,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         auto currentLine{std::unique_ptr<QSGRectangleNode>{window->createRectangleNode()}};
         auto clip{makeClip()};
         auto content{std::make_unique<QSGTransformNode>()};
+        auto marksLayer{std::make_unique<QSGNode>()};
         auto selectionLayer{std::make_unique<QSGNode>()};
         auto textLayer{std::make_unique<QSGNode>()};
         auto caret{std::unique_ptr<QSGRectangleNode>{window->createRectangleNode()}};
@@ -918,10 +997,12 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->currentLine = currentLine.get();
         created->textClip = clip.get();
         created->content = content.get();
+        created->marksLayer = marksLayer.get();
         created->selectionLayer = selectionLayer.get();
         created->textLayer = textLayer.get();
         created->caret = caret.get();
         created->gutter = gutter.get();
+        content->appendChildNode(marksLayer.release());
         content->appendChildNode(selectionLayer.release());
         content->appendChildNode(textLayer.release());
         content->appendChildNode(caret.release());
@@ -969,11 +1050,9 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     removeText(node->gutter, node->numbers);
     node->numbers = std::move(numbers);
 
-    resizeRectangles(window, node->selectionLayer, node->selection, m_selectionRects.size());
-    for (qsizetype i{0}; i < m_selectionRects.size(); ++i) {
-        node->selection.at(i)->setRect(m_selectionRects.at(i));
-        node->selection.at(i)->setColor(selectionColor());
-    }
+    syncRectangles(window, node->marksLayer, node->words, m_wordRects, wordColor());
+    syncRectangles(window, node->marksLayer, node->brackets, m_bracketRects, bracketColor());
+    syncRectangles(window, node->selectionLayer, node->selection, m_selectionRects, selectionColor());
 
     const bool caretShown{m_caretRect.isValid()};
     const bool dropping{m_dropPosition >= 0};

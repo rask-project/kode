@@ -96,6 +96,16 @@ KSyntaxHighlighting::Theme SyntaxHighlighter::defaultTheme(bool dark)
     );
 }
 
+QList<KSyntaxHighlighting::Definition> SyntaxHighlighter::definitions()
+{
+    QList<KSyntaxHighlighting::Definition> visible{repository().definitions()};
+    // "None", the empty definition, has no section: plain text stands for it.
+    visible.removeIf([](const KSyntaxHighlighting::Definition &definition) {
+        return definition.isHidden() || definition.section().isEmpty();
+    });
+    return visible;
+}
+
 void SyntaxHighlighter::setDefinition(const KSyntaxHighlighting::Definition &definition)
 {
     AbstractHighlighter::setDefinition(definition);
