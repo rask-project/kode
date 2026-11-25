@@ -716,6 +716,25 @@ qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
     return lineStart + column;
 }
 
+bool EditorView::goToLine(const QString &target)
+{
+    const QStringList parts{target.trimmed().split(QLatin1Char(':'))};
+    if (parts.size() > 2) {
+        return false;
+    }
+    bool lineOk{false};
+    bool columnOk{true};
+    const qsizetype line{parts.first().toLongLong(&lineOk)};
+    const qsizetype column{parts.size() == 2 ? parts.last().toLongLong(&columnOk) : 1};
+    if (!lineOk || !columnOk) {
+        return false;
+    }
+    const qsizetype clampedLine{std::clamp(line - 1, qsizetype{0}, m_buffer.lineCount() - 1)};
+    const qsizetype clampedColumn{std::clamp(column - 1, qsizetype{0}, m_buffer.lineLength(clampedLine))};
+    moveCaret(m_buffer.lineStart(clampedLine) + clampedColumn, Select::Collapse);
+    return true;
+}
+
 // --- find ---------------------------------------------------------------------
 
 QString EditorView::searchPattern() const

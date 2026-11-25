@@ -304,4 +304,19 @@ void TestEditorView::replaceAllIsOneUndo()
     QCOMPARE(editor.searchMatchCount(), 3);
 }
 
+void TestEditorView::goesToLineAndColumn()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("first\nsecond\nthird"));
+    QVERIFY(editor.goToLine(QStringLiteral("2")));
+    QCOMPARE(editor.cursorPosition(), 6);
+    QVERIFY(editor.goToLine(QStringLiteral(" 3:4 ")));
+    QCOMPARE(editor.cursorPosition(), 16);
+    // Clamped to the text.
+    QVERIFY(editor.goToLine(QStringLiteral("99:99")));
+    QCOMPARE(editor.cursorPosition(), editor.length());
+    QVERIFY(!editor.goToLine(QStringLiteral("two")));
+    QVERIFY(!editor.goToLine(QStringLiteral("1:2:3")));
+}
+
 QTEST_MAIN(TestEditorView)

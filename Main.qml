@@ -200,6 +200,13 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
+            MenuItem {
+                action: Action {
+                    text: qsTr("Go to Line…")
+                    shortcut: "Ctrl+L"
+                    onTriggered: goToLine.open()
+                }
+            }
             Menu {
                 title: qsTr("Find")
 
@@ -364,6 +371,20 @@ ApplicationWindow {
             visible = false;
             root.editor.forceActiveFocus();
         }
+    }
+
+    GoToLine {
+        id: goToLine
+
+        x: (root.width - width) / 2
+        y: titleBar.height + 8
+        onAccepted: target => {
+            if (root.editor.goToLine(target)) {
+                goToLine.close();
+                textEditor.center(root.editor.cursorRectangle);
+            }
+        }
+        onClosed: root.editor.forceActiveFocus()
     }
 
     // The editor searches for what the bar holds while it shows.

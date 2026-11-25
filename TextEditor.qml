@@ -25,6 +25,12 @@ Flickable {
             contentX = rect.x + rect.width - width + 24;
     }
 
+    // Scrolls `rect` (content coordinates) to the middle of the view.
+    function center(rect) {
+        contentY = Math.max(0, Math.min(rect.y + rect.height / 2 - height / 2, contentHeight - height));
+        ensureVisible(rect);
+    }
+
     contentWidth: Math.max(width, view.contentWidth)
     contentHeight: Math.max(height, view.contentHeight)
     clip: true

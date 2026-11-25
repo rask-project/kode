@@ -29,7 +29,8 @@ Guidance for AI agents working in this repository.
   together.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
-  `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls` (`SearchBar`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
+  `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
+  (`SearchBar`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
   `AboutQtDialog`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
@@ -42,6 +43,8 @@ Guidance for AI agents working in this repository.
 - `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
   editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
   kept, written through `QSaveFile`.
+- `GoToLine.qml` — the ⌘L popup ("line" or "line:column", parsed by
+  `EditorView::goToLine()`).
 - `StatusBar.qml` — line and column, and the syntax with a native menu
   (`Popup.Native`) of `Syntaxes` (C++ singleton, `src/Syntaxes.*`: the
   definitions by section).

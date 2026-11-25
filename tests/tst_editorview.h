@@ -26,4 +26,5 @@ private slots:
     void findNextSelectsMatches();
     void findWraps();
     void replaceAllIsOneUndo();
+    void goesToLineAndColumn();
 };

@@ -165,6 +165,9 @@ public:
     Q_INVOKABLE void markSaved();
     // Picks the syntax for a file named `fileName` (or by its shebang).
     Q_INVOKABLE void detectSyntax(const QString &fileName);
+    // Moves the caret to "line" or "line:column" (from 1, clamped); false
+    // when `target` is neither.
+    Q_INVOKABLE bool goToLine(const QString &target);
     // Select the next (previous) match after (before) the caret, wrapping;
     // false when there is none.
     Q_INVOKABLE bool findNext();
