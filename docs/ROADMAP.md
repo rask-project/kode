@@ -84,17 +84,15 @@ holds the library's rules), consumed by the apps as a **git submodule**
   ID for releases; notarization rejects unsigned nested code). In the
   install step `qt_generate_deploy_qml_app_script` deploys them with Qt's own
   modules. `PruneBundle` must not strip them.
-- **Other platforms:** Linux installs them next to the app (`lib/` + `qml/`,
-  `RPATH=$ORIGIN/../lib`); on Android `androiddeployqt` packages the `.so`
-  files and QML plugins into the APK — Metronom's build is the check.
 - **Consumption:** git submodule + `add_subdirectory` (builds from source with
   the app's Qt kit — no ABI mismatch). The project also has `install(EXPORT)`
   with a `RaskConfig.cmake`, so `find_package(Rask)` works against an
   installed copy later.
 - C++ namespace `rask`. Types registered with `QML_ELEMENT` / `QML_SINGLETON`.
-- **Cross-platform by contract**: Metronom runs on Android and Linux. Every
-  `.mm` has a `_stub.cpp` counterpart (no-op) selected in CMake, and each type
-  exposes `supported`/`translucent` so QML can fall back.
+- **macOS only**: no stubs or fallbacks for other systems; `rask` refuses to
+  configure elsewhere. An app that also ships elsewhere (Metronom: Android,
+  Linux) links `rask` on macOS only and keeps its own code for the others.
+  Features of newer macOS versions report it (`GlassEffect.supported`).
 - Minimum Qt **6.10** (Metronom requires 6.10; Konsoll and Tekst use 6.12).
 - Nothing app-specific: no "workspace", "session", "agent".
 - Each module has an example in `examples/` and tests (`qmltestrunner` / QtTest).
@@ -133,7 +131,8 @@ section 3), not all at once.
 ### Migrating the existing apps
 
 1. **Metronom** migrates first (`Rask.Window`, `Rask.Platform`, `Rask.Style`,
-   `Rask.Updater`): it is small and validates Android/Linux.
+   `Rask.Updater`) on its macOS build: it is small and proves the API serves
+   a second app.
 2. **Konsoll** migrates afterwards, module by module, without blocking Tekst.
 3. **notes** replaces `Rask.Controls.Native` with the new modules.
 
@@ -214,13 +213,13 @@ First stage where Tekst uses shared code. Already in `rask` (section 2,
 - Replace the `MessageDialog` with `Rask.Dialogs`' `Alert` "Save changes?"
   (a sheet on the window); "About Tekst" and "About Qt" in the menu with
   `AboutDialog` / `AboutQtDialog`.
-- Migrate **Metronom** to `Rask.Window` + `Rask.Platform` (proves the API
-  serves two apps and works outside macOS).
+- Migrate **Metronom**'s macOS build to `Rask.Window` + `Rask.Platform`
+  (proves the API serves two apps).
 
 **Done when:** Tekst has translucency/blur and native dialogs, the installed
 (`package-macos`) bundle runs on a machine without the build tree, and
-Metronom builds and runs on all three platforms using the shared `rask`
-libraries.
+Metronom's macOS build runs on the shared `rask` libraries (its Android and
+Linux builds unchanged).
 
 ---
 
