@@ -14,7 +14,11 @@ private slots:
     void keepsLfAndFinalNewline();
     void keepsNonBreakingSpaces();
     void reportsMissingFile();
-    void rejectsInvalidUtf8();
+    void readsWindows1252WhenNotUtf8();
+    void keepsTheByteOrderMark();
+    void reopensWithAnotherEncoding();
+    void convertsEncodingAndLineEnding();
+    void refusesCharactersTheEncodingLacks();
     void tracksModified();
     void clearsToUntitled();
 

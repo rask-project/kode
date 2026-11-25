@@ -12,6 +12,10 @@ Item {
     id: root
 
     required property EditorView editor
+    required property Document document
+
+    // Reading the file again as `encoding` (the window asks about unsaved changes).
+    signal reopenRequested(string encoding)
 
     implicitHeight: 26
 
@@ -27,9 +31,120 @@ Item {
         anchors.left: parent.left
         anchors.leftMargin: 12
         anchors.verticalCenter: parent.verticalCenter
-        text: qsTr("Line %1, Column %2").arg(root.editor.cursorLine + 1).arg(root.editor.cursorColumn + 1)
+        text: {
+            const position = qsTr("Line %1, Column %2").arg(root.editor.cursorLine + 1).arg(root.editor.cursorColumn + 1);
+            const selected = root.editor.selectionEnd - root.editor.selectionStart;
+            return selected > 0 ? qsTr("%1 (%2 selected)").arg(position).arg(selected) : position;
+        }
         color: SystemColors.secondaryLabel
         font.pixelSize: 11
+    }
+
+    Label {
+        id: encodingLabel
+
+        anchors.right: lineEndingLabel.left
+        anchors.rightMargin: 20
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.document.byteOrderMark ? qsTr("%1 with BOM").arg(root.document.encoding) : root.document.encoding
+        color: encodingArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
+        font.pixelSize: 11
+
+        MouseArea {
+            id: encodingArea
+
+            anchors.fill: parent
+            anchors.margins: -6
+            hoverEnabled: true
+            onClicked: encodingMenu.popup(encodingLabel, 0, encodingLabel.height)
+        }
+    }
+
+    Menu {
+        id: encodingMenu
+
+        popupType: Popup.Native
+
+        Menu {
+            id: reopenMenu
+
+            title: qsTr("Reopen with Encoding")
+            enabled: root.document.fileUrl.toString() !== ""
+
+            Instantiator {
+                model: root.document.encodings
+
+                delegate: MenuItem {
+                    required property string modelData
+
+                    text: modelData
+                    onTriggered: root.reopenRequested(modelData)
+                }
+
+                onObjectAdded: (index, object) => reopenMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => reopenMenu.removeItem(object)
+            }
+        }
+        Menu {
+            id: saveMenu
+
+            title: qsTr("Save with Encoding")
+
+            Instantiator {
+                model: root.document.encodings
+
+                delegate: MenuItem {
+                    required property string modelData
+
+                    text: modelData
+                    checkable: true
+                    checked: root.document.encoding === modelData
+                    onTriggered: root.document.encoding = modelData
+                }
+
+                onObjectAdded: (index, object) => saveMenu.insertItem(index, object)
+                onObjectRemoved: (index, object) => saveMenu.removeItem(object)
+            }
+        }
+    }
+
+    Label {
+        id: lineEndingLabel
+
+        anchors.right: indentationLabel.left
+        anchors.rightMargin: 20
+        anchors.verticalCenter: parent.verticalCenter
+        text: root.document.crlf ? "CRLF" : "LF"
+        color: lineEndingArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
+        font.pixelSize: 11
+
+        MouseArea {
+            id: lineEndingArea
+
+            anchors.fill: parent
+            anchors.margins: -6
+            hoverEnabled: true
+            onClicked: lineEndingMenu.popup(lineEndingLabel, 0, lineEndingLabel.height)
+        }
+    }
+
+    Menu {
+        id: lineEndingMenu
+
+        popupType: Popup.Native
+
+        MenuItem {
+            text: qsTr("LF (macOS, Linux)")
+            checkable: true
+            checked: !root.document.crlf
+            onTriggered: root.document.crlf = false
+        }
+        MenuItem {
+            text: qsTr("CRLF (Windows)")
+            checkable: true
+            checked: root.document.crlf
+            onTriggered: root.document.crlf = true
+        }
     }
 
     Label {

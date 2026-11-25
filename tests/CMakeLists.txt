@@ -24,10 +24,12 @@ qt_add_executable(tst_document
     tst_document.cpp
     ../src/Document.h
     ../src/Document.cpp
+    ../src/TextCodec.h
+    ../src/TextCodec.cpp
     ${editor_sources}
 )
 target_include_directories(tst_document PRIVATE ../src ../src/editor)
-target_link_libraries(tst_document PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting)
+target_link_libraries(tst_document PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
 add_test(NAME tst_document COMMAND tst_document)
 set_tests_properties(tst_document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

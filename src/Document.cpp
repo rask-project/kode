@@ -3,7 +3,6 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
-#include <QStringDecoder>
 
 namespace tekst
 {
@@ -11,23 +10,7 @@ namespace tekst
 namespace
 {
 
-const QString crlf{QStringLiteral("\r\n")};
-
-// The file's text, decoded as UTF-8.
-std::expected<QString, QString> readText(const QString &path)
-{
-    QFile file{path};
-    if (!file.open(QIODevice::ReadOnly)) {
-        return std::unexpected{Document::tr("“%1” could not be opened: %2").arg(path, file.errorString())};
-    }
-    const QByteArray bytes{file.readAll()};
-    QStringDecoder decoder{QStringDecoder::Utf8};
-    QString text{decoder.decode(bytes)};
-    if (decoder.hasError()) {
-        return std::unexpected{Document::tr("“%1” is not UTF-8 text.").arg(path)};
-    }
-    return text;
-}
+const QString crlfText{QStringLiteral("\r\n")};
 
 } // namespace
 
@@ -56,27 +39,82 @@ QString Document::fileName() const
 
 bool Document::modified() const
 {
-    return m_editor != nullptr && m_editor->modified();
+    return (m_editor != nullptr && m_editor->modified()) || (m_flags & FormatChanged) != 0U;
+}
+
+void Document::setFormatChanged(bool changed)
+{
+    const bool wasModified{modified()};
+    m_flags = changed ? (m_flags | FormatChanged) : (m_flags & ~FormatChanged);
+    if (wasModified != modified()) {
+        emit modifiedChanged();
+    }
+}
+
+void Document::setEncoding(const QString &encoding)
+{
+    if (m_format.encoding == encoding || !codec::encodings().contains(encoding)) {
+        return;
+    }
+    // Keeps a byte order mark if the new encoding has one.
+    m_format = {.encoding = encoding, .byteOrderMark = byteOrderMark() ? codec::byteOrderMark(encoding) : QByteArray{}};
+    emit formatChanged();
+    setFormatChanged(true);
+}
+
+void Document::setCrlf(bool crlf)
+{
+    if (this->crlf() == crlf) {
+        return;
+    }
+    m_flags = crlf ? (m_flags | Crlf) : (m_flags & ~Crlf);
+    emit formatChanged();
+    setFormatChanged(true);
 }
 
 bool Document::load(const QUrl &fileUrl)
 {
+    return read(fileUrl, {});
+}
+
+bool Document::reopen(const QString &encoding)
+{
+    return !m_fileUrl.isEmpty() && read(m_fileUrl, encoding);
+}
+
+bool Document::read(const QUrl &fileUrl, const QString &encoding)
+{
     if (m_editor == nullptr) {
         return false;
     }
-    const std::expected<QString, QString> text{readText(fileUrl.toLocalFile())};
-    if (!text) {
-        emit errorOccurred(text.error());
+    const QString path{fileUrl.toLocalFile()};
+    QFile file{path};
+    if (!file.open(QIODevice::ReadOnly)) {
+        emit errorOccurred(tr("“%1” could not be opened: %2").arg(path, file.errorString()));
         return false;
     }
-    m_lineEnding = text->contains(crlf) ? crlf : QStringLiteral("\n");
+    const QByteArray bytes{file.readAll()};
+    codec::Format format{codec::detect(bytes)};
+    if (!encoding.isEmpty() && encoding != format.encoding) {
+        format = {.encoding = encoding, .byteOrderMark = {}};
+    }
+    const std::optional<QString> text{codec::decode(bytes.sliced(format.byteOrderMark.size()), format.encoding)};
+    if (!text) {
+        emit errorOccurred(tr("“%1” is not valid %2 text.").arg(path, format.encoding));
+        return false;
+    }
+    const bool fileCrlf{text->contains(crlfText)};
     QString lines{*text};
-    lines.replace(crlf, QStringLiteral("\n"));
+    lines.replace(crlfText, QStringLiteral("\n"));
+    m_format = format;
+    m_flags = fileCrlf ? Crlf : 0U;
     // Also clears the undo history and the modified state.
     m_editor->setText(lines);
     m_editor->detectSyntax(fileUrl.fileName());
     m_editor->detectIndentation();
     setFileUrl(fileUrl);
+    emit formatChanged();
+    emit modifiedChanged();
     return true;
 }
 
@@ -99,6 +137,7 @@ bool Document::saveAs(const QUrl &fileUrl)
         return false;
     }
     m_editor->markSaved();
+    setFormatChanged(false);
     if (fileUrl != m_fileUrl) {
         m_editor->detectSyntax(fileUrl.fileName());
     }
@@ -113,7 +152,10 @@ void Document::clear()
     }
     m_editor->setText({});
     m_editor->setSyntax({});
-    m_lineEnding = QStringLiteral("\n");
+    m_format = {};
+    m_flags = 0U;
+    emit formatChanged();
+    emit modifiedChanged();
     setFileUrl({});
 }
 
@@ -121,16 +163,20 @@ std::expected<void, QString> Document::write(const QUrl &fileUrl) const
 {
     const QString path{fileUrl.toLocalFile()};
     QString text{m_editor->text()};
-    if (m_lineEnding == crlf) {
-        text.replace(QLatin1Char('\n'), crlf);
+    if (crlf()) {
+        text.replace(QLatin1Char('\n'), crlfText);
+    }
+    const std::optional<QByteArray> bytes{codec::encode(text, m_format)};
+    if (!bytes) {
+        return std::unexpected{tr("“%1” could not be saved as %2: some characters cannot be represented in it.")
+                                   .arg(path, m_format.encoding)};
     }
 
     QSaveFile file{path};
     if (!file.open(QIODevice::WriteOnly)) {
         return std::unexpected{tr("“%1” could not be saved: %2").arg(path, file.errorString())};
     }
-    const QByteArray bytes{text.toUtf8()};
-    if (file.write(bytes) != bytes.size() || !file.commit()) {
+    if (file.write(*bytes) != bytes->size() || !file.commit()) {
         return std::unexpected{tr("“%1” could not be saved: %2").arg(path, file.errorString())};
     }
     return {};

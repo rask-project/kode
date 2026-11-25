@@ -41,8 +41,12 @@ Guidance for AI agents working in this repository.
   draws it as a bordered field), the menu bar, file dialogs and the
   "Save changes?" sheet.
 - `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
-  editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
-  kept, written through `QSaveFile`.
+  `EditorView` and saves it back through `QSaveFile`, keeping its encoding,
+  byte order mark and line ending (changing them marks it modified);
+  `reopen()` reads it again in another encoding.
+- `src/TextCodec.{h,cpp}` — detecting, decoding and encoding a file's
+  bytes: Qt for UTF-8/16 and Latin-1 (no ICU in this Qt), CoreFoundation
+  (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest.
 - `GoToLine.qml` — the ⌘L popup ("line" or "line:column", parsed by
   `EditorView::goToLine()`).
 - `StatusBar.qml` — line and column, and the syntax with a native menu

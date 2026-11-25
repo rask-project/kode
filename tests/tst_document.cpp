@@ -98,15 +98,75 @@ void TestDocument::reportsMissingFile()
     QVERIFY(document.fileUrl().isEmpty());
 }
 
-void TestDocument::rejectsInvalidUtf8()
+void TestDocument::readsWindows1252WhenNotUtf8()
 {
-    writeFile(path(QStringLiteral("latin1.txt")), QByteArray{"caf\xe9\n"});
+    const QByteArray bytes{"caf\xe9 \x80\n"};
+    writeFile(path(QStringLiteral("cp1252.txt")), bytes);
     tekst::EditorView editor;
     tekst::Document document;
     document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("cp1252.txt")))));
+    QCOMPARE(document.encoding(), QStringLiteral("Windows-1252"));
+    QCOMPARE(editor.text(), QStringLiteral("café €\n"));
+    QVERIFY(document.save());
+    QCOMPARE(readFile(path(QStringLiteral("cp1252.txt"))), bytes);
+}
+
+void TestDocument::keepsTheByteOrderMark()
+{
+    const QByteArray bytes{"\xEF\xBB\xBF"
+                           "bom\n"};
+    writeFile(path(QStringLiteral("bom.txt")), bytes);
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("bom.txt")))));
+    QVERIFY(document.byteOrderMark());
+    QCOMPARE(editor.text(), QStringLiteral("bom\n"));
+    QVERIFY(document.save());
+    QCOMPARE(readFile(path(QStringLiteral("bom.txt"))), bytes);
+}
+
+void TestDocument::reopensWithAnotherEncoding()
+{
+    writeFile(path(QStringLiteral("utf8-as-latin1.txt")), QByteArray{"caf\xC3\xA9"});
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("utf8-as-latin1.txt")))));
+    QCOMPARE(editor.text(), QStringLiteral("café"));
+    QVERIFY(document.reopen(QStringLiteral("ISO-8859-1")));
+    QCOMPARE(document.encoding(), QStringLiteral("ISO-8859-1"));
+    QCOMPARE(editor.text(), QStringLiteral("cafÃ©"));
+}
+
+void TestDocument::convertsEncodingAndLineEnding()
+{
+    writeFile(path(QStringLiteral("convert.txt")), QByteArray{"a\xC3\xA9\nb\n"});
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("convert.txt")))));
+    document.setEncoding(QStringLiteral("UTF-16LE"));
+    document.setCrlf(true);
+    QVERIFY(document.modified());
+    QVERIFY(document.save());
+    QVERIFY(!document.modified());
+    QCOMPARE(readFile(path(QStringLiteral("convert.txt"))), QByteArray("a\0\xE9\0\r\0\n\0b\0\r\0\n\0", 14));
+}
+
+void TestDocument::refusesCharactersTheEncodingLacks()
+{
+    writeFile(path(QStringLiteral("lacks.txt")), QByteArray{"\xE2\x82\xAC\n"});
+    tekst::EditorView editor;
+    tekst::Document document;
+    document.setEditor(&editor);
+    QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("lacks.txt")))));
+    document.setEncoding(QStringLiteral("ISO-8859-1"));
     const QSignalSpy errors{&document, &tekst::Document::errorOccurred};
-    QVERIFY(!document.load(QUrl::fromLocalFile(path(QStringLiteral("latin1.txt")))));
+    QVERIFY(!document.save());
     QCOMPARE(errors.count(), 1);
+    QCOMPARE(readFile(path(QStringLiteral("lacks.txt"))), QByteArray{"\xE2\x82\xAC\n"});
 }
 
 void TestDocument::tracksModified()

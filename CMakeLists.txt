@@ -89,6 +89,8 @@ qt_add_qml_module(tekst
         src/Document.cpp
         src/Syntaxes.h
         src/Syntaxes.cpp
+        src/TextCodec.h
+        src/TextCodec.cpp
         src/editor/EditorAccessible.h
         src/editor/EditorAccessible.cpp
         src/editor/EditorView.h
@@ -110,7 +112,7 @@ target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
-set_property(SOURCE main.cpp src/Document.cpp src/Syntaxes.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
+set_property(SOURCE main.cpp src/Document.cpp src/Syntaxes.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
     src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/TextSearch.cpp src/editor/Indentation.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
@@ -148,6 +150,7 @@ target_link_libraries(tekst
         Rask::Platform
         Rask::Window
         Rask::Dialogs
+        "-framework CoreFoundation"
 )
 
 # Before the bundle is signed below: its signature covers the libraries.

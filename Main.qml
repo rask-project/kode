@@ -23,15 +23,15 @@ ApplicationWindow {
     property bool closeApproved: false
     // The editor's font size, zoomed with ⌘+ / ⌘- (⌘0: the default).
     readonly property int defaultFontSize: editorFont.pointSize
-    // The editing surface, for the menus and the document.
+    // The editing surface, for the menus and the fileDocument.
     readonly property EditorView editor: textEditor.editor
 
     // Saves, asking for a file when the document has none, then runs `then`.
     function save(then) {
-        if (document.fileUrl.toString() === "") {
+        if (fileDocument.fileUrl.toString() === "") {
             saveDialog.then = then;
             saveDialog.open();
-        } else if (document.save() && then) {
+        } else if (fileDocument.save() && then) {
             then();
         }
     }
@@ -45,7 +45,7 @@ ApplicationWindow {
 
     // Runs `action` now, or after the user saves or discards the changes.
     function confirmThen(action) {
-        if (!document.modified) {
+        if (!fileDocument.modified) {
             action();
             return;
         }
@@ -59,14 +59,14 @@ ApplicationWindow {
     minimumHeight: 240
     visible: true
     // Feeds the Window menu and the window switcher; the title bar is drawn below.
-    title: document.fileName + " — Tekst"
+    title: fileDocument.fileName + " — Tekst"
     flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     color: "transparent"
     // ApplicationWindow pads its content by the safe area; the title bar draws there itself.
     topPadding: 0
 
     onClosing: close => {
-        if (root.closeApproved || !document.modified)
+        if (root.closeApproved || !fileDocument.modified)
             return;
         close.accepted = false;
         root.confirmThen(() => {
@@ -77,7 +77,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         if (root.initialFile.toString() !== "")
-            document.load(root.initialFile);
+            fileDocument.load(root.initialFile);
         root.editor.forceActiveFocus();
     }
 
@@ -99,7 +99,7 @@ ApplicationWindow {
     }
 
     Document {
-        id: document
+        id: fileDocument
 
         editor: root.editor
         onErrorOccurred: message => {
@@ -122,7 +122,7 @@ ApplicationWindow {
                 action: Action {
                     text: qsTr("New")
                     shortcut: StandardKey.New
-                    onTriggered: root.confirmThen(() => document.clear())
+                    onTriggered: root.confirmThen(() => fileDocument.clear())
                 }
             }
             MenuItem {
@@ -324,7 +324,7 @@ ApplicationWindow {
 
         title: qsTr("Open")
         fileMode: FileDialog.OpenFile
-        onAccepted: document.load(selectedFile)
+        onAccepted: fileDocument.load(selectedFile)
     }
 
     FileDialog {
@@ -335,11 +335,11 @@ ApplicationWindow {
 
         title: qsTr("Save As")
         fileMode: FileDialog.SaveFile
-        selectedFile: document.fileUrl
+        selectedFile: fileDocument.fileUrl
         onAccepted: {
             const then = saveDialog.then;
             saveDialog.then = null;
-            if (document.saveAs(selectedFile) && then)
+            if (fileDocument.saveAs(selectedFile) && then)
                 then();
         }
         onRejected: saveDialog.then = null
@@ -350,7 +350,7 @@ ApplicationWindow {
 
         window: root
         style: Alert.Warning
-        text: qsTr("Do you want to save the changes made to “%1”?").arg(document.fileName)
+        text: qsTr("Do you want to save the changes made to “%1”?").arg(fileDocument.fileName)
         informativeText: qsTr("Your changes will be lost if you don’t save them.")
         buttons: [qsTr("Save"), qsTr("Don’t Save"), qsTr("Cancel")]
         onFinished: button => {
@@ -397,7 +397,7 @@ ApplicationWindow {
         Label {
             anchors.centerIn: parent
             width: Math.min(implicitWidth, parent.width - 2 * 90)
-            text: document.modified ? qsTr("%1 — Edited").arg(document.fileName) : document.fileName
+            text: fileDocument.modified ? qsTr("%1 — Edited").arg(fileDocument.fileName) : fileDocument.fileName
             color: systemPalette.windowText
             opacity: root.active ? 1 : 0.5
             font.weight: Font.DemiBold
@@ -478,5 +478,7 @@ ApplicationWindow {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         editor: root.editor
+        document: fileDocument
+        onReopenRequested: encoding => root.confirmThen(() => fileDocument.reopen(encoding))
     }
 }

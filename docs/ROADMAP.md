@@ -324,6 +324,12 @@ regular expression, $0…$9 in the replacement. Go to line (⌘L): "line" or
 the width, detected when a file opens and shown (and changed) in the
 status bar; Return keeps the line's indentation, Tab goes to the next
 stop or indents the selected lines, ⇧Tab and ⌘[ / ⌘] shift them.
+Encodings: detected when a file opens (byte order mark, else UTF-8 if
+valid, else Windows-1252), the byte order mark kept; Reopen with / Save
+with Encoding from the status bar (20 encodings: Qt's Unicode and
+Latin-1, the rest through CoreFoundation); saving refuses characters the
+encoding lacks. The status bar also shows the selection's length and the
+line ending (LF/CRLF, changeable).
 
 - Find/replace (`SearchBar` from `Rask.Controls`): ⌘F, ⌘G/⇧⌘G, ⌘R, regex,
   case sensitivity, matches highlighted by the `EditorView` (search runs on
