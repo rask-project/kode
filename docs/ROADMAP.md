@@ -158,9 +158,15 @@ window.
 
 ---
 
-### Stage 1 — Simple text editor (MVP)
+### Stage 1 — Simple text editor (MVP) — done
 
-One window, one document. Qt only, no native code yet.
+One window, one document. Built directly on `rask` (the parts of Stage 2 it
+already covered): `NativeWindow` with the title bar drawn by QML,
+`Appearance`, the "Save changes?" sheet (`Alert`), About Tekst / About Qt.
+The editor is a `TextEdit` in a `Flickable` rather than a `TextArea` (the
+macOS style draws `TextArea` as a bordered field). Checked by hand: open from
+the command line, edit, ⌘S, ⌘W and ⌘Q with unsaved changes (Save, Don't
+Save, Cancel), the save panel for an untitled document.
 
 **C++**
 - `Document` (`QML_ELEMENT`): `fileUrl`, `fileName`, `modified`, `text`
@@ -193,31 +199,22 @@ without losing data, with no native code.
 
 ---
 
-### Stage 2 — Adopt `rask` and give it a Mac look
+### Stage 2 — Finish the Mac look
 
-First stage where Tekst uses shared code. Already in `rask` (section 2,
-*Status*): the shared-library plumbing, **`Rask.Platform`** (`Appearance`),
-**`Rask.Window`** (`NativeWindow`), **`Rask.Dialogs`** and **`Rask.Updater`**.
+Done in Stage 1: `rask` as a submodule (`external/rask`), the libraries
+embedded and signed in the bundle, the window with its content under the
+title bar and the blur, the native "Save changes?" sheet and About panels.
+What is left:
 
-- Tekst: add `rask` as a submodule (`external/rask`), link `Rask::Platform`,
-  `Rask::Window` and `Rask::Dialogs`, and call `rask_embed_libraries()` before the bundle's ad hoc
-  signing. Check `otool -L` / `codesign --verify --deep --strict` on the
-  built `Tekst.app`. No import path is needed: the modules' `qmldir` is in
-  the libraries' resources.
 - **`SystemColors`** in `Rask.Platform` (semantic `NSColor`s, from notes'
-  `UIKit`).
-- Tekst: window with content under the title bar
-  (`Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint`), translucent
-  blurred background (optional), text/selection/caret colors from
-  `SystemColors`, follows light/dark.
-- Replace the `MessageDialog` with `Rask.Dialogs`' `Alert` "Save changes?"
-  (a sheet on the window); "About Tekst" and "About Qt" in the menu with
-  `AboutDialog` / `AboutQtDialog`.
+  `UIKit`): text, selection and caret colors (today Qt's `SystemPalette`).
+- Window settings: blur on/off and opacity (later in the Settings window).
+- The installed bundle (`cmake --install`, `qt_generate_deploy_qml_app_script`)
+  runs without the build tree: Qt, the `rask` dylibs.
 - Migrate **Metronom**'s macOS build to `Rask.Window` + `Rask.Platform`
   (proves the API serves two apps).
 
-**Done when:** Tekst has translucency/blur and native dialogs, the installed
-(`package-macos`) bundle runs on a machine without the build tree, and
+**Done when:** Tekst's colors come from the system, the installed bundle runs on a machine without the build tree, and
 Metronom's macOS build runs on the shared `rask` libraries (its Android and
 Linux builds unchanged).
 

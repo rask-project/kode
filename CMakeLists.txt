@@ -57,15 +57,16 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.12 REQUIRED COMPONENTS Quick QuickControls2)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Quick QuickControls2 QuickDialogs2)
 
 qt_standard_project_setup(REQUIRES 6.12)
 
-# Flag padded/misaligned class layouts in Debug (see the member ordering rule
-# in AGENTS.md).
-add_compile_options($<$<CONFIG:Debug>:-Wpadded>)
-
 include(cmake/AppIcons.cmake)
+
+# The shared Rask modules (git submodule): native window, dialogs, appearance.
+set(RASK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(RASK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(external/rask)
 
 qt_add_executable(tekst
     main.cpp
@@ -77,7 +78,17 @@ qt_add_qml_module(tekst
     VERSION 1.0
     QML_FILES
         Main.qml
+    SOURCES
+        src/Document.h
+        src/Document.cpp
 )
+
+# The generated QML type registrations include the headers by their bare name.
+target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+# Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
+# on our sources only: Qt's generated code and rask's trip it.
+set_property(SOURCE main.cpp src/Document.cpp APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
 # Debug builds get a bundle id of their own, so they don't share macOS
 # permissions and Launch Services entries with the installed app.
@@ -107,7 +118,14 @@ target_link_libraries(tekst
     PRIVATE
         Qt6::Quick
         Qt6::QuickControls2
+        Qt6::QuickDialogs2
+        Rask::Platform
+        Rask::Window
+        Rask::Dialogs
 )
+
+# Before the bundle is signed below: its signature covers the libraries.
+rask_embed_libraries(tekst LIBRARIES Rask::Platform Rask::Window Rask::Dialogs)
 
 install(TARGETS tekst
     BUNDLE DESTINATION .
@@ -129,4 +147,10 @@ if(APPLE)
         OUTPUT_SCRIPT deploy_script
     )
     install(SCRIPT ${deploy_script})
+endif()
+
+option(TEKST_BUILD_TESTS "Build the Tekst tests" ${PROJECT_IS_TOP_LEVEL})
+if(TEKST_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()

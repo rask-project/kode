@@ -20,9 +20,25 @@ Guidance for AI agents working in this repository.
 ## Structure
 
 - `CMakeLists.txt` — app target `tekst` (bundle `Tekst.app`), QML module
-  `Tekst`, version from the git tag, ad hoc signing after the build.
-- `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`, loads `Tekst.Main`.
-- `Main.qml` — the editor window.
+  `Tekst`, version from the git tag, the `rask` libraries embedded
+  (`rask_embed_libraries()`) and ad hoc signing after the build.
+- `external/rask` — the shared `Rask.*` modules, a git submodule
+  (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
+  `Rask.Platform` (`Appearance`) and `Rask.Dialogs` (`Alert`, `AboutDialog`,
+  `AboutQtDialog`). Changes to those go to the `rask` repository first, then
+  the submodule is bumped here.
+- `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
+  from the command line (`initialFile`) and the system's monospaced font
+  (`editorFont`) to `Tekst.Main`.
+- `Main.qml` — the editor window: title bar drawn under the transparent
+  AppKit one, a `TextEdit` in a `Flickable` (not `TextArea`: the macOS style
+  draws it as a bordered field), the menu bar, file dialogs and the
+  "Save changes?" sheet.
+- `src/Document.{h,cpp}` — `Document` (QML type): loads a file into the
+  editor's `QTextDocument` and saves it back; UTF-8, the file's line ending
+  kept, written through `QSaveFile`.
+- `tests/` — QtTest (`tst_document`), run offscreen with `ctest`; `Document`
+  is compiled into the test.
 - `cmake/` — `Info.plist.in`, `AppIcons.cmake` (compiles `assets/tekst.icon`
   with actool; falls back to `assets/tekst.icns`).
 - `assets/` — app icon: `tekst.icon` (Icon Composer document), `tekst.svg`,
@@ -37,11 +53,17 @@ Build to validate changes (the macOS Debug build below); also run it when the
 user asks.
 
 ```sh
+git submodule update --init                    # once, and after pulling a bump
 cmake -B build/Qt_6_12_0_for_macOS_Debug -G Ninja \
   -DCMAKE_PREFIX_PATH=/opt/Qt/6.12.0/macos -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build build/Qt_6_12_0_for_macOS_Debug
+ctest --test-dir build/Qt_6_12_0_for_macOS_Debug --output-on-failure
 open build/Qt_6_12_0_for_macOS_Debug/Tekst.app
 ```
+
+`tools/format-code.sh` and clang-tidy cover Tekst's own files; `external/rask`
+follows its own `AGENTS.md`. Lint QML with the rask modules on the import
+path: `qmllint -I build/…/qml -I build/… -I build/…/external/rask/qml Main.qml`.
 
 Qt Creator opens the project directly with the matching kit.
 

@@ -1,0 +1,3 @@
+[submodule "external/rask"]
+	path = external/rask
+	url = https://github.com/rask-project/rask.git
