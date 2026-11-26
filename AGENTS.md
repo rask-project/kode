@@ -158,7 +158,7 @@ Guidance for AI agents working in this repository.
 - `SettingsWindow.qml` — the Settings window (⌘,): `Rask.Controls`'
   `SidebarLayout`, `FormGroup`, `FormRow`, bound to `Preferences`; section
   icons in `assets/settings/`. Files also has Make Default
-  (`DefaultApplication`, the "Text" document type) and Install for the
+  (`DefaultApplication`, the "Code" document type: macOS confirms each type another app opens, so it stays short) and Install for the
   `kode` command (`CommandLineTool`), read again when the window shows.
 - `bin/kode` — the `kode` command, as VS Code's `code` (bundled in
   `Contents/Resources/bin`, linked into `/usr/local/bin` from Settings):
@@ -305,7 +305,7 @@ Guidance for AI agents working in this repository.
   `tst_preferences`, `tst_filetree`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
-  — the "Text" list and imported types shared with Konsoll's Neovim, so both
+  — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both
   give an extension one type — and the "Open in Kode" Service; in the plist
   only with `KODE_FINDER_INTEGRATION`, off in Debug: Launch Services lists
   every copy it sees), `PruneBundle.cmake` (after Qt's deploy script in

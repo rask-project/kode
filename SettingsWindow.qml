@@ -262,7 +262,7 @@ Window {
                 property bool commandInstalled: false
 
                 function refresh() {
-                    integration.isDefault = DefaultApplication.isDefault("Text");
+                    integration.isDefault = DefaultApplication.isDefault("Code");
                     integration.commandInstalled = CommandLineTool.isInstalled("kode");
                 }
 
@@ -287,7 +287,7 @@ Window {
                         enabled: !integration.isDefault
                         text: integration.isDefault ? qsTr("Default") : qsTr("Make Default")
                         // Launch Services applies it a few seconds later.
-                        onClicked: integration.isDefault = DefaultApplication.makeDefault("Text")
+                        onClicked: integration.isDefault = DefaultApplication.makeDefault("Code")
                     }
                 }
                 FormRow {

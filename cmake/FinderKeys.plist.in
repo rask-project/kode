@@ -2,13 +2,60 @@
 	     KODE_FINDER_INTEGRATION is on (CMakeLists.txt). -->
 	<!-- Alternate everywhere: offered in Open With, never the default until
 	     the user picks it (Get Info ▸ Change All, or Settings ▸ Files ▸ Make
-	     Default, which sets every "Text" type: DefaultApplication). "Text" is
-	     the text types macOS declares, less those another app edits better,
-	     plus the imported types below: the same list, and the same imported
-	     identifiers, as Konsoll's Neovim, so both apps give an extension one
-	     type. -->
+	     Default, which sets the "Code" types: DefaultApplication). "Code" and
+	     "Text" together are the text types macOS declares, less those another
+	     app edits better, plus the imported types below: the same list, and
+	     the same imported identifiers, as Konsoll's Neovim, so both apps give
+	     an extension one type. "Code" is the common ones: macOS asks the user
+	     about each type another app opens, so Make Default stays short. -->
 	<key>CFBundleDocumentTypes</key>
 	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Code</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.plain-text</string>
+				<string>public.utf8-plain-text</string>
+				<string>net.daringfireball.markdown</string>
+				<string>public.json</string>
+				<string>public.yaml</string>
+				<string>public.toml</string>
+				<string>public.xml</string>
+				<string>com.microsoft.ini</string>
+				<string>public.script</string>
+				<string>public.shell-script</string>
+				<string>public.bash-script</string>
+				<string>public.zsh-script</string>
+				<string>com.apple.terminal.shell-script</string>
+				<string>public.python-script</string>
+				<string>public.ruby-script</string>
+				<string>public.perl-script</string>
+				<string>public.php-script</string>
+				<string>public.source-code</string>
+				<string>public.c-source</string>
+				<string>public.c-header</string>
+				<string>public.c-plus-plus-source</string>
+				<string>public.c-plus-plus-header</string>
+				<string>public.objective-c-source</string>
+				<string>public.objective-c-plus-plus-source</string>
+				<string>public.swift-source</string>
+				<string>com.netscape.javascript-source</string>
+				<string>com.microsoft.typescript</string>
+				<string>public.css</string>
+				<string>com.sun.java-source</string>
+				<string>org.iso.sql</string>
+				<string>public.make-source</string>
+				<string>org.qt-project.qml</string>
+				<string>com.github.rask-project.konsoll.source-code</string>
+				<string>com.github.rask-project.konsoll.configuration</string>
+				<string>com.github.rask-project.konsoll.json-variant</string>
+			</array>
+		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>Text</string>
@@ -28,7 +75,6 @@
 				<string>com.apple.rez-source</string>
 				<string>com.apple.scripting-definition</string>
 				<string>com.apple.symbol-export</string>
-				<string>com.apple.terminal.shell-script</string>
 				<string>com.apple.text-based-dylib</string>
 				<string>com.apple.tightbeam-source</string>
 				<string>com.apple.xcode.apinotes</string>
@@ -42,12 +88,6 @@
 				<string>com.apple.xcode.xcstrings</string>
 				<string>com.apple.xml-property-list</string>
 				<string>com.microsoft.hlsl</string>
-				<string>com.microsoft.ini</string>
-				<string>com.microsoft.typescript</string>
-				<string>com.netscape.javascript-source</string>
-				<string>com.sun.java-source</string>
-				<string>net.daringfireball.markdown</string>
-				<string>org.iso.sql</string>
 				<string>org.khronos.glsl-source</string>
 				<string>org.khronos.glsl.fragment-shader</string>
 				<string>org.khronos.glsl.geometry-shader</string>
@@ -60,24 +100,17 @@
 				<string>org.qt-project.qbs</string>
 				<string>org.qt-project.qdoc</string>
 				<string>org.qt-project.qdocconf</string>
-				<string>org.qt-project.qml</string>
 				<string>org.qt-project.qrc</string>
 				<string>org.qt-project.qtcreator-qmlproject</string>
 				<string>org.qt-project.ui</string>
 				<string>org.w3.webvtt</string>
 				<string>public.ada-source</string>
 				<string>public.assembly-source</string>
-				<string>public.bash-script</string>
-				<string>public.c-header</string>
-				<string>public.c-plus-plus-header</string>
 				<string>public.c-plus-plus-inline-header</string>
-				<string>public.c-plus-plus-source</string>
 				<string>public.c-plus-plus-source.preprocessed</string>
-				<string>public.c-source</string>
 				<string>public.c-source.preprocessed</string>
 				<string>public.comma-separated-values-text</string>
 				<string>public.csh-script</string>
-				<string>public.css</string>
 				<string>public.delimited-values-text</string>
 				<string>public.dylan-source</string>
 				<string>public.fortran-77-source</string>
@@ -85,47 +118,26 @@
 				<string>public.fortran-95-source</string>
 				<string>public.fortran-source</string>
 				<string>public.geojson</string>
-				<string>public.json</string>
 				<string>public.ksh-script</string>
 				<string>public.lex-source</string>
-				<string>public.make-source</string>
 				<string>public.mig-source</string>
 				<string>public.module-map</string>
 				<string>public.nasm-assembly-source</string>
 				<string>public.ndjson</string>
-				<string>public.objective-c-plus-plus-source</string>
 				<string>public.objective-c-plus-plus-source.preprocessed</string>
-				<string>public.objective-c-source</string>
 				<string>public.objective-c-source.preprocessed</string>
 				<string>public.opencl-source</string>
 				<string>public.pascal-source</string>
 				<string>public.patch-file</string>
-				<string>public.perl-script</string>
-				<string>public.php-script</string>
 				<string>public.pkl-source</string>
-				<string>public.plain-text</string>
 				<string>public.protobuf-source</string>
-				<string>public.python-script</string>
-				<string>public.ruby-script</string>
-				<string>public.script</string>
-				<string>public.shell-script</string>
-				<string>public.source-code</string>
 				<string>public.source-code.preprocessed</string>
 				<string>public.swift-interface</string>
-				<string>public.swift-source</string>
 				<string>public.tab-separated-values-text</string>
 				<string>public.tcsh-script</string>
-				<string>public.toml</string>
-				<string>public.utf8-plain-text</string>
 				<string>public.utf8-tab-separated-values-text</string>
-				<string>public.xml</string>
 				<string>public.yacc-source</string>
-				<string>public.yaml</string>
-				<string>public.zsh-script</string>
-				<string>com.github.rask-project.konsoll.source-code</string>
-				<string>com.github.rask-project.konsoll.configuration</string>
 				<string>com.github.rask-project.konsoll.document-text</string>
-				<string>com.github.rask-project.konsoll.json-variant</string>
 			</array>
 		</dict>
 		<dict>
