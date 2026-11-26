@@ -7,6 +7,7 @@ import QtQuick.Layouts
 import Rask.Application
 import Rask.Controls
 import Rask.Platform
+import Rask.Updater
 import Rask.Window
 
 import Kode
@@ -51,6 +52,10 @@ Window {
             {
                 title: qsTr("Files"),
                 iconSource: Qt.resolvedUrl("assets/settings/files.svg")
+            },
+            {
+                title: qsTr("Updates"),
+                iconSource: Qt.resolvedUrl("assets/settings/updates.svg")
             }
         ]
 
@@ -300,6 +305,72 @@ Window {
                         text: integration.commandInstalled ? qsTr("Installed") : qsTr("Install")
                         onClicked: integration.commandInstalled = CommandLineTool.install("kode")
                     }
+                }
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+        }
+        // Updates: Sparkle's schedule and the release channel.
+        ColumnLayout {
+            spacing: 6
+            enabled: Updater.available
+
+            FormGroup {
+                FormRow {
+                    label: qsTr("Check for updates automatically")
+                    detail: Updater.lastCheck.getTime() ? qsTr("Last checked %1").arg(Updater.lastCheck.toLocaleString(Qt.locale(), Locale.ShortFormat)) : qsTr("Not checked yet")
+                    showSeparator: false
+
+                    Switch {
+                        checked: Updater.automaticChecks
+                        onToggled: Updater.automaticChecks = checked
+                    }
+                }
+                FormRow {
+                    label: qsTr("Download updates automatically")
+                    detail: qsTr("Installed when you quit Kode")
+                    enabled: Updater.automaticChecks
+                    opacity: enabled ? 1 : 0.5
+
+                    Switch {
+                        checked: Updater.automaticDownloads
+                        onToggled: Updater.automaticDownloads = checked
+                    }
+                }
+                FormRow {
+                    label: qsTr("Updates")
+                    detail: qsTr("Beta versions bring new features earlier, for testing")
+
+                    ComboBox {
+                        focusPolicy: Qt.TabFocus
+                        Layout.preferredWidth: 150
+                        model: [qsTr("Stable only"), qsTr("Stable and beta")]
+                        currentIndex: Updater.betaUpdates ? 1 : 0
+                        onActivated: index => Updater.betaUpdates = index === 1
+                    }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 10
+                Layout.rightMargin: 10
+                Layout.topMargin: 6
+
+                Label {
+                    Layout.fillWidth: true
+                    text: Updater.available ? qsTr("Kode %1").arg(Qt.application.version) : qsTr("This build does not update itself.")
+                    font.pointSize: 11
+                    color: SystemColors.secondaryLabel
+                    wrapMode: Text.Wrap
+                }
+
+                Button {
+                    focusPolicy: Qt.TabFocus
+                    text: qsTr("Check Now")
+                    onClicked: Updater.checkForUpdates()
                 }
             }
 

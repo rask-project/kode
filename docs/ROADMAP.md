@@ -449,9 +449,10 @@ the sidebar and its width are saved with the session.
   tag publishes the ad-hoc-signed `.dmg`/`.zip`; `docs/RELEASE.md`), 1.0.0;
   the website (`site/`); the `kode` command, "Open in Kode" and Make
   Default (`Rask.Application`).
-- **`Rask.Updater`** (link it, `rask_sparkle_plist_keys()` in `Info.plist`,
-  `Updater.start()`) + appcast
-  (Developer ID signing and notarization, as in `konsoll/docs/RELEASE.md`;
+- Done: **`Rask.Updater`** (linked, `rask_sparkle_plist_keys()` in
+  `Info.plist`, `Updater.start()`, Settings ▸ Updates) + the appcast in the
+  release workflow.
+- Developer ID signing and notarization (as in `konsoll/docs/RELEASE.md`;
   every embedded `Rask.*` dylib and QML plugin signed with the hardened
   runtime).
 - Liquid Glass (`Rask.Window`'s `GlassEffect`, `GlassSurface` as fallback) on

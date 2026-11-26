@@ -22,6 +22,29 @@ A tag with a suffix (`v1.1.0-beta.1`, `v1.1.0-rc.1`) publishes a
 tag as its version (`git describe`); `CFBundleVersion` orders pre-releases
 before the release (`CMakeLists.txt`).
 
+## Updates (Sparkle)
+
+Installed apps update themselves (`Rask.Updater`): "Check for Updates…" in
+the app menu, and Settings ▸ Updates (daily checks, background downloads
+installed on quit, the beta channel). They read the appcast at
+`KODE_UPDATE_FEED_URL`, `appcast.xml` on the repository's `appcast` branch,
+and accept an update only when its EdDSA signature matches
+`KODE_UPDATE_PUBLIC_KEY` (the key the rask-project apps share; its private
+half is in the login keychain, from Sparkle's `generate_keys`).
+
+The release workflow's last step adds each release to the appcast
+(`tools/update-appcast.py`; a pre-release goes to the `beta` channel),
+signing the zip with the `SPARKLE_ED_PRIVATE_KEY` repository secret. Without
+the secret the release is published but not offered as an update. To set
+it from the keychain:
+
+```sh
+generate_keys -x private.key   # Sparkle's tool, in build/…/_deps/sparkle-*/bin
+gh secret set SPARKLE_ED_PRIVATE_KEY < private.key && rm private.key
+```
+
+Debug builds have no feed URL: they never update themselves.
+
 ## The bundle
 
 ```sh

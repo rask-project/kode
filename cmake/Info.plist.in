@@ -44,6 +44,7 @@
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 
+${KODE_SPARKLE_PLIST_KEYS}
 ${KODE_FINDER_PLIST_KEYS}
 </dict>
 </plist>

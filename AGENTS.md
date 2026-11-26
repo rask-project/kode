@@ -33,7 +33,10 @@ Guidance for AI agents working in this repository.
   (`SearchBar`, `HelpTag` for tooltips, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler` with the "Open in Kode" Service,
-  `RecentDocuments`, `DefaultApplication`, `CommandLineTool`). Changes to those go to the `rask` repository first, then
+  `RecentDocuments`, `DefaultApplication`, `CommandLineTool`) and
+  `Rask.Updater` (Sparkle: "Check for Updates…" in the app menu, started
+  by `Main.qml`; the feed and key in `Info.plist` from
+  `KODE_UPDATE_FEED_URL`/`KODE_UPDATE_PUBLIC_KEY`, off in Debug). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
   from the command line (`initialFile`) to `Kode.Main`.
@@ -321,13 +324,15 @@ Guidance for AI agents working in this repository.
   (2024) color schemes with Qt Creator's own defaults and style mapping;
   never edit them by hand either.
 - `tools/` — `format-code.sh`, `make-app-icons.py`, `render-icon.swift`,
-  `make-syntax-themes.py`, `site-assets.sh`/`site-serve.sh` (the site's
+  `make-syntax-themes.py`, `update-appcast.py` (from Konsoll's), `site-assets.sh`/`site-serve.sh` (the site's
   images and a local preview) and `screenshots/` (`docshot.sh`, which drives
   an isolated copy of the app over a demo project, `demo/aurora`, to take the
   README and site images; kept out of `format-code.sh`).
 - `.github/workflows/` — `ci.yml` (formatting, Release build, tests),
   `release.yml` (a `v*` tag: tests, `package-macos`, the ad-hoc-signed
-  `.dmg`/`.zip` on a GitHub Release, notes from `docs/releases/<tag>.md`)
+  `.dmg`/`.zip` on a GitHub Release, notes from `docs/releases/<tag>.md`,
+  then the Sparkle appcast on the `appcast` branch, signed with the
+  `SPARKLE_ED_PRIVATE_KEY` secret: `tools/update-appcast.py`)
   and `pages.yml` (the site).
 - `docs/` — `ROADMAP.md`, `RELEASE.md` (releasing; the bundle; Developer
   ID), `releases/` (each release's notes), `editor-bench.md`, `SCREENSHOTS.md` (how each

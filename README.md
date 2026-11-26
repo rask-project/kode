@@ -170,6 +170,16 @@ xattr -dr com.apple.quarantine /Applications/Kode.app
 or open it, then choose **System Settings → Privacy & Security → Open
 Anyway**.
 
+### Updates
+
+Kode updates itself: once a day it looks for a newer release, downloads it
+in the background and installs it when you quit. **Kode ▸ Check for
+Updates…** checks right away. **Settings ▸ Updates** turns the automatic
+checks and downloads off and picks the channel: **Stable only** (the
+default) or **Stable and beta**. Updates are signed, and they open without
+the quarantine step above. (1.0.0 predates the updater: install the next
+release by hand once.)
+
 ### The `kode` command
 
 As VS Code's `code`: **Settings ▸ Files ▸ Command line tool ▸ Install**

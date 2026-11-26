@@ -4,6 +4,7 @@ import QtQuick
 
 import Rask.Application
 import Rask.Dialogs
+import Rask.Updater
 
 import Kode
 
@@ -261,5 +262,7 @@ Item {
             app.openFiles([app.initialFile], null);
         if (app.windows.length === 0)
             app.openWindow(null);
+        // Once a window's menu bar exists: it adds "Check for Updates…" to the app menu.
+        Updater.start();
     }
 }
