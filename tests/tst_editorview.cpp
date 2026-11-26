@@ -489,6 +489,48 @@ void TestEditorView::switchingDocumentsKeepsEachPlace()
     QVERIFY(view.text().isEmpty());
 }
 
+void TestEditorView::optionArrowsAddCaretsAboveAndBelow()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("abcd\nabcd\nab\nabcd"));
+    editor.setCursorPosition(3);
+    press(editor, Qt::Key_Down, Qt::AltModifier);
+    press(editor, Qt::Key_Down, Qt::AltModifier);
+    press(editor, Qt::Key_Down, Qt::AltModifier);
+    // Past the last line: nothing more.
+    press(editor, Qt::Key_Down, Qt::AltModifier);
+    QCOMPARE(editor.caretCount(), 4);
+    // The short line gets its end; the next one the column again.
+    type(editor, QStringLiteral("X"));
+    QCOMPARE(editor.text(), QStringLiteral("abcXd\nabcXd\nabX\nabcXd"));
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("abcd\nabcd\nab\nabcd"));
+    editor.setCursorPosition(6);
+    press(editor, Qt::Key_Up, Qt::AltModifier);
+    press(editor, Qt::Key_Up, Qt::AltModifier);
+    QCOMPARE(editor.caretCount(), 2);
+    type(editor, QStringLiteral("<"));
+    QCOMPARE(editor.text(), QStringLiteral("a<bcd\na<bcd\nab\nabcd"));
+}
+
+void TestEditorView::optionShiftArrowsAddBlockSelections()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("abcdef\nabcdef\nabcdef"));
+    editor.select(1, 3);
+    press(editor, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier);
+    press(editor, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier);
+    type(editor, QStringLiteral("Z"));
+    QCOMPARE(editor.text(), QStringLiteral("aZdef\naZdef\naZdef"));
+    // From carets, ⇧ extends each selection: to the line's end with ⌘.
+    editor.setCursorPosition(2);
+    press(editor, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier);
+    press(editor, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier);
+    press(editor, Qt::Key_Right, Qt::ControlModifier | Qt::ShiftModifier);
+    type(editor, QStringLiteral("!"));
+    QCOMPARE(editor.text(), QStringLiteral("aZ!\naZ!\naZ!"));
+}
+
 QTEST_MAIN(TestEditorView)
 
 void TestEditorView::nextOccurrenceSelectsTheWordThenTheNextOne()

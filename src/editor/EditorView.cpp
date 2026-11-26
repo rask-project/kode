@@ -719,6 +719,7 @@ void EditorView::editedTo(TextDocument::Caret caret)
     m_cursor = caret.cursor;
     m_anchor = caret.anchor;
     m_preferredX = -1.0;
+    m_preferredAnchorX = -1.0;
     emit cursorChanged();
     emit caretMoved();
     emit selectionChanged();
@@ -911,16 +912,21 @@ bool EditorView::clearOthers()
     return true;
 }
 
-void EditorView::moveEach(bool forward)
+void EditorView::moveEach(Step step)
 {
-    const qsizetype length{buffer().length()};
-    const auto moved{[&forward, length](const TextDocument::Caret &caret) {
+    const TextBuffer &text{buffer()};
+    const auto moved{[this, &text, &step](const TextDocument::Caret &caret) {
         const TextDocument::Range range{selectionOf(caret)};
-        qsizetype position{std::clamp(caret.cursor + (forward ? 1 : -1), qsizetype{0}, length)};
-        if (range.count > 0) {
-            position = forward ? range.position + range.count : range.position;
+        const qsizetype line{text.lineAt(caret.cursor)};
+        qsizetype position{std::clamp(caret.cursor + (step.forward ? 1 : -1), qsizetype{0}, text.length())};
+        if (step.line) {
+            position = step.forward ? text.lineStart(line) + text.lineLength(line) : text.lineStart(line);
+        } else if (step.word) {
+            position = wordBoundary(caret.cursor, step.forward);
+        } else if (range.count > 0 && !step.extend) {
+            position = step.forward ? range.position + range.count : range.position;
         }
-        return TextDocument::Caret{.cursor = position, .anchor = position};
+        return TextDocument::Caret{.cursor = position, .anchor = step.extend ? caret.anchor : position};
     }};
     const TextDocument::Caret primary{moved({.cursor = m_cursor, .anchor = m_anchor})};
     QList<TextDocument::Caret> others;
@@ -934,6 +940,38 @@ void EditorView::moveEach(bool forward)
     m_others = std::move(others);
     m_document->closeMerge();
     editedTo(primary);
+}
+
+qsizetype EditorView::rowAt(qsizetype position) const
+{
+    return static_cast<qsizetype>(std::lround((positionRect(position).y() - topPadding) / m_lineHeight));
+}
+
+void EditorView::addCaretVertically(qint32 lines, bool block)
+{
+    const auto outermost{[&lines](qsizetype a, qsizetype b) { return lines > 0 ? std::max(a, b) : std::min(a, b); }};
+    qsizetype from{m_cursor};
+    for (const TextDocument::Caret &other : m_others) {
+        from = outermost(from, other.cursor);
+    }
+    const qsizetype row{rowAt(from) + lines};
+    if (row < 0 || row >= totalRows()) {
+        return;
+    }
+    const qreal cursorX{m_preferredX >= 0.0 ? m_preferredX : positionRect(m_cursor).x() - textLeft()};
+    const qreal anchorX{
+        !block || !hasSelection()   ? cursorX
+        : m_preferredAnchorX >= 0.0 ? m_preferredAnchorX
+                                    : positionRect(m_anchor).x() - textLeft()
+    };
+    const TextDocument::Caret added{.cursor = positionAtRow(row, cursorX), .anchor = positionAtRow(row, anchorX)};
+    // The new one becomes the main caret (the view follows it).
+    m_others.append({.cursor = m_cursor, .anchor = m_anchor});
+    m_flags &= ~WholeWords;
+    m_document->closeMerge();
+    editedTo(added);
+    m_preferredX = cursorX;
+    m_preferredAnchorX = anchorX;
 }
 
 void EditorView::cut()
@@ -995,7 +1033,7 @@ void EditorView::moveVertically(qsizetype lines, Select select)
     // By visual rows, aiming for the same x.
     const QRectF caret{positionRect(m_cursor)};
     const qreal preferredX{m_preferredX >= 0.0 ? m_preferredX : caret.x() - textLeft()};
-    const auto row{static_cast<qsizetype>(std::lround((caret.y() - topPadding) / m_lineHeight))};
+    const qsizetype row{rowAt(m_cursor)};
     moveCaret(positionAtRow(row + lines, preferredX), select);
     m_preferredX = preferredX;
 }
@@ -1907,12 +1945,23 @@ qsizetype EditorView::deletionTarget(qsizetype cursor, bool backspace, bool comm
 // one (moveCaret()).
 bool EditorView::handleMoveEach(const QKeyEvent *event)
 {
-    const bool horizontal{event->key() == Qt::Key_Left || event->key() == Qt::Key_Right};
-    const Qt::KeyboardModifiers modifiers{event->modifiers() & ~Qt::KeypadModifier};
-    if (m_others.isEmpty() || !horizontal || modifiers != Qt::NoModifier) {
+    // On macOS, ControlModifier is ⌘, AltModifier ⌥ and MetaModifier ⌃.
+    const Qt::KeyboardModifiers modifiers{event->modifiers()};
+    const bool command{modifiers.testFlag(Qt::ControlModifier)};
+    const bool option{modifiers.testFlag(Qt::AltModifier)};
+    const bool shift{modifiers.testFlag(Qt::ShiftModifier)};
+    if (modifiers.testFlag(Qt::MetaModifier) || (command && option)) {
         return false;
     }
-    moveEach(event->key() == Qt::Key_Right);
+    const qint32 key{event->key()};
+    if ((key == Qt::Key_Up || key == Qt::Key_Down) && option) {
+        addCaretVertically(key == Qt::Key_Down ? 1 : -1, shift);
+        return true;
+    }
+    if (m_others.isEmpty() || (key != Qt::Key_Left && key != Qt::Key_Right)) {
+        return false;
+    }
+    moveEach({.forward = key == Qt::Key_Right, .word = option, .line = command, .extend = shift});
     return true;
 }
 

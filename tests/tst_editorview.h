@@ -42,4 +42,6 @@ private slots:
     void fromACaretOnlyWholeWords();
     void escapeOrAClickLeavesOneCaret();
     void nextOccurrenceWrapsAndSkipsSelected();
+    void optionArrowsAddCaretsAboveAndBelow();
+    void optionShiftArrowsAddBlockSelections();
 };

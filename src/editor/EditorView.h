@@ -358,8 +358,21 @@ private:
     // Several carets: replaces at each the range `rangeOf(caret)` gives with
     // `text`, as one undo step; the carets end up after it.
     template <typename RangeOf> void replaceEach(RangeOf rangeOf, const QString &text, bool mergeable);
-    // Several carets: each one character on (back), a selection collapsing.
-    void moveEach(bool forward);
+    // How a horizontal key moves each caret: by word (⌥), to the line's edge
+    // (⌘), extending its selection (⇧).
+    struct Step {
+        bool forward;
+        bool word;
+        bool line;
+        bool extend;
+    };
+    // Several carets: each moves as `step` says (a selection collapsing without ⇧).
+    void moveEach(Step step);
+    // A caret on the row above (-1) or below (1) the outermost one that way,
+    // at the main caret's column; with `block`, at its selection's columns too.
+    void addCaretVertically(qint32 lines, bool block);
+    // The visual row `position` is on.
+    [[nodiscard]] qsizetype rowAt(qsizetype position) const;
     // Drops the other carets; false when there were none.
     bool clearOthers();
     // The next occurrence of `needle` (one line) at or after `from`, around
@@ -457,7 +470,7 @@ private:
     // rectangle per line, and the caret.
     QList<QRectF> m_selectionRects;
     QList<QRectF> m_otherCaretRects;
-    // The carets selectNextOccurrence() added besides m_cursor/m_anchor.
+    // The carets selectNextOccurrence() and ⌥↑/↓ added besides m_cursor/m_anchor.
     QList<TextDocument::Caret> m_others;
     QList<QRectF> m_bracketRects;
     QList<QRectF> m_wordRects;
@@ -482,6 +495,8 @@ private:
     qreal m_widestLine{0.0};
     // The x vertical moves aim for, kept across short lines.
     qreal m_preferredX{-1.0};
+    // The same for the anchor, as carets added with ⌥⇧↑/↓ keep their columns.
+    qreal m_preferredAnchorX{-1.0};
     // The width lines were wrapped at (to notice it change).
     qreal m_wrapWidth{0.0};
     // m_baseLine's top in content coordinates.
