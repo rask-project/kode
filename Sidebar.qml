@@ -457,7 +457,8 @@ Item {
                 anchors.leftMargin: 6
                 anchors.rightMargin: 6
                 radius: 5
-                color: entry.selected ? SystemColors.selectedTextBackground : (entry.current ? SystemColors.unemphasizedSelectedTextBackground : (hover.hovered ? Qt.alpha(SystemColors.label, 0.06) : "transparent"))
+                // The accent color, as the editor's selection: the selection, then (lighter) the file in view.
+                color: entry.selected ? Qt.alpha(SystemColors.controlAccent, entry.Window.active ? 0.4 : 0.2) : (entry.current ? Qt.alpha(SystemColors.controlAccent, 0.14) : (hover.hovered ? Qt.alpha(SystemColors.label, 0.06) : "transparent"))
             }
 
             IconImage {

@@ -278,6 +278,12 @@ EditorView::EditorView(QQuickItem *parent)
     connect(&m_searchTimer, &QTimer::timeout, this, &EditorView::searchAhead);
     // The selected match follows the selection.
     connect(this, &EditorView::selectionChanged, this, &EditorView::searchChanged);
+    connect(&m_blinkTimer, &QTimer::timeout, this, [this] {
+        m_flags ^= CaretOff;
+        update();
+    });
+    // A moved caret (typing, navigation) shows at once.
+    connect(this, &EditorView::cursorChanged, this, &EditorView::restartBlink);
     setFlag(ItemHasContents);
     setFlag(ItemAcceptsInputMethod);
     setFlag(ItemIsFocusScope);
@@ -501,6 +507,16 @@ void EditorView::setLineNumberColor(const QColor &color)
 void EditorView::setBracketColor(const QColor &color)
 {
     setColor(m_colors.bracket, color);
+}
+
+void EditorView::setGuideColor(const QColor &color)
+{
+    setColor(m_colors.guide, color);
+}
+
+void EditorView::setScopeColor(const QColor &color)
+{
+    setColor(m_colors.scope, color);
 }
 
 void EditorView::setWordColor(const QColor &color)
@@ -2111,12 +2127,8 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         m_flags &= ~InvisiblesChanged;
     }
     if ((m_flags & GuidesChanged) != 0U) {
-        QColor guide{textColor()};
-        guide.setAlphaF(0.12F);
-        QColor scope{caretColor()};
-        scope.setAlphaF(0.7F);
-        setRectangles(node->guides, m_guideRects, guide);
-        setRectangles(node->scopeGuides, m_scopeGuideRects, scope);
+        setRectangles(node->guides, m_guideRects, guideColor());
+        setRectangles(node->scopeGuides, m_scopeGuideRects, scopeColor());
         m_flags &= ~GuidesChanged;
     }
     syncRectangles(window, node->marksLayer, node->matches, m_matchRects, matchColor());
@@ -2126,11 +2138,12 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
 
     const bool caretShown{m_caretRect.isValid()};
     const bool dropping{m_dropPosition >= 0};
+    const bool blinkedOff{(m_flags & CaretOff) != 0U};
     node->caret->setRect(
-        caretShown && (dropping || (hasActiveFocus() && m_preedit.isEmpty())) ? m_caretRect : QRectF{}
+        caretShown && (dropping || (hasActiveFocus() && m_preedit.isEmpty() && !blinkedOff)) ? m_caretRect : QRectF{}
     );
     node->caret->setColor(caretColor());
-    const bool caretsShown{hasActiveFocus() && m_preedit.isEmpty()};
+    const bool caretsShown{hasActiveFocus() && m_preedit.isEmpty() && !blinkedOff};
     syncRectangles(
         window,
         node->caretLayer,
@@ -2765,12 +2778,25 @@ void EditorView::mouseDoubleClickEvent(QMouseEvent *event)
 void EditorView::focusInEvent(QFocusEvent *event)
 {
     QQuickItem::focusInEvent(event);
-    update();
+    restartBlink();
 }
 
 void EditorView::focusOutEvent(QFocusEvent *event)
 {
     QQuickItem::focusOutEvent(event);
+    restartBlink();
+}
+
+void EditorView::restartBlink()
+{
+    m_flags &= ~CaretOff;
+    // The system's period (a whole on-off cycle); 0: it does not blink.
+    const qint32 period{QGuiApplication::styleHints()->cursorFlashTime()};
+    if (hasActiveFocus() && period > 0) {
+        m_blinkTimer.start(period / 2);
+    } else {
+        m_blinkTimer.stop();
+    }
     update();
 }
 

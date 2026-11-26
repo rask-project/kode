@@ -66,6 +66,9 @@ class EditorView : public QQuickItem
     Q_PROPERTY(QColor wordColor READ wordColor WRITE setWordColor NOTIFY colorsChanged)
     // Behind the matches of the search.
     Q_PROPERTY(QColor matchColor READ matchColor WRITE setMatchColor NOTIFY colorsChanged)
+    // The indent guides, and the one of the caret's block.
+    Q_PROPERTY(QColor guideColor READ guideColor WRITE setGuideColor NOTIFY colorsChanged)
+    Q_PROPERTY(QColor scopeColor READ scopeColor WRITE setScopeColor NOTIFY colorsChanged)
     Q_PROPERTY(qreal contentX READ contentX WRITE setContentX NOTIFY contentXChanged)
     Q_PROPERTY(qreal contentY READ contentY WRITE setContentY NOTIFY contentYChanged)
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
@@ -145,6 +148,10 @@ public:
     void setWordColor(const QColor &color);
     [[nodiscard]] QColor matchColor() const { return QColor::fromRgba(m_colors.match); }
     void setMatchColor(const QColor &color);
+    [[nodiscard]] QColor guideColor() const { return QColor::fromRgba(m_colors.guide); }
+    void setGuideColor(const QColor &color);
+    [[nodiscard]] QColor scopeColor() const { return QColor::fromRgba(m_colors.scope); }
+    void setScopeColor(const QColor &color);
     [[nodiscard]] QString searchPattern() const;
     void setSearchPattern(const QString &pattern);
     [[nodiscard]] bool searchCaseSensitive() const;
@@ -357,6 +364,8 @@ private:
         QRgb bracket{0x403d8bffU};
         QRgb word{0x1a000000U};
         QRgb match{0x66ffd60aU};
+        QRgb guide{0x1f000000U};
+        QRgb scope{0xb33d8bffU};
     };
 
     // This view is editing: replaced() is its own change.
@@ -376,6 +385,8 @@ private:
     static constexpr quint64 ShowIndentGuides{1U << 9U};
     // m_guideRects/m_scopeGuideRects changed since the scene last took them.
     static constexpr quint64 GuidesChanged{1U << 10U};
+    // The blinking caret is in its hidden half.
+    static constexpr quint64 CaretOff{1U << 11U};
 
     [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
     [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
@@ -526,6 +537,8 @@ private:
     void notifyCursorChanged();
     // Highlights ahead of the view, a slice per event loop pass.
     void highlightAhead();
+    // Shows the caret and starts its blinking over (it blinks only with focus).
+    void restartBlink();
     [[nodiscard]] qsizetype lastVisibleLine() const;
     void startDrag();
     void setDropPosition(qsizetype position);
@@ -570,6 +583,7 @@ private:
     QPointF m_pressPoint;
     QTimer m_highlightTimer;
     QTimer m_searchTimer;
+    QTimer m_blinkTimer;
     qreal m_contentX{0.0};
     qreal m_contentY{0.0};
     qreal m_lineHeight{16.0};
@@ -596,8 +610,8 @@ private:
     // Bumped when the composition changes, so its line is laid out again
     // (above Plain and Highlighted).
     quint64 m_preeditGeneration{2};
-    Colors m_colors;
     quint64 m_flags{0U};
+    Colors m_colors;
 };
 
 } // namespace kode

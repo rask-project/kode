@@ -75,11 +75,14 @@ Flickable {
         focus: true
 
         textColor: SystemColors.text
-        selectionColor: Window.active ? SystemColors.selectedTextBackground : SystemColors.unemphasizedSelectedTextBackground
+        // The accent color throughout, as the sidebar's selection: lighter when the window is inactive.
+        selectionColor: Qt.alpha(SystemColors.controlAccent, Window.active ? 0.4 : 0.2)
         caretColor: SystemColors.textInsertionPoint
         currentLineColor: Qt.alpha(SystemColors.text, 0.05)
         lineNumberColor: SystemColors.tertiaryLabel
         bracketColor: Qt.alpha(SystemColors.controlAccent, 0.35)
+        guideColor: Qt.alpha(SystemColors.text, 0.12)
+        scopeColor: Qt.alpha(SystemColors.controlAccent, 0.75)
         wordColor: Qt.alpha(SystemColors.text, 0.1)
         matchColor: Qt.alpha(SystemColors.findHighlight, 0.45)
 
