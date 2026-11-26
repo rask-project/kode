@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Controls.Basic as Basic
 import Rask.Platform
 
 // The editing area: an EditorView filling a Flickable's viewport, with
@@ -9,6 +8,8 @@ Flickable {
     id: root
 
     readonly property alias editor: view
+    // Behind the text; transparent lets the window's background and blur show.
+    property color backgroundColor: "transparent"
 
     // Scrolls just enough to show `rect` (content coordinates); horizontally,
     // the gutter covers the left of the viewport.
@@ -39,39 +40,22 @@ Flickable {
     // Scrolls by wheel and trackpad only: a mouse drag selects text.
     acceptedButtons: Qt.NoButton
 
-    // Basic's scroll bars: no track, only a handle that shows while
-    // scrolling (the macOS style draws a track and is not meant to be
-    // customized).
-    ScrollBar.vertical: Basic.ScrollBar {
+    ScrollBar.vertical: OverlayScrollBar {
         id: verticalBar
-
-        contentItem: ScrollHandle {
-            bar: verticalBar
-        }
     }
 
-    ScrollBar.horizontal: Basic.ScrollBar {
+    ScrollBar.horizontal: OverlayScrollBar {
         id: horizontalBar
-
-        contentItem: ScrollHandle {
-            bar: horizontalBar
-        }
     }
 
-    component ScrollHandle: Rectangle {
-        required property Basic.ScrollBar bar
-
-        implicitWidth: 7
-        implicitHeight: 7
-        radius: 3.5
-        color: Qt.alpha(SystemColors.label, bar.pressed ? 0.5 : 0.3)
-        opacity: bar.active && bar.size < 1.0 ? 1.0 : 0.0
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 200
-            }
-        }
+    // Fills the viewport as the view does (both follow the scroll).
+    Rectangle {
+        x: root.contentX
+        y: root.contentY
+        width: root.width
+        height: root.height
+        visible: root.backgroundColor.a > 0
+        color: root.backgroundColor
     }
 
     EditorView {

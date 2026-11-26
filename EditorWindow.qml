@@ -11,8 +11,9 @@ import Rask.Window
 
 import Kode
 
-// An editor window: its splits up to the top (the bars there fill the
-// title bar, after the window buttons), the editor splits (Splits, PaneLayout) each showing one of the open
+// An editor window: the sidebar with its folder (hidden without one), its
+// splits up to the top (the bars there fill the title bar, after the window
+// buttons and the sidebar button), the editor splits (Splits, PaneLayout) each showing one of the open
 // documents, the menus, and the file dialogs and "Save changes?" sheet.
 // Main.qml keeps the window list and the documents shared by all windows.
 ApplicationWindow {
@@ -24,6 +25,10 @@ ApplicationWindow {
     // Documents left to review before `reviewDone` runs (see review()).
     property list<Document> reviewQueue: []
     property var reviewDone: null
+    // The folder the sidebar shows; none for a window of files alone.
+    property url folder
+    property bool sidebarVisible: false
+    property real sidebarWidth: 240
 
     readonly property Splits splits: windowSplits
     readonly property EditorPane activeView: windowSplits.activeView as EditorPane
@@ -105,6 +110,16 @@ ApplicationWindow {
         root.review([document], () => OpenDocuments.close(document));
     }
 
+    // Every open document, unsaved ones asked about first; the windows stay, on the start page.
+    function closeAllDocuments() {
+        // A copy: the property read stays bound to the list, which shrinks as they close.
+        const documents = OpenDocuments.documents.slice();
+        root.review(documents, () => {
+            for (const document of documents)
+                OpenDocuments.close(document as Document);
+        });
+    }
+
     // The saved geometry and splits, for the next launch.
     function state(): var {
         return {
@@ -113,7 +128,10 @@ ApplicationWindow {
             width: root.width,
             height: root.height,
             visibility: root.visibility === Window.FullScreen ? "fullscreen" : (root.visibility === Window.Maximized ? "maximized" : "normal"),
-            splits: windowSplits.state()
+            splits: windowSplits.state(),
+            folder: root.folder.toString(),
+            sidebar: root.sidebarVisible,
+            sidebarWidth: sidebar.SplitView.preferredWidth
         };
     }
 
@@ -122,7 +140,7 @@ ApplicationWindow {
     minimumWidth: 400
     minimumHeight: 240
     // Feeds the Window menu and the window switcher; the title bar shows none.
-    title: activeDocument ? activeDocument.fileName : "Kode"
+    title: activeDocument ? activeDocument.fileName : (folder.toString() !== "" ? decodeURIComponent(folder.toString().split("/").pop()) : "Kode")
     flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     color: "transparent"
     // ApplicationWindow pads its content by the safe area; the title bar draws there itself.
@@ -154,6 +172,8 @@ ApplicationWindow {
         alpha: Preferences.windowOpacity
         blur: Preferences.windowBlur
         unifiedToolbar: root.visibility !== Window.FullScreen
+        // Not by the title bar while the pointer is on one of its buttons.
+        movable: TitleBarButtons.hovered === 0
         representedFile: root.activeDocument ? root.activeDocument.fileUrl : ""
         documentEdited: root.activeDocument ? root.activeDocument.modified : false
     }
@@ -178,6 +198,13 @@ ApplicationWindow {
         title: qsTr("Open")
         fileMode: FileDialog.OpenFiles
         onAccepted: root.app.openFiles(selectedFiles, root)
+    }
+
+    FolderDialog {
+        id: folderDialog
+
+        title: qsTr("Open Folder")
+        onAccepted: root.app.openFiles([selectedFolder], root)
     }
 
     FileDialog {
@@ -260,6 +287,13 @@ ApplicationWindow {
                     onTriggered: openDialog.open()
                 }
             }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Open Folder…")
+                    shortcut: "Ctrl+Shift+O"
+                    onTriggered: folderDialog.open()
+                }
+            }
             Menu {
                 id: recentMenu
 
@@ -324,8 +358,27 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
-                    text: qsTr("Close Window")
+                    text: qsTr("Close All Documents")
                     shortcut: "Ctrl+Shift+W"
+                    enabled: OpenDocuments.count > 0
+                    onTriggered: root.closeAllDocuments()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Close Folder")
+                    enabled: root.folder.toString() !== ""
+                    onTriggered: {
+                        root.folder = "";
+                        root.sidebarVisible = false;
+                    }
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Close Window")
+                    // ⇧⌘W closes all documents.
+                    shortcut: "Ctrl+Alt+W"
                     onTriggered: root.close()
                 }
             }
@@ -474,6 +527,33 @@ ApplicationWindow {
         Menu {
             title: qsTr("View")
 
+            MenuItem {
+                // ⌃⌘S as the system's apps (⌘0, Xcode's, is Actual Size here).
+                action: Action {
+                    text: root.sidebarVisible ? qsTr("Hide Sidebar") : qsTr("Show Sidebar")
+                    shortcut: "Ctrl+Meta+S"
+                    onTriggered: root.sidebarVisible = !root.sidebarVisible
+                }
+            }
+            MenuItem {
+                // ⇧⌘. as in the Finder.
+                action: Action {
+                    text: qsTr("Show Hidden Files")
+                    checkable: true
+                    checked: Preferences.showHiddenFiles
+                    shortcut: "Ctrl+Shift+."
+                    onTriggered: Preferences.showHiddenFiles = checked
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Collapse All Folders")
+                    shortcut: "Ctrl+Alt+-"
+                    enabled: root.sidebarVisible && root.folder.toString() !== ""
+                    onTriggered: sidebar.collapseAll()
+                }
+            }
+            MenuSeparator {}
             MenuItem {
                 action: Action {
                     text: qsTr("Wrap Lines")
@@ -726,16 +806,71 @@ ApplicationWindow {
         }
     }
 
-    PaneLayout {
+    SplitView {
+        id: content
+
+        // The title bar's height: the sidebar and the splits reach the window's top.
+        readonly property real titleBarHeight: Math.max(root.SafeArea.margins.top, 34)
+
         anchors.fill: parent
-        splits: windowSplits
-        // The splits reach the window's top: those there fill the title bar.
-        topInset: Math.max(root.SafeArea.margins.top, 34)
-        leadingInset: root.visibility === Window.FullScreen ? 0 : windowStyle.leadingInset
-        nativeWindow: windowStyle
-        onDocumentChosen: (view, document) => root.showDocument(document, view)
-        onReviewRequested: (document, action) => root.review([document], action)
-        onCloseDocumentRequested: document => root.closeDocument(document)
+        orientation: Qt.Horizontal
+
+        handle: DividerHandle {
+            color: Qt.alpha(SystemColors.label, 0.12)
+        }
+
+        Sidebar {
+            id: sidebar
+
+            visible: root.sidebarVisible
+            SplitView.preferredWidth: root.sidebarWidth
+            SplitView.minimumWidth: 160
+            SplitView.maximumWidth: 480
+            folder: root.folder
+            currentFile: root.activeDocument ? root.activeDocument.fileUrl : ""
+            topInset: content.titleBarHeight
+            nativeWindow: windowStyle
+            onFileChosen: file => root.app.openFiles([file], root)
+            onOpenFolderRequested: folderDialog.open()
+            onFolderChosen: folder => root.folder = OpenDocuments.cleanFolder(folder)
+            // Its documents close first (unsaved ones asked about); Cancel keeps it all.
+            onTrashRequested: url => {
+                const documents = OpenDocuments.documentsIn(url);
+                root.review(documents, () => {
+                    if (!sidebar.trash(url))
+                        return;
+                    for (const document of documents)
+                        OpenDocuments.close(document as Document);
+                });
+            }
+        }
+
+        PaneLayout {
+            SplitView.fillWidth: true
+            splits: windowSplits
+            // Those at the top fill the title bar; at its left, after the sidebar button.
+            topInset: content.titleBarHeight
+            leadingInset: root.sidebarVisible ? 0 : sidebarButton.x + sidebarButton.width - 6
+            nativeWindow: windowStyle
+            onDocumentChosen: (view, document) => root.showDocument(document, view)
+            onReviewRequested: (document, action) => root.review([document], action)
+            onCloseDocumentRequested: document => root.closeDocument(document)
+            onNewDocumentRequested: root.newDocument()
+            onOpenRequested: openDialog.open()
+            onOpenFolderRequested: folderDialog.open()
+        }
+    }
+
+    // After the window buttons, as Xcode's: it stays there with the sidebar hidden.
+    BarButton {
+        id: sidebarButton
+
+        x: 8 + (root.visibility === Window.FullScreen ? 0 : windowStyle.leadingInset)
+        y: (content.titleBarHeight - height) / 2
+        icon.name: "sidebar.left"
+        Accessible.name: root.sidebarVisible ? qsTr("Hide sidebar") : qsTr("Show sidebar")
+        toolTip: root.sidebarVisible ? qsTr("Hide Sidebar") : qsTr("Show Sidebar")
+        onClicked: root.sidebarVisible = !root.sidebarVisible
     }
 
     // Ctrl+Tab, Ctrl+Shift+Tab: the active split's switcher (Meta is Control on macOS).

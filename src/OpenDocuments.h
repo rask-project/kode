@@ -50,6 +50,14 @@ public:
     // The most recent document other than `document`, or null.
     Q_INVOKABLE [[nodiscard]] kode::Document *other(const kode::Document *document) const;
     Q_INVOKABLE [[nodiscard]] QVariantList modifiedDocuments() const;
+    // The documents of `url`, or of files in it when it is a folder.
+    Q_INVOKABLE [[nodiscard]] QVariantList documentsIn(const QUrl &url) const;
+    // `from` (a file or folder) was renamed or moved to `to`: the documents of it, or in it, follow.
+    Q_INVOKABLE void fileMoved(const QUrl &from, const QUrl &to);
+    // `url` is a folder on disk (a window's folder, not a document).
+    Q_INVOKABLE [[nodiscard]] static bool isFolder(const QUrl &url);
+    // `folder` without a trailing slash, to compare and name it.
+    Q_INVOKABLE [[nodiscard]] static QUrl cleanFolder(const QUrl &folder);
 
 signals:
     void documentsChanged();

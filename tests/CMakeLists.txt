@@ -169,3 +169,18 @@ qt_add_executable(tst_folding
 target_include_directories(tst_folding PRIVATE ../src/editor)
 target_link_libraries(tst_folding PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME tst_folding COMMAND tst_folding)
+
+qt_add_executable(tst_filetree
+    tst_filetree.h
+    tst_filetree.cpp
+    ../src/FileTree.h
+    ../src/FileTree.cpp
+    ../src/FileOperations.h
+    ../src/FileOperations.cpp
+    ../src/FileKinds.h
+    ../src/FileKinds.cpp
+)
+target_include_directories(tst_filetree PRIVATE ../src)
+target_link_libraries(tst_filetree PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)
+add_test(NAME tst_filetree COMMAND tst_filetree)
+set_tests_properties(tst_filetree PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

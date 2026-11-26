@@ -65,6 +65,8 @@ public:
     Q_INVOKABLE bool saveAs(const QUrl &fileUrl);
     // An empty, untitled document.
     Q_INVOKABLE void clear();
+    // The file was renamed or moved to `fileUrl` (from Kode's sidebar): the text stays.
+    void followMove(const QUrl &fileUrl);
 
 signals:
     void fileUrlChanged();

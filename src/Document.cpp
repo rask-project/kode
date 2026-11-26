@@ -43,6 +43,13 @@ void Document::setUntitledNumber(qint32 number)
     emit fileUrlChanged();
 }
 
+void Document::followMove(const QUrl &fileUrl)
+{
+    setFileUrl(fileUrl);
+    m_text.detectSyntax(fileUrl.fileName());
+    watch();
+}
+
 bool Document::modified() const
 {
     return m_text.modified() || (m_flags & FormatChanged) != 0U;

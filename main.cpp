@@ -1,8 +1,12 @@
+#include "FileIcons.h"
+
 #include <QCommandLineParser>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QUrl>
+
+#include <memory>
 
 int main(int argc, char *argv[])
 {
@@ -16,15 +20,18 @@ int main(int argc, char *argv[])
 
     const QGuiApplication app{argc, argv};
 
-    // kode [FILE]. parse(), not process(): unknown options (macOS adds some
+    // kode [FILE | FOLDER]. parse(), not process(): unknown options (macOS adds some
     // when launching from the Finder) are ignored rather than fatal.
     QCommandLineParser parser;
-    parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The file to open."));
+    parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The file or folder to open."));
     parser.parse(QCoreApplication::arguments());
     const QStringList files{parser.positionalArguments()};
     const QUrl initialFile{files.isEmpty() ? QUrl{} : QUrl::fromLocalFile(QFileInfo{files.first()}.absoluteFilePath())};
 
     QQmlApplicationEngine engine;
+    // The engine owns its image providers.
+    engine.addImageProvider(QStringLiteral("fileicon"), std::make_unique<kode::FileIcons>().release());
+    engine.addImageProvider(QStringLiteral("codeicon"), std::make_unique<kode::CodeIcons>().release());
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,

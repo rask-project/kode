@@ -46,6 +46,10 @@ Window {
             {
                 title: qsTr("Editor"),
                 iconSource: Qt.resolvedUrl("assets/settings/editor.svg")
+            },
+            {
+                title: qsTr("Files"),
+                iconSource: Qt.resolvedUrl("assets/settings/files.svg")
             }
         ]
 
@@ -90,6 +94,15 @@ Window {
                         to: 1.0
                         value: Preferences.windowOpacity
                         onMoved: Preferences.windowOpacity = value
+                    }
+                }
+                FormRow {
+                    label: qsTr("Transparent code area")
+                    detail: qsTr("Off: the code on a solid background; the bars stay translucent")
+
+                    Switch {
+                        checked: Preferences.transparentEditor
+                        onToggled: Preferences.transparentEditor = checked
                     }
                 }
             }
@@ -193,6 +206,49 @@ Window {
                     Switch {
                         checked: Preferences.reindentOnSave
                         onToggled: Preferences.reindentOnSave = checked
+                    }
+                }
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+        }
+
+        // Files
+        ColumnLayout {
+            spacing: 6
+
+            FormGroup {
+                FormRow {
+                    label: qsTr("Show hidden files")
+                    detail: qsTr("In the sidebar's folder: dotfiles and those the Finder hides")
+                    showSeparator: false
+
+                    Switch {
+                        checked: Preferences.showHiddenFiles
+                        onToggled: Preferences.showHiddenFiles = checked
+                    }
+                }
+                FormRow {
+                    label: qsTr("Sidebar size")
+                    detail: qsTr("The text and icons of the sidebar's files")
+
+                    ComboBox {
+                        focusPolicy: Qt.TabFocus
+                        Layout.preferredWidth: 120
+                        model: [qsTr("Small"), qsTr("Medium"), qsTr("Large")]
+                        currentIndex: Preferences.sidebarSize
+                        onActivated: index => Preferences.sidebarSize = index
+                    }
+                }
+                FormRow {
+                    label: qsTr("Synchronize with editor")
+                    detail: qsTr("The sidebar opens the folders down to the document in view")
+
+                    Switch {
+                        checked: Preferences.syncWithEditor
+                        onToggled: Preferences.syncWithEditor = checked
                     }
                 }
             }

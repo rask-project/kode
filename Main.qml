@@ -20,10 +20,16 @@ Item {
     property list<EditorWindow> windows: []
     property EditorWindow lastActiveWindow: null
 
-    // A window with the splits of `state` (see EditorWindow.state()), else
-    // one split with a new document.
+    // A window with the folder and splits of `state` (see
+    // EditorWindow.state()), else one split with a new document (none in a
+    // window opened on a folder: the start page, or another open document).
     function openWindow(state: var): EditorWindow {
-        const window = windowComponent.createObject(app) as EditorWindow;
+        const folder = state && OpenDocuments.isFolder(state.folder ?? "") ? state.folder : "";
+        const window = windowComponent.createObject(app, {
+            folder: folder,
+            sidebarVisible: folder !== "" && (state.sidebar ?? true),
+            sidebarWidth: state && state.sidebarWidth > 0 ? state.sidebarWidth : 240
+        }) as EditorWindow;
         app.windows.push(window);
         if (state && state.width > 0) {
             window.x = state.x;
@@ -33,7 +39,7 @@ Item {
         }
         if (!state || !window.splits.restore(state.splits))
             window.splits.addView({
-                document: OpenDocuments.create()
+                document: folder !== "" ? null : OpenDocuments.create()
             });
         if (state && state.visibility === "fullscreen")
             window.showFullScreen();
@@ -65,9 +71,13 @@ Item {
 
     // Each file in the active split of `window`. From outside the app
     // (`window` null: the Finder, the Dock) a file already in view is shown
-    // where it is, else in the last active window.
+    // where it is, else in the last active window. A folder goes to the sidebar.
     function openFiles(files: list<url>, window: EditorWindow) {
         for (const file of files) {
+            if (OpenDocuments.isFolder(file)) {
+                app.openFolder(file, window);
+                continue;
+            }
             const document = OpenDocuments.open(file);
             if (!document)
                 continue;
@@ -85,6 +95,23 @@ Item {
             target.raise();
             target.requestActivate();
         }
+    }
+
+    // `folder` in `window`'s sidebar, shown. From outside the app a window
+    // already on it comes forward, else the last active window takes it if
+    // it has none, else a new window opens on it.
+    function openFolder(given: url, window: EditorWindow) {
+        const folder = OpenDocuments.cleanFolder(given);
+        RecentDocuments.add(folder);
+        const owner = window ? null : app.windows.find(candidate => candidate.folder.toString() === folder.toString());
+        const idle = app.lastActiveWindow && app.lastActiveWindow.folder.toString() === "" ? app.lastActiveWindow : null;
+        const target = window ?? owner ?? idle ?? app.openWindow({
+            folder: folder
+        });
+        target.folder = folder;
+        target.sidebarVisible = true;
+        target.raise();
+        target.requestActivate();
     }
 
     // The next (1) or previous (-1) document by name, in `window`'s active split.

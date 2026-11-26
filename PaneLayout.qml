@@ -23,6 +23,9 @@ Item {
     signal documentChosen(EditorPane view, Document document)
     signal reviewRequested(Document document, var action)
     signal closeDocumentRequested(Document document)
+    signal newDocumentRequested
+    signal openRequested
+    signal openFolderRequested
 
     NodeLoader {
         anchors.fill: parent
@@ -109,6 +112,17 @@ Item {
                 function onRemoveRequested() {
                     layout.splits.remove(leafItem.view);
                 }
+                function onNewDocumentRequested() {
+                    layout.splits.activate(leafItem.view);
+                    layout.newDocumentRequested();
+                }
+                function onOpenRequested() {
+                    layout.splits.activate(leafItem.view);
+                    layout.openRequested();
+                }
+                function onOpenFolderRequested() {
+                    layout.openFolderRequested();
+                }
             }
         }
     }
@@ -125,14 +139,8 @@ Item {
                 anchors.fill: parent
                 orientation: splitItem.node ? splitItem.node.orientation : Qt.Horizontal
 
-                handle: Item {
-                    implicitWidth: 1
-                    implicitHeight: 1
-
-                    Rectangle {
-                        anchors.fill: parent
-                        color: Qt.alpha(dividerPalette.windowText, 0.2)
-                    }
+                handle: DividerHandle {
+                    color: Qt.alpha(dividerPalette.windowText, 0.2)
                 }
 
                 SystemPalette {

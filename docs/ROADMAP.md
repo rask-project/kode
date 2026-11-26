@@ -130,14 +130,6 @@ section 3), not all at once.
   0.2.0); the rest come as the
   stages below need them.
 
-### Migrating the existing apps
-
-1. **Metronom** migrates first (`Rask.Window`, `Rask.Platform`, `Rask.Style`,
-   `Rask.Updater`) on its macOS build: it is small and proves the API serves
-   a second app.
-2. **Konsoll** migrates afterwards, module by module, without blocking Kode.
-3. **notes** replaces `Rask.Controls.Native` with the new modules.
-
 ---
 
 ## 3. Kode stages
@@ -215,12 +207,9 @@ What is left:
 - Done: window settings — blur on/off and opacity, in the Settings window.
 - The installed bundle (`cmake --install`, `qt_generate_deploy_qml_app_script`)
   runs without the build tree: Qt, the `rask` dylibs.
-- Migrate **Metronom**'s macOS build to `Rask.Window` + `Rask.Platform`
-  (proves the API serves two apps).
 
-**Done when:** Kode's colors come from the system, the installed bundle runs on a machine without the build tree, and
-Metronom's macOS build runs on the shared `rask` libraries (its Android and
-Linux builds unchanged).
+**Done when:** Kode's colors come from the system and the installed bundle
+runs on a machine without the build tree.
 
 ---
 
@@ -299,7 +288,7 @@ file name and shebang; Breeze light/dark following `Appearance`
 syntax with a native menu of every definition by section), the bracket
 pairing with the one at the caret and the word at the caret with its
 occurrences in view marked behind the text. Left: off-thread
-highlighting if large files need it, and brackets inside strings and
+highlighting if large files need it (Stage 10), and brackets inside strings and
 comments (today matched like any other).
 
 - **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes;
@@ -376,7 +365,7 @@ caret and scroll). `NativeWindow` got `representedFile` and
 for the QML title bar); `Rask.Application` has `QuitGuard`,
 `FileOpenHandler` and `RecentDocuments` (Open Recent in File, the system's
 list for the Dock); `Session` reopens the documents and each window's
-geometry and splits. ⌘N new document, ⇧⌘N new window, ⌘W close document,
+geometry and splits. ⌘N new document, ⇧⌘N new window, ⌘W close document, ⇧⌘W close all documents (⌥⌘W closes the window),
 ⌘D / ⇧⌘D split side by side / top and bottom, ⌥⌘D remove split.
 
 The window then lost its title (no sidebar yet: the project view comes
@@ -417,13 +406,34 @@ toolbar capsule) along the way, unused here for now.
 
 ---
 
-### Stage 8 — Tabs — replaced
+### Stage 8 — Sidebar: folders — done
 
-Kode has no tabs: Stage 7's splits and documents menu (Qt Creator's
-model) take their place. `TabStrip` was added to `Rask.Controls` for it
-and stays there for Konsoll.
+Kode has no tabs: Stage 7's splits and documents menu (Qt Creator's model)
+take their place (`TabStrip` stays in `Rask.Controls`).
 
-- Migrate Konsoll to the shared `TabStrip` (can happen in parallel).
+A sidebar that hides, as in Xcode: the button after the window buttons
+(and View > Show Sidebar, ⌃⌘S: ⌘0 is Actual Size here). Each window may
+have a folder (File > Open Folder…, ⇧⌘O; the command line, the Finder,
+the Dock, Open Recent, a folder dropped on the window), shown in the
+sidebar as VS Code's explorer (`FileTree` over `QFileSystemModel`, which
+reads folders in its own thread and follows changes on disk): folders
+first, names as the Finder sorts them, a click selects, a double click
+opens a folder in place (as its arrow does) or a file in the active split,
+the file in view marked and revealed (its folders opened, scrolled to)
+while Synchronize with Editor is on (the link button beside the folder's
+name, as in Qt Creator, with a filter menu). As in Neovim's file trees, the
+root goes up a folder (the arrow button) or moves to a folder in the tree
+(its right-click menu). Collapse All closes every folder (View, ⌥⌘-, or
+the right-click menus). The right-click menu does what a file tree needs:
+New File and New Folder (named in place), Rename (in place), Duplicate,
+Move to Trash, Cut/Copy/Paste (file URLs on the clipboard, so the Finder
+pastes them too), Copy Path, Reveal in Finder; open documents follow a
+rename or move. Settings > Files > Sidebar size (small, medium, large)
+scales its text and icons. Opening a file alone
+leaves the sidebar hidden. The system's icon for each entry (`FileIcons`,
+`image://fileicon/…`). Hidden files shown or not (View > Show Hidden
+Files, ⇧⌘., as in the Finder; Settings > Files). The window's folder,
+the sidebar and its width are saved with the session.
 
 ---
 
@@ -436,8 +446,32 @@ and stays there for Konsoll.
   runtime).
 - Liquid Glass (`Rask.Window`'s `GlassEffect`, `GlassSurface` as fallback) on
   the tab strip/status bar on macOS 26.
-- **`Rask.Style`** extracted from Metronom and adopted by Kode.
+- **`Rask.Style`** (a Qt Quick Controls style for macOS) adopted by Kode.
 - Website (GitHub Pages) following the Konsoll/Metronom pattern.
+
+---
+
+### Stage 10 — Large files off the GUI thread
+
+Editing stays on the GUI thread: Qt Quick items, input and accessibility
+live there, a keystroke lays out one line, and documents not in view cost
+nothing. A thread per document would add a round trip and locks to every
+keystroke for no gain. What moves is the work that grows with the file and
+cannot be sliced well, measured first with `kode-editor-bench`:
+
+- Opening: reading and decoding (`TextCodec`) a large file without
+  blocking the window; the view shows it when it is ready.
+- Highlighting ahead of the view (a jump far down a large file).
+- Find and Replace All over the whole text (today 3 ms slices on the GUI
+  thread: never blocking, but slower in total).
+- Saving, and re-indenting before saving, large files.
+
+How: a snapshot of the `TextBuffer` (its original buffer is immutable and
+the added one append-only, so copying the piece list is enough) with the
+document's version, worked on in a `QThreadPool` (shared by every
+document, as many threads as cores), the result posted back to the GUI
+thread and dropped if the document changed meanwhile. No locks on the
+typing path.
 
 ---
 

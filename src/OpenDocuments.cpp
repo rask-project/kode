@@ -1,5 +1,6 @@
 #include "OpenDocuments.h"
 
+#include <QDir>
 #include <QFileInfo>
 #include <QQmlEngine>
 
@@ -63,6 +64,31 @@ Document *OpenDocuments::open(const QUrl &file)
         return nullptr;
     }
     return adopt(std::move(document));
+}
+
+bool OpenDocuments::isFolder(const QUrl &url)
+{
+    return url.isLocalFile() && QFileInfo{url.toLocalFile()}.isDir();
+}
+
+void OpenDocuments::fileMoved(const QUrl &from, const QUrl &to)
+{
+    const QString fromPath{from.toLocalFile()};
+    const QString toPath{to.toLocalFile()};
+    for (const Pointer &document : m_documents) {
+        const QString path{document->fileUrl().toLocalFile()};
+        if (path == fromPath) {
+            document->followMove(to);
+        } else if (path.startsWith(fromPath + QLatin1Char('/'))) {
+            document->followMove(QUrl::fromLocalFile(toPath + path.mid(fromPath.size())));
+        }
+    }
+    emit documentsChanged();
+}
+
+QUrl OpenDocuments::cleanFolder(const QUrl &folder)
+{
+    return folder.isLocalFile() ? QUrl::fromLocalFile(QDir::cleanPath(folder.toLocalFile())) : folder;
 }
 
 void OpenDocuments::restore(const QStringList &files)
@@ -139,6 +165,19 @@ Document *OpenDocuments::other(const Document *document) const
         return candidate.get() != document;
     })};
     return found != m_documents.end() ? found->get() : nullptr;
+}
+
+QVariantList OpenDocuments::documentsIn(const QUrl &url) const
+{
+    const QString root{url.toLocalFile()};
+    std::vector<Document *> found;
+    for (const Pointer &document : m_documents) {
+        const QString path{document->fileUrl().toLocalFile()};
+        if (!root.isEmpty() && (path == root || path.startsWith(root + QLatin1Char('/')))) {
+            found.emplace_back(document.get());
+        }
+    }
+    return toList(found);
 }
 
 QVariantList OpenDocuments::modifiedDocuments() const

@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Templates as T
 import QtQuick.Controls.impl
 
 import Rask.Controls
@@ -28,7 +27,7 @@ Item {
     // its left too, starts after the window buttons (leadingInset).
     property real topInset: 0
     property real leadingInset: 0
-    // Kept from moving while the pointer is on a button of the bar.
+    // For the title bar's double click.
     property NativeWindow nativeWindow: null
 
     readonly property EditorView editor: textEditor.editor
@@ -48,6 +47,10 @@ Item {
     signal closeDocumentRequested
     signal splitRequested(int orientation)
     signal removeRequested
+    // From the start page.
+    signal newDocumentRequested
+    signal openRequested
+    signal openFolderRequested
 
     function focusEditor() {
         textEditor.editor.forceActiveFocus();
@@ -124,47 +127,6 @@ Item {
         // None open: the start page.
         if (!pane.document)
             pane.document = OpenDocuments.other(null);
-    }
-
-    // Flat, an SF Symbol and a light fill under the pointer (the macOS style draws a bezel).
-    component BarButton: T.ToolButton {
-        id: barButton
-
-        // Shown when the pointer rests on it.
-        property string toolTip
-        // Not `enabled`: IconImage draws the symbol once, in the state the
-        // button had then, so the button stays enabled and this only fades it.
-        property bool available: true
-
-        implicitWidth: 28
-        implicitHeight: 26
-        padding: 0
-        focusPolicy: Qt.NoFocus
-        hoverEnabled: true
-        icon.width: 15
-        icon.height: 15
-        onHoveredChanged: {
-            if (pane.nativeWindow)
-                pane.nativeWindow.movable = !hovered;
-        }
-
-        background: Rectangle {
-            radius: 6
-            color: barButton.hovered && barButton.available ? Qt.alpha(SystemColors.label, barButton.down ? 0.16 : 0.08) : "transparent"
-        }
-
-        HelpTag {
-            text: barButton.toolTip
-        }
-
-        contentItem: IconImage {
-            name: barButton.icon.name
-            sourceSize.width: barButton.icon.width
-            sourceSize.height: barButton.icon.height
-            fillMode: Image.Pad
-            color: SystemColors.label
-            opacity: !barButton.available ? 0.35 : (barButton.hovered ? 1 : 0.8)
-        }
     }
 
     // The bar, as in Qt Creator: Back and Forward, which document (from
@@ -414,6 +376,9 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         visible: pane.document === null
+        onNewRequested: pane.newDocumentRequested()
+        onOpenRequested: pane.openRequested()
+        onOpenFolderRequested: pane.openFolderRequested()
     }
 
     TextEditor {
@@ -424,6 +389,8 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: statusBar.top
+        // Opaque (Settings > Appearance): the window's color, without its transparency.
+        backgroundColor: Preferences.transparentEditor || !pane.nativeWindow ? "transparent" : pane.nativeWindow.color
         editor.document: pane.document ? pane.document.textDocument : null
         editor.syntaxTheme: Syntaxes.themeName(Preferences.theme, Appearance.dark)
         editor.wrap: Preferences.wrap

@@ -23,11 +23,16 @@ const QString indentWithTabsKey{QStringLiteral("editor/indentWithTabs")};
 const QString indentWidthKey{QStringLiteral("editor/indentWidth")};
 const QString windowBlurKey{QStringLiteral("window/blur")};
 const QString windowOpacityKey{QStringLiteral("window/opacity")};
+const QString transparentEditorKey{QStringLiteral("window/transparentEditor")};
+const QString showHiddenFilesKey{QStringLiteral("sidebar/showHiddenFiles")};
+const QString syncWithEditorKey{QStringLiteral("sidebar/syncWithEditor")};
+const QString sidebarSizeKey{QStringLiteral("sidebar/size")};
 
 constexpr qint32 defaultIndentWidth{4};
 constexpr qint32 largestIndentWidth{16};
 constexpr qreal defaultWindowOpacity{1.0};
 constexpr qreal leastWindowOpacity{0.5};
+constexpr qint32 largestSidebarSize{2};
 
 } // namespace
 
@@ -156,6 +161,46 @@ qreal Preferences::windowOpacity()
 void Preferences::setWindowOpacity(qreal opacity)
 {
     store(windowOpacityKey, std::clamp(opacity, leastWindowOpacity, 1.0));
+}
+
+bool Preferences::transparentEditor()
+{
+    return QSettings().value(transparentEditorKey, true).toBool();
+}
+
+void Preferences::setTransparentEditor(bool transparent)
+{
+    store(transparentEditorKey, transparent);
+}
+
+bool Preferences::showHiddenFiles()
+{
+    return QSettings().value(showHiddenFilesKey, false).toBool();
+}
+
+void Preferences::setShowHiddenFiles(bool show)
+{
+    store(showHiddenFilesKey, show);
+}
+
+bool Preferences::syncWithEditor()
+{
+    return QSettings().value(syncWithEditorKey, true).toBool();
+}
+
+void Preferences::setSyncWithEditor(bool sync)
+{
+    store(syncWithEditorKey, sync);
+}
+
+qint32 Preferences::sidebarSize()
+{
+    return std::clamp(QSettings().value(sidebarSizeKey, 1).toInt(), 0, largestSidebarSize);
+}
+
+void Preferences::setSidebarSize(qint32 size)
+{
+    store(sidebarSizeKey, std::clamp(size, 0, largestSidebarSize));
 }
 
 QStringList Preferences::monospacedFamilies()

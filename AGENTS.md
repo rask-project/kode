@@ -37,7 +37,9 @@ Guidance for AI agents working in this repository.
 - `main.cpp` — `QGuiApplication` + `QQmlApplicationEngine`; passes the file
   from the command line (`initialFile`) to `Kode.Main`.
 - `Main.qml` — the app root (no window of its own): the window list over
-  the documents they share (`OpenDocuments`), opening files (in the active
+  the documents they share (`OpenDocuments`), opening files and folders (a folder goes to a window's sidebar: from
+  outside the app the window already on it, else the last active one
+  without a folder, else a new one; files in the active
   split; from the Finder or the Dock a file already in view is shown
   there; each split moves off a closing document itself, to the start
   page when none is left: the windows stay), document errors and changes on disk (alerts
@@ -45,7 +47,9 @@ Guidance for AI agents working in this repository.
   each window's geometry and splits, saved on quit and when the last window
   closes, reopened at launch), the quit review (`QuitGuard`) and the
   app-wide Settings and About windows.
-- `EditorWindow.qml` — a window without a title: its splits reach the top
+- `EditorWindow.qml` — a window without a title: the `Sidebar` with the
+  window's `folder` (hidden without one; the sidebar button after the
+  window buttons, ⌃⌘S), its splits reach the top
   (the bars of the splits there fill the title bar, the top-left one after
   the window buttons), Ctrl+Tab for the active split's switcher, its splits (`Splits` + `PaneLayout`), the menus
   (actions go to the active split), the file dialogs and the "Save
@@ -63,6 +67,51 @@ Guidance for AI agents working in this repository.
   Back and Forward and the Ctrl+Tab switcher; when its document closes it goes back to the previous
   one. Icons are SF Symbols by name (`icon.name`, `IconImage`): Qt asks
   the system for them, nothing is drawn or bundled.
+- `BarButton.qml` — the flat SF Symbol button of the bars in the title bar.
+  `TitleBarButtons.qml` (singleton) counts those under the pointer; the
+  window is dragged by its title bar only when none (`NativeWindow.movable`
+  bound to it): set per button, leaving one could come after entering the
+  next and leave the window draggable over a button, eating its clicks.
+- `Sidebar.qml` — the window's sidebar, as Xcode's navigator: under the
+  title bar, the folder as a `TreeView` over `FileTree`, as VS Code's
+  explorer (a click selects; a double click opens a folder in place, as its
+  arrow does, or a file in the active split),
+  the system's icons, the file in view revealed while syncing with the
+  editor (`FileTree::indexOf()`, `expandToIndex()`, again as entries
+  arrive); beside the folder's name, as Qt Creator's, Enclosing Folder,
+  the filter menu (hidden files) and Synchronize with Editor; a folder's
+  right-click menu makes it the root, as Neovim's file trees (both change
+  the window's folder); Collapse All (View, ⌥⌘-, and the right-click menus
+  of a folder and of the folder's name); the right-click menu's file
+  operations (New File/Folder, named in place, Rename in place, Duplicate,
+  Move to Trash, Cut/Copy/Paste, Copy Path, Reveal in Finder); text, icon
+  and row sizes from `Preferences.sidebarSize`;
+- `OverlayScrollBar.qml` — the editor's and the sidebar's scroll bar: no
+  track, a handle that shows while scrolling.
+- `src/FileTree.{h,cpp}` — `FileTree`: a `QSortFilterProxyModel` over a
+  `QFileSystemModel` (folders read in its thread, changes on disk
+  followed): the name column, folders first, names by `QCollator`
+  (numeric), hidden files on request; `rootIndex` for the view and the
+  roles `iconSource`, `isFolder`, `fileUrl`, `parentFolder`; the folder is
+  kept without a trailing slash (the Finder sends one); `indexOf()` reads the folders
+  down to a file (TreeView reads a folder only while it has no entries).
+- `src/FileOperations.{h,cpp}` — `kode::files`: creating, renaming,
+  copying (folders entry by entry, `QDirIterator`), moving and trashing
+  files as the Finder does (a taken name gets " 2", a duplicate " copy"),
+  each returning the new path or the error (`std::expected`). `FileTree`
+  exposes them to QML with the clipboard (file URLs, so the Finder pastes
+  them; a cut moves when pasted here) and emits `moved()`, which
+  `OpenDocuments::fileMoved()` follows (`Document::followMove()`).
+- `src/FileIcons.{h,cpp}` — `FileIcons`, the `image://fileicon/<path>`
+  provider (registered in `main.cpp`): the system's icon for a file or
+  folder (`QAbstractFileIconProvider`, the platform theme's, i.e. the
+  Finder's); `CodeIcons`, `image://codeicon/<key>`: a code file's icon,
+  the system's document icon with a badge of its language's label and
+  color (the system has none by language; one per language, cached by
+  URL).
+- `src/FileKinds.{h,cpp}` — `fileKind()`: a code file's language by
+  extension or whole name (CMakeLists.txt, Makefile…), a table of labels
+  and colors (Linguist's).
 - `PaneLayout.qml` — a window's split tree as nested `SplitView`s; each
   leaf is a slot its view is reparented into, so rebuilding keeps views.
   Each node knows whether it touches the window's top and left edges, for
@@ -107,7 +156,9 @@ Guidance for AI agents working in this repository.
 - `src/Preferences.{h,cpp}` — `Preferences` (QML singleton): the user's
   preferences in QSettings (the only copy), shared by every window; the
   editor binds its font, theme, wrapping, invisibles and default
-  indentation to it.
+  indentation to it, and its background: transparent (the window's blur
+  shows) or the window's color (`transparentEditor`; the bars stay
+  translucent either way).
 - `StatusBar.qml` — line and column, and the syntax with a native menu
   (`Popup.Native`) of `Syntaxes` (C++ singleton, `src/Syntaxes.*`: the
   definitions by section).
@@ -223,7 +274,7 @@ Guidance for AI agents working in this repository.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
   randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`, `tst_folding`,
-  `tst_preferences`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  `tst_preferences`, `tst_filetree`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in` (with the document types the Finder offers
   Kode for), `AppIcons.cmake` (compiles `assets/kode.icon`

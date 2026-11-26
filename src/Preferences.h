@@ -10,7 +10,8 @@ namespace kode
 
 // The user's preferences, kept in QSettings (the only copy) and shared by
 // every window: the editor's font and theme, wrapping, invisibles, indent guides and re-indenting on save, the
-// indentation for new documents, the window's blur and opacity.
+// indentation for new documents, the window's blur and opacity, hidden files in the sidebar and whether it follows the
+// editor.
 class Preferences : public QObject
 {
     Q_OBJECT
@@ -35,6 +36,14 @@ class Preferences : public QObject
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY changed)
     Q_PROPERTY(bool windowBlur READ windowBlur WRITE setWindowBlur NOTIFY changed)
     Q_PROPERTY(qreal windowOpacity READ windowOpacity WRITE setWindowOpacity NOTIFY changed)
+    // The code area shows the window's background and blur (else a solid background; the bars stay translucent).
+    Q_PROPERTY(bool transparentEditor READ transparentEditor WRITE setTransparentEditor NOTIFY changed)
+    // The sidebar lists hidden files and folders too.
+    Q_PROPERTY(bool showHiddenFiles READ showHiddenFiles WRITE setShowHiddenFiles NOTIFY changed)
+    // The sidebar follows the document in view (opens its folders, scrolls to it), as Qt Creator's.
+    Q_PROPERTY(bool syncWithEditor READ syncWithEditor WRITE setSyncWithEditor NOTIFY changed)
+    // The sidebar's text and icons: 0 small, 1 medium, 2 large (as the system's sidebar icon size).
+    Q_PROPERTY(qint32 sidebarSize READ sidebarSize WRITE setSidebarSize NOTIFY changed)
     // The installed monospaced font families, sorted.
     Q_PROPERTY(QStringList monospacedFamilies READ monospacedFamilies CONSTANT)
 public:
@@ -66,6 +75,14 @@ public:
     void setWindowBlur(bool blur);
     [[nodiscard]] static qreal windowOpacity();
     void setWindowOpacity(qreal opacity);
+    [[nodiscard]] static bool transparentEditor();
+    void setTransparentEditor(bool transparent);
+    [[nodiscard]] static bool showHiddenFiles();
+    void setShowHiddenFiles(bool show);
+    [[nodiscard]] static bool syncWithEditor();
+    void setSyncWithEditor(bool sync);
+    [[nodiscard]] static qint32 sidebarSize();
+    void setSidebarSize(qint32 size);
     [[nodiscard]] static QStringList monospacedFamilies();
 
 signals:
