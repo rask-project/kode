@@ -87,6 +87,7 @@ qt_add_qml_module(tekst
         Main.qml
         PaneLayout.qml
         SettingsWindow.qml
+        StartPage.qml
         StatusBar.qml
         TextEditor.qml
     SOURCES

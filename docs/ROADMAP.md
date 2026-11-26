@@ -384,7 +384,8 @@ later): the splits reach the top, the bars of those there filling the
 title bar. Each bar has Back and Forward (⌃⌘← / ⌃⌘→) through the
 documents that split showed (`DocumentHistory`) and a wider documents
 pop-up; Ctrl+Tab switches among the open documents, that split's most recent first, as
-in Qt Creator (`DocumentSwitcher`). Every icon is an SF Symbol
+in Qt Creator (`DocumentSwitcher`). Closing the last document leaves the
+window on a start page with how to open one (`StartPage`), not closed. Every icon is an SF Symbol
 (`icon.name`). `Rask.Controls` got `ToolbarGroup`/`ToolbarButton` (a glass
 toolbar capsule) along the way, unused here for now.
 

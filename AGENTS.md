@@ -39,8 +39,8 @@ Guidance for AI agents working in this repository.
 - `Main.qml` — the app root (no window of its own): the window list over
   the documents they share (`OpenDocuments`), opening files (in the active
   split; from the Finder or the Dock a file already in view is shown
-  there), the windows closing with the last document (each split moves
-  off a closing document itself), document errors and changes on disk (alerts
+  there; each split moves off a closing document itself, to the start
+  page when none is left: the windows stay), document errors and changes on disk (alerts
   on the last active window), the session (`Session`: the open files and
   each window's geometry and splits, saved on quit and when the last window
   closes, reopened at launch), the quit review (`QuitGuard`) and the
@@ -67,6 +67,9 @@ Guidance for AI agents working in this repository.
   leaf is a slot its view is reparented into, so rebuilding keeps views.
   Each node knows whether it touches the window's top and left edges, for
   the insets of the bars in the title bar.
+- `StartPage.qml` — what a split without a document shows, as in Qt
+  Creator: "Open a document" and how (closing the last document leaves
+  the windows open on it).
 - `DocumentSwitcher.qml` — the Ctrl+Tab popup, as in Qt Creator: every open
   document, those the split showed first by recent use; Tab moves on while Control is held, releasing
   it shows the one selected, Escape cancels.

@@ -28,7 +28,8 @@ ApplicationWindow {
     readonly property Splits splits: windowSplits
     readonly property EditorPane activeView: windowSplits.activeView as EditorPane
     readonly property Document activeDocument: activeView ? activeView.document : null
-    readonly property EditorView editor: activeView ? activeView.editor : null
+    // Null on the start page.
+    readonly property EditorView editor: activeDocument ? activeView.editor : null
 
     // Shows `document` in `view` (the active split); an untouched new
     // document it replaces is closed when no other split shows it.
@@ -396,7 +397,7 @@ ApplicationWindow {
             MenuItem {
                 action: Action {
                     text: qsTr("Go to Line…")
-                    enabled: root.activeView !== null
+                    enabled: root.activeDocument !== null
                     shortcut: "Ctrl+L"
                     onTriggered: root.activeView.showGoToLine()
                 }
@@ -407,7 +408,7 @@ ApplicationWindow {
                 MenuItem {
                     action: Action {
                         text: qsTr("Find…")
-                        enabled: root.activeView !== null
+                        enabled: root.activeDocument !== null
                         shortcut: StandardKey.Find
                         onTriggered: root.activeView.showSearch(false)
                     }
@@ -415,7 +416,7 @@ ApplicationWindow {
                 MenuItem {
                     action: Action {
                         text: qsTr("Find and Replace…")
-                        enabled: root.activeView !== null
+                        enabled: root.activeDocument !== null
                         shortcut: "Ctrl+R"
                         onTriggered: root.activeView.showSearch(true)
                     }

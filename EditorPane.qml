@@ -88,7 +88,11 @@ Item {
             pane.documentChosen(document);
     }
 
-    onDocumentChanged: documentHistory.visit(pane.document)
+    onDocumentChanged: {
+        documentHistory.visit(pane.document);
+        if (!pane.document)
+            searchBar.visible = false;
+    }
 
     DocumentHistory {
         id: documentHistory
@@ -117,8 +121,9 @@ Item {
     Component.onCompleted: {
         if (!pane.document && pane.initialFile.toString() !== "")
             pane.document = OpenDocuments.open(pane.initialFile);
+        // None open: the start page.
         if (!pane.document)
-            pane.document = OpenDocuments.other(null) ?? OpenDocuments.create();
+            pane.document = OpenDocuments.other(null);
     }
 
     // Flat, an SF Symbol and a light fill under the pointer (the macOS style draws a bezel).
@@ -224,6 +229,8 @@ Item {
             // Room left by the other buttons.
             readonly property real room: splitButtons.x - x - closeButton.width - 16
 
+            // Hidden with nothing to pick.
+            visible: OpenDocuments.count > 0
             anchors.left: forwardButton.right
             anchors.leftMargin: 4
             anchors.verticalCenter: parent.verticalCenter
@@ -260,7 +267,7 @@ Item {
 
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.min(implicitWidth, documentRow.width - 21)
-                        text: pane.modified ? pane.title + " •" : pane.title
+                        text: !pane.document ? qsTr("No Document") : (pane.modified ? pane.title + " •" : pane.title)
                         color: pane.active ? SystemColors.label : SystemColors.secondaryLabel
                         font.pixelSize: 13
                         elide: Text.ElideMiddle
@@ -306,6 +313,7 @@ Item {
         BarButton {
             id: closeButton
 
+            visible: pane.document !== null
             anchors.left: documentButton.right
             anchors.leftMargin: 2
             anchors.verticalCenter: parent.verticalCenter
@@ -400,9 +408,18 @@ Item {
         value: searchBar.regularExpression
     }
 
+    StartPage {
+        anchors.top: bar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        visible: pane.document === null
+    }
+
     TextEditor {
         id: textEditor
 
+        visible: pane.document !== null
         anchors.top: searchBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
