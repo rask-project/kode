@@ -1,0 +1,44 @@
+---
+layout: default
+title: Download
+description: Get Kode for macOS on Apple Silicon, or build it from source.
+permalink: /download/
+---
+<div class="page container container-narrow">
+  <header class="page-header">
+    <p class="eyebrow">Download</p>
+    <h1>Get Kode</h1>
+  </header>
+
+  <div class="download-card glass-card">
+    <img src="{{ '/assets/kode.png' | relative_url }}" alt="" width="112" height="112">
+    <div>
+      <h2>Kode for Mac</h2>
+      <p>Free and open source. Kode is young: there is no packaged release yet, so for now you build it from source (below). Releases will appear on GitHub.</p>
+      <a class="button" href="{{ site.github_url }}/releases" data-download>Releases on GitHub</a>
+      <div class="download-meta">
+        <span data-version="Version %v" hidden></span>
+        <span>macOS 14.4 or later</span>
+        <span>Apple Silicon</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="prose">
+    <h2>Build from source</h2>
+    <p>You need Qt 6.12, CMake 3.21+, Ninja and the Xcode command-line tools (a C++23 compiler). KDE's syntax-highlighting library comes as a submodule and is built along the way.</p>
+    <div class="code-copy"><pre><code>git clone --recurse-submodules https://github.com/rask-project/kode.git
+cd kode
+cmake -B build -G Ninja \
+    -DCMAKE_PREFIX_PATH=/path/to/Qt/6.12.0/macos \
+    -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+open build/Kode.app</code></pre></div>
+    <p>The app is signed ad hoc after the build. Move <code>build/Kode.app</code> to <strong>Applications</strong> to keep it.</p>
+
+    <h2>Open files from the Terminal</h2>
+    <p>Kode opens a file or a folder given on the command line:</p>
+    <div class="code-copy"><pre><code>open -a /Applications/Kode.app ~/Projects/aurora</code></pre></div>
+    <p>The <a href="{{ site.github_url }}#readme">README</a> covers the tests, the project layout and how the screenshots are made.</p>
+  </div>
+</div>

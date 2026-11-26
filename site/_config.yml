@@ -1,0 +1,37 @@
+title: Kode
+tagline: A native code editor for macOS
+description: >-
+  Kode is a fast, native macOS text and code editor built in QML and C++:
+  syntax highlighting for 300+ languages, splits, multiple carets, code
+  folding and a file sidebar, flat from 1 KB to 100 MB.
+url: https://rask-project.github.io
+baseurl: /kode
+repository: rask-project/kode
+github_url: https://github.com/rask-project/kode
+releases_url: https://github.com/rask-project/kode/releases/latest
+lang: en
+
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter_opts:
+    disable: true
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Link previews (Open Graph / Twitter) and the logo in the structured data.
+logo: /assets/kode.png
+twitter:
+  card: summary_large_image
+
+defaults:
+  - scope: { path: "" }
+    values: { layout: page, image: /assets/screenshots/overview.png }
+
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - vendor

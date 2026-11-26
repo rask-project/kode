@@ -1,0 +1,210 @@
+---
+layout: default
+body_class: home
+---
+{%- assign icons = '/assets/icons/' | relative_url -%}
+<section class="hero container">
+  <img class="hero-icon" src="{{ '/assets/kode.png' | relative_url }}" alt="" width="128" height="128">
+  <a class="badge" href="#qml">Built with QML · Qt Quick · C++23</a>
+  <h1><span class="gradient-text">A code editor that feels like a Mac.</span></h1>
+  <p class="lead">Kode is a fast, native macOS text and code editor: syntax highlighting for more than 300 languages, splits, multiple carets, code folding and a file sidebar, in a see-through window. Typing costs the same in a 1 KB file and in a 100 MB one.</p>
+  <div class="hero-actions">
+    <a class="button" href="{{ '/download/' | relative_url }}">Get Kode</a>
+    <a class="button button-secondary" href="{{ '/features/' | relative_url }}">See the features</a>
+  </div>
+  <p class="button-note">Free and open source · macOS 14.4+ on Apple Silicon</p>
+
+  <div class="hero-shot">
+    {% include shot.html name="overview.png" w=1600 h=927 alt="A Kode window: the project's folder in the sidebar, Forecast.cpp and ForecastView.qml side by side, the word at the caret marked and its block's indent guide in the accent color" %}
+  </div>
+</section>
+
+<section class="section container">
+  <div class="section-head">
+    <p class="eyebrow">Everything in one window</p>
+    <h2>Made for code, made for the Mac</h2>
+    <p class="lead">Native menus, keys and dialogs, the system's colors and icons, and an editing surface written for speed.</p>
+  </div>
+  <div class="feature-grid">
+    <a class="feature-card glass-card" href="{{ '/features/#syntax' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}syntax.svg" alt="">
+      <h3>Highlighting for 300+ languages</h3>
+      <p>KDE's KSyntaxHighlighting, detected by name and shebang, with themes that follow light and dark: Kode, Atom One, ayu, GitHub, gruvbox, Solarized…</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#splits' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}splits.svg" alt="">
+      <h3>Splits, not tabs</h3>
+      <p>Split side by side or top and bottom, as deep as you like. Two splits can show the same document, each with its own caret and scroll.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#carets' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}carets.svg" alt="">
+      <h3>Multiple carets</h3>
+      <p><kbd>⌃D</kbd> adds the next occurrence, <kbd>⌥↑</kbd> <kbd>⌥↓</kbd> a caret above or below. Type once, edit them all, undo in one step.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#folding' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}folding.svg" alt="">
+      <h3>Folding and blocks</h3>
+      <p>Fold by the language's regions or by indentation. <kbd>⌘U</kbd> selects the block around the selection, a larger one each time.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#sidebar' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}files.svg" alt="">
+      <h3>A folder in the sidebar</h3>
+      <p>Open a folder and browse it as in Xcode's navigator: the Finder's icons, the file in view revealed, and new, rename, duplicate and trash in place.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#search' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}search.svg" alt="">
+      <h3>Find and replace</h3>
+      <p>Case-sensitive or not, regular expressions with <code>$1</code> in the replacement, every match marked, Replace All in one undo.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#performance' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}speed.svg" alt="">
+      <h3>Large files, no wait</h3>
+      <p>A 100 MB file opens in 83 ms. Kode lays out and draws only the lines in view, on a piece table that never copies the text.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#documents' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}documents.svg" alt="">
+      <h3>A real Mac document app</h3>
+      <p>Open Recent, Open With from the Finder, a sheet for unsaved changes, changes on disk reloaded, and your windows back when you return.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#appearance' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}appearance.svg" alt="">
+      <h3>See-through and native</h3>
+      <p>A translucent, blurred window, the system's accent and selection colors, SF Symbols, and light or dark as you choose.</p>
+    </a>
+  </div>
+</section>
+
+<section class="container">
+  <div class="showcase">
+    <div class="showcase-text">
+      <p class="eyebrow">Multiple carets</p>
+      <h2>Type once. Change every one.</h2>
+      <p>Put the caret on a word and press <kbd>⌃D</kbd>: Kode selects it, then each next whole-word occurrence with a caret of its own. Typing, deleting, pasting and moving by word act at every caret.</p>
+      <ul>
+        <li><strong><kbd>⌥↑</kbd> <kbd>⌥↓</kbd></strong> add a caret on the line above or below; with <kbd>⇧</kbd>, a block selection.</li>
+        <li><strong>One undo step</strong> for an edit at every caret.</li>
+        <li><strong><kbd>esc</kbd></strong> goes back to one caret.</li>
+      </ul>
+    </div>
+    {% include shot.html name="multiple-carets.gif" w=900 h=622 alt="Control-D selects readings and three more occurrences, typing samples renames them all, Escape leaves one caret" %}
+  </div>
+
+  <div class="showcase is-flipped">
+    <div class="showcase-text">
+      <p class="eyebrow">Code folding</p>
+      <h2>Only the code you are reading.</h2>
+      <p>Fold the block at the caret with <kbd>⌥⌘←</kbd> and open it with <kbd>⌥⌘→</kbd>, as in Xcode, or click the markers in the gutter. A ⋯ after the line shows what is hidden; click it to unfold.</p>
+      <ul>
+        <li><strong>By the language:</strong> the folding regions of its KSyntaxHighlighting definition, or indentation for Python and YAML.</li>
+        <li><strong>Never lost:</strong> going to a hidden line, finding or undoing there opens the fold.</li>
+      </ul>
+    </div>
+    {% include shot.html name="code-folding.gif" w=900 h=622 alt="Option-Command-Left folds a for loop, Option-Command-Right unfolds it, then a click on the gutter's marker folds and unfolds the function" %}
+  </div>
+
+  <div class="showcase">
+    <div class="showcase-text">
+      <p class="eyebrow">Select Block</p>
+      <h2>Grow the selection by the code's shape.</h2>
+      <p><kbd>⌘U</kbd> selects the lines inside the block at the caret, then the whole block, then the one around it, up to all the text, as Qt Creator's Select Block Up. <kbd>⇧⌘U</kbd> steps back.</p>
+      <ul>
+        <li><strong><kbd>⌘/</kbd></strong> comments the selected lines in or out with the language's own marker; <kbd>⌥⌘/</kbd> a block comment.</li>
+        <li><strong><kbd>⌃I</kbd></strong> re-indents by the brackets, comments and strings told apart.</li>
+      </ul>
+    </div>
+    {% include shot.html name="select-block.gif" w=900 h=622 alt="Command-U selects the body of a for loop, then the loop, the function body and the function, and Shift-Command-U steps back" %}
+  </div>
+
+  <div class="showcase is-flipped">
+    <div class="showcase-text">
+      <p class="eyebrow">The sidebar</p>
+      <h2>Your project, the Finder's way.</h2>
+      <p>Open a folder and it fills the window's sidebar: folders first, names in the Finder's order, the system's icons, and code files badged with their language. Double-click a file to open it in the active split.</p>
+      <ul>
+        <li><strong>Follows the editor:</strong> the file in view is revealed and selected.</li>
+        <li><strong>File operations in place:</strong> New File, New Folder, Rename, Duplicate, Move to Trash, Cut, Copy and Paste with the Finder.</li>
+        <li><strong>Open documents follow</strong> the files you rename or move.</li>
+      </ul>
+    </div>
+    {% include shot.html name="sidebar.png" w=1200 h=1104 alt="The sidebar's right-click menu on Forecast.h: New File, New Folder, Open, Rename, Duplicate, Move to Trash, Cut, Copy, Paste, Copy Path, Reveal in Finder, Collapse All" %}
+  </div>
+</section>
+
+<section class="section container" id="qml">
+  <div class="showcase is-flipped qml-showcase">
+    <div class="showcase-text">
+      <p class="eyebrow">Under the hood</p>
+      <h2>QML outside. C++ where it counts.</h2>
+      <p>Kode's interface is QML on Qt Quick: the windows, the splits, the sidebar, the bars and Settings. The editing surface is a C++ <code>QQuickItem</code> that draws straight into Qt Quick's scene graph.</p>
+      <ul>
+        <li><strong>A piece table</strong> holds the text: edits never copy it, and typing grows a single piece.</li>
+        <li><strong>Only what is visible</strong> is laid out (<code>QTextLayout</code>) and drawn; scrolling within those lines lays out nothing.</li>
+        <li><strong>Highlighting in slices</strong> of 3 ms ahead of the view, and after an edit only until a line ends as before.</li>
+        <li><strong>Objective-C++ where macOS needs it</strong>, through the shared <a href="https://github.com/rask-project/rask">Rask</a> modules: the see-through window, alerts, the system's colors.</li>
+      </ul>
+      <ul class="stack" aria-label="Technologies">
+        <li>QML</li><li>Qt Quick 6.12</li><li>C++23</li><li>KSyntaxHighlighting</li><li>Objective-C++</li>
+      </ul>
+    </div>
+    <div class="kwin code-window" role="img" aria-label="TextEditor.qml (abridged), the QML around Kode's C++ editing surface">
+      <div class="kwin-bar">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <div class="ktabs">
+          <span class="ktab is-active"><span class="label">TextEditor.qml</span></span>
+        </div>
+      </div>
+<pre class="kpane-term code"><span class="q-k">import</span> <span class="q-t">QtQuick</span>
+<span class="q-k">import</span> <span class="q-t">Rask.Platform</span>
+
+<span class="q-c">// The editing area: an EditorView filling a Flickable's</span>
+<span class="q-c">// viewport, colored with the system colors.</span>
+<span class="q-t">Flickable</span> {
+    <span class="q-p">id</span>: root
+
+    <span class="q-p">contentWidth</span>: Math.max(width, view.contentWidth)
+    <span class="q-p">contentHeight</span>: Math.max(height, view.contentHeight)
+
+    <span class="q-t">EditorView</span> {
+        <span class="q-p">id</span>: view
+
+        <span class="q-p">x</span>: root.contentX
+        <span class="q-p">y</span>: root.contentY
+        <span class="q-p">width</span>: root.width
+        <span class="q-p">height</span>: root.height
+        <span class="q-p">contentX</span>: root.contentX
+        <span class="q-p">contentY</span>: root.contentY
+
+        <span class="q-p">textColor</span>: SystemColors.text
+        <span class="q-p">caretColor</span>: SystemColors.textInsertionPoint
+    }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<section class="section container">
+  <div class="section-head">
+    <p class="eyebrow">Performance</p>
+    <h2>Flat from 1 MB to 100 MB.</h2>
+    <p class="lead">Kode's editing surface against Qt Quick's own TextEdit, Release build on an Apple M1.</p>
+  </div>
+  <div class="stats">
+    <div class="stat glass-card"><span class="stat-value">83 ms</span><span class="stat-label">to open 100 MB to the first frame</span><span class="stat-compare">TextEdit: 19.6 s</span></div>
+    <div class="stat glass-card"><span class="stat-value">12.9 ms</span><span class="stat-label">worst keystroke at 100 MB</span><span class="stat-compare">TextEdit: 1.2 s</span></div>
+    <div class="stat glass-card"><span class="stat-value">32 MB</span><span class="stat-label">of memory for 100 MB of text</span><span class="stat-compare">TextEdit: 1.2 GB</span></div>
+    <div class="stat glass-card"><span class="stat-value">17 ms</span><span class="stat-label">to estimate wrapping for 100 MB</span><span class="stat-compare">on open and on resize</span></div>
+  </div>
+  <p class="button-note" style="text-align:center">The method and every number are in <a href="{{ site.github_url }}/blob/main/docs/editor-bench.md">editor-bench.md</a>.</p>
+</section>
+
+<section class="section container">
+  <div class="cta glass-card">
+    <img src="{{ '/assets/kode.png' | relative_url }}" alt="" width="88" height="88">
+    <h2>Try Kode</h2>
+    <p class="lead">Free and open source, for macOS 14.4 or later on Apple Silicon.</p>
+    <div class="hero-actions">
+      <a class="button" href="{{ '/download/' | relative_url }}">Get Kode</a>
+      <a class="button button-secondary" href="{{ site.github_url }}">Source on GitHub</a>
+    </div>
+  </div>
+</section>

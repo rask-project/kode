@@ -91,7 +91,7 @@ QML_FILES=()
 while IFS= read -r file; do
     [[ -f "$file" ]] || continue
     case "$file" in
-    tests/fixtures/*) ;;
+    tests/fixtures/* | tools/screenshots/demo/*) ;;
     *.cpp | *.h | *.mm) CPP_FILES+=("$file") ;;
     *.qml) QML_FILES+=("$file") ;;
     esac

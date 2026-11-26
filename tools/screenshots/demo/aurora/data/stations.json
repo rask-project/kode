@@ -1,0 +1,7 @@
+{
+  "stations": [
+    { "id": "oslo", "name": "Oslo", "lat": 59.91, "lon": 10.75 },
+    { "id": "bergen", "name": "Bergen", "lat": 60.39, "lon": 5.32 },
+    { "id": "tromso", "name": "Tromsø", "lat": 69.65, "lon": 18.96 }
+  ]
+}

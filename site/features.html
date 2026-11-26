@@ -1,0 +1,194 @@
+---
+layout: default
+title: Features
+description: Syntax highlighting, splits, multiple carets, code folding, find and replace, a file sidebar, encodings, large files and a native Mac look.
+permalink: /features/
+---
+{%- assign icons = '/assets/icons/' | relative_url -%}
+<div class="page container">
+  <header class="page-header">
+    <p class="eyebrow">Features</p>
+    <h1>Everything Kode does</h1>
+    <p class="lead">A tour of the app, laid out like its own Settings window.</p>
+  </header>
+
+  <div class="settings glass-card">
+    <aside class="settings-sidebar" aria-label="Sections">
+      <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
+      <ul>
+        <li><a href="#syntax"><img src="{{ icons }}syntax.svg" alt="">Highlighting</a></li>
+        <li><a href="#editing"><img src="{{ icons }}editor.svg" alt="">Editing</a></li>
+        <li><a href="#carets"><img src="{{ icons }}carets.svg" alt="">Multiple Carets</a></li>
+        <li><a href="#folding"><img src="{{ icons }}folding.svg" alt="">Folding</a></li>
+        <li><a href="#search"><img src="{{ icons }}search.svg" alt="">Find &amp; Replace</a></li>
+        <li><a href="#splits"><img src="{{ icons }}splits.svg" alt="">Splits</a></li>
+        <li><a href="#sidebar"><img src="{{ icons }}files.svg" alt="">Sidebar</a></li>
+        <li><a href="#documents"><img src="{{ icons }}documents.svg" alt="">Documents</a></li>
+        <li><a href="#encodings"><img src="{{ icons }}encodings.svg" alt="">Encodings</a></li>
+        <li><a href="#appearance"><img src="{{ icons }}appearance.svg" alt="">Appearance</a></li>
+        <li><a href="#performance"><img src="{{ icons }}speed.svg" alt="">Performance</a></li>
+        <li><a href="#keyboard"><img src="{{ icons }}keyboard.svg" alt="">Keyboard</a></li>
+      </ul>
+    </aside>
+
+    <div class="settings-content">
+      <section class="settings-section" id="syntax">
+        <header><img src="{{ icons }}syntax.svg" alt=""><h2>Syntax Highlighting</h2></header>
+        <p>Kode highlights more than 300 languages with KDE's KSyntaxHighlighting, the engine of Kate and Qt Creator.</p>
+        <ul>
+          <li><strong>Detected</strong> by file name, extension and shebang; the status bar shows the language and changes it from a menu of every definition by section.</li>
+          <li><strong>Themes in pairs:</strong> Kode (Qt Creator's 2024 colors), Atom One, ayu, Breeze, GitHub, gruvbox and Solarized, each with a light and a dark version that follows the app's appearance.</li>
+          <li><strong>Brackets and words:</strong> the bracket matching the one at the caret, and the word at the caret with its occurrences in view, are marked behind the text.</li>
+          <li><strong>Indent guides</strong> show each level, the block at the caret in the accent color.</li>
+        </ul>
+        {% include shot.html name="overview-light.png" w=1600 h=927 alt="Kode in light mode with the Kode Light theme: C++ and QML side by side" %}
+      </section>
+
+      <section class="settings-section" id="editing">
+        <header><img src="{{ icons }}editor.svg" alt=""><h2>Editing</h2></header>
+        <p>The keys you expect from a Mac text view, and the ones you expect from a code editor.</p>
+        <ul>
+          <li><strong>Indentation:</strong> tabs or spaces and the width, detected when a file opens and changed from the status bar. <kbd>Tab</kbd> and <kbd>⇧Tab</kbd> or <kbd>⌘]</kbd> <kbd>⌘[</kbd> shift the selected lines.</li>
+          <li><strong>Auto-indent by the brackets,</strong> without knowing the language: <kbd>↩</kbd> between brackets puts the closing one on a line of its own, and a closing bracket lines up with its opening line. <kbd>⌃I</kbd> re-indents the selection, and Kode can re-indent on save.</li>
+          <li><strong>Comments</strong> by the language's own markers: <kbd>⌘/</kbd> toggles line comments, <kbd>⌥⌘/</kbd> a block comment.</li>
+          <li><strong>Select Block:</strong> <kbd>⌘U</kbd> selects the block around the selection, a larger one each time; <kbd>⇧⌘U</kbd> steps back.</li>
+          <li><strong>Wrap lines and show invisibles</strong> from the View menu; drag and drop text, <kbd>⌥</kbd> to copy.</li>
+          <li><strong>Input methods,</strong> press-and-hold accents and VoiceOver work in the editor.</li>
+        </ul>
+        {% include shot.html name="select-block.gif" w=900 h=622 alt="Command-U grows the selection block by block, Shift-Command-U steps back" %}
+      </section>
+
+      <section class="settings-section" id="carets">
+        <header><img src="{{ icons }}carets.svg" alt=""><h2>Multiple Carets</h2></header>
+        <p>Edit several places at once, as in VS Code and Qt Creator.</p>
+        <ul>
+          <li><strong><kbd>⌃D</kbd></strong> selects the word at the caret, then adds the next occurrence of the selection with a caret of its own (whole words when it started from a caret).</li>
+          <li><strong><kbd>⌥↑</kbd> <kbd>⌥↓</kbd></strong> add a caret on the line above or below at the same column; <kbd>⌥⇧↑</kbd> <kbd>⌥⇧↓</kbd> keep the selection's columns, a block selection.</li>
+          <li><strong>Typing, deleting, pasting,</strong> <kbd>←</kbd> <kbd>→</kbd> with <kbd>⌥</kbd>, <kbd>⌘</kbd> or <kbd>⇧</kbd>, and Home/End act at every caret; the edit is one undo step. Any other move or <kbd>esc</kbd> leaves one caret.</li>
+        </ul>
+        {% include shot.html name="multiple-carets.gif" w=900 h=622 alt="Control-D adds occurrences of readings and typing renames them all" %}
+      </section>
+
+      <section class="settings-section" id="folding">
+        <header><img src="{{ icons }}folding.svg" alt=""><h2>Code Folding</h2></header>
+        <p>Hide the blocks you are not reading.</p>
+        <ul>
+          <li><strong><kbd>⌥⌘←</kbd> / <kbd>⌥⌘→</kbd></strong> fold and unfold the block at the caret, as in Xcode; View ▸ Code Folding also unfolds everything.</li>
+          <li><strong>Markers in the gutter</strong> (▾ / ▸) toggle a block; a ⋯ after a folded line opens it.</li>
+          <li><strong>Blocks come from the language:</strong> KSyntaxHighlighting's folding regions, or indentation where the language works that way (Python, YAML).</li>
+          <li><strong>The caret never hides:</strong> going to a line, a match or an undo inside a fold opens it.</li>
+        </ul>
+        {% include shot.html name="code-folding.gif" w=900 h=622 alt="Folding a loop with the keyboard and a function from the gutter" %}
+      </section>
+
+      <section class="settings-section" id="search">
+        <header><img src="{{ icons }}search.svg" alt=""><h2>Find &amp; Replace</h2></header>
+        <p><kbd>⌘F</kbd> opens the find bar under the split's title bar, <kbd>⌘R</kbd> with replace.</p>
+        <ul>
+          <li><strong><kbd>⌘G</kbd> / <kbd>⇧⌘G</kbd></strong> for the next and previous match, <kbd>⌘E</kbd> to search for the selection.</li>
+          <li><strong>Match case and regular expressions,</strong> with <code>$0</code>…<code>$9</code> in the replacement.</li>
+          <li><strong>Every match in view is marked,</strong> with the count; the search runs in slices, so even a 100 MB file never stalls the window.</li>
+          <li><strong>Replace All</strong> is a single undo step.</li>
+          <li><strong>Go to line</strong> with <kbd>⌘L</kbd>: <code>42</code> or <code>42:7</code>.</li>
+        </ul>
+        {% include shot.html name="search.png" w=1600 h=927 alt="The find bar searching sum: 5 of 14, every match marked in the code" %}
+      </section>
+
+      <section class="settings-section" id="splits">
+        <header><img src="{{ icons }}splits.svg" alt=""><h2>Splits</h2></header>
+        <p>Every window is a tree of splits, as in Qt Creator, and every split shows one of the app's open documents.</p>
+        <ul>
+          <li><strong><kbd>⌘D</kbd> / <kbd>⇧⌘D</kbd></strong> split side by side / top and bottom, <kbd>⌥⌘D</kbd> removes a split. Splits nest as deep as you like.</li>
+          <li><strong>The same document in two splits,</strong> each with its own caret and scroll, edits showing in both.</li>
+          <li><strong>Back and forward</strong> (<kbd>⌃⌘←</kbd> / <kbd>⌃⌘→</kbd>) through the documents a split showed, like a browser.</li>
+          <li><strong><kbd>⌃Tab</kbd></strong> switches among the open documents, the split's most recent first; the bar's pop-up lists them all.</li>
+        </ul>
+        {% include shot.html name="document-switcher.png" w=1600 h=927 alt="The Control-Tab switcher listing the open documents, most recent first" %}
+      </section>
+
+      <section class="settings-section" id="sidebar">
+        <header><img src="{{ icons }}files.svg" alt=""><h2>Sidebar</h2></header>
+        <p>Open a folder and the window shows it in a sidebar, as Xcode's navigator and VS Code's explorer (<kbd>⌃⌘S</kbd> hides it).</p>
+        <ul>
+          <li><strong>The Finder's order and icons:</strong> folders first, names sorted numerically, code files badged with their language.</li>
+          <li><strong>Synchronize with Editor</strong> reveals the file in view; Enclosing Folder and Make Root move the window's folder.</li>
+          <li><strong>File operations</strong> from the right-click menu: New File, New Folder, Rename (named in place), Duplicate, Move to Trash, Cut, Copy and Paste — with the Finder too — Copy Path and Reveal in Finder.</li>
+          <li><strong>Open documents follow</strong> the files you rename or move.</li>
+        </ul>
+        {% include shot.html name="sidebar.png" w=1200 h=1104 alt="The sidebar's right-click menu" %}
+      </section>
+
+      <section class="settings-section" id="documents">
+        <header><img src="{{ icons }}documents.svg" alt=""><h2>Documents</h2></header>
+        <p>Kode works with the Mac's document model, not against it.</p>
+        <ul>
+          <li><strong>Open from anywhere:</strong> the Finder's Open With, the Dock, File ▸ Open Recent, or <code>kode file</code> on the command line. A file already open is shown where it is.</li>
+          <li><strong>Unsaved changes</strong> are asked about in a sheet, document by document, when you close or quit.</li>
+          <li><strong>Changes on disk</strong> reload by themselves when nothing is unsaved, keeping the caret; otherwise Kode asks.</li>
+          <li><strong>Your session comes back:</strong> the open files and each window's size, folder and splits.</li>
+          <li><strong>Safe saves</strong> through an atomic write, keeping the file's encoding, byte order mark and line endings.</li>
+        </ul>
+      </section>
+
+      <section class="settings-section" id="encodings">
+        <header><img src="{{ icons }}encodings.svg" alt=""><h2>Encodings</h2></header>
+        <p>Kode detects a file's encoding when it opens it — a byte order mark, valid UTF-8, or Windows-1252 — and keeps it.</p>
+        <ul>
+          <li><strong>Reopen with</strong> or <strong>save with</strong> another of 20 encodings from the status bar: Unicode, Latin and Windows code pages, Mac Roman, Japanese, Chinese, Korean, Cyrillic…</li>
+          <li><strong>Line endings</strong> (LF / CRLF) shown and changed from the status bar.</li>
+          <li><strong>Never loses a character:</strong> saving refuses characters the encoding lacks.</li>
+        </ul>
+      </section>
+
+      <section class="settings-section" id="appearance">
+        <header><img src="{{ icons }}appearance.svg" alt=""><h2>Appearance</h2></header>
+        <p>A Mac app all the way through, from the shared <a href="https://github.com/rask-project/rask">Rask</a> modules of the rask-project apps.</p>
+        <ul>
+          <li><strong>A see-through window,</strong> blurred, with its opacity in Settings; the code can sit on the window's color instead.</li>
+          <li><strong>The system's colors:</strong> the text, the selection and the caret's block in your accent color, following light and dark live.</li>
+          <li><strong>Light, dark or as the system,</strong> and the theme's matching version.</li>
+          <li><strong>SF Symbols</strong> for every icon, and the Finder's icons in the sidebar.</li>
+          <li><strong>Any font</strong> and size; <kbd>⌘+</kbd> <kbd>⌘-</kbd> <kbd>⌘0</kbd> zoom.</li>
+        </ul>
+        {% include shot.html name="settings.png" w=2400 h=592 alt="The Settings window's Appearance, Editor and Files sections" %}
+      </section>
+
+      <section class="settings-section" id="performance">
+        <header><img src="{{ icons }}speed.svg" alt=""><h2>Performance</h2></header>
+        <p>Kode's editing surface is a C++ item drawing into Qt Quick's scene graph. Nothing per keystroke or per frame grows with the file.</p>
+        <ul>
+          <li><strong>A piece table</strong> holds the text with an index of its lines; typing grows one piece and never copies the text.</li>
+          <li><strong>Only the lines in view</strong> are laid out and drawn, each a scene-graph node moved by its matrix as you scroll.</li>
+          <li><strong>Highlighting and search</strong> run in slices of a few milliseconds ahead of the view.</li>
+        </ul>
+        <div class="form-group">
+          <div class="form-row"><span>Open 100 MB to the first frame</span><span>83 ms (TextEdit: 19.6 s)</span></div>
+          <div class="form-row"><span>Worst keystroke at 100 MB</span><span>12.9 ms (TextEdit: 1.2 s)</span></div>
+          <div class="form-row"><span>Memory for 100 MB of text</span><span>32 MB (TextEdit: 1.2 GB)</span></div>
+        </div>
+        <p>Release build on an Apple M1; the method is in <a href="{{ site.github_url }}/blob/main/docs/editor-bench.md">editor-bench.md</a>.</p>
+      </section>
+
+      <section class="settings-section" id="keyboard">
+        <header><img src="{{ icons }}keyboard.svg" alt=""><h2>Keyboard</h2></header>
+        <p>The shortcuts that matter most. Every action is also in the menus.</p>
+        <div class="form-group">
+          <div class="form-row"><span><kbd>⌘N</kbd> <kbd>⇧⌘N</kbd></span><span>New document / new window</span></div>
+          <div class="form-row"><span><kbd>⌘W</kbd> <kbd>⇧⌘W</kbd> <kbd>⌥⌘W</kbd></span><span>Close document / all documents / the window</span></div>
+          <div class="form-row"><span><kbd>⌘D</kbd> <kbd>⇧⌘D</kbd> <kbd>⌥⌘D</kbd></span><span>Split side by side / top and bottom / remove split</span></div>
+          <div class="form-row"><span><kbd>⌃Tab</kbd></span><span>Switch documents</span></div>
+          <div class="form-row"><span><kbd>⌃⌘←</kbd> <kbd>⌃⌘→</kbd></span><span>Back / forward</span></div>
+          <div class="form-row"><span><kbd>⌃⌘S</kbd></span><span>Show or hide the sidebar</span></div>
+          <div class="form-row"><span><kbd>⌘F</kbd> <kbd>⌘R</kbd> <kbd>⌘G</kbd> <kbd>⌘E</kbd></span><span>Find / replace / next / use selection</span></div>
+          <div class="form-row"><span><kbd>⌘L</kbd></span><span>Go to line</span></div>
+          <div class="form-row"><span><kbd>⌃D</kbd> <kbd>⌥↑</kbd> <kbd>⌥↓</kbd></span><span>Add a caret</span></div>
+          <div class="form-row"><span><kbd>⌘U</kbd> <kbd>⇧⌘U</kbd></span><span>Select block / step back</span></div>
+          <div class="form-row"><span><kbd>⌘/</kbd> <kbd>⌥⌘/</kbd></span><span>Line / block comment</span></div>
+          <div class="form-row"><span><kbd>⌥⌘←</kbd> <kbd>⌥⌘→</kbd></span><span>Fold / unfold</span></div>
+          <div class="form-row"><span><kbd>⌘[</kbd> <kbd>⌘]</kbd> <kbd>⌃I</kbd></span><span>Outdent / indent / re-indent</span></div>
+          <div class="form-row"><span><kbd>⌘,</kbd></span><span>Settings</span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>

@@ -303,8 +303,17 @@ Guidance for AI agents working in this repository.
   (2024) color schemes with Qt Creator's own defaults and style mapping;
   never edit them by hand either.
 - `tools/` — `format-code.sh`, `make-app-icons.py`, `render-icon.swift`,
-  `make-syntax-themes.py`.
-- `docs/` — `ROADMAP.md`.
+  `make-syntax-themes.py`, `site-assets.sh`/`site-serve.sh` (the site's
+  images and a local preview) and `screenshots/` (`docshot.sh`, which drives
+  an isolated copy of the app over a demo project, `demo/aurora`, to take the
+  README and site images; kept out of `format-code.sh`).
+- `docs/` — `ROADMAP.md`, `editor-bench.md`, `SCREENSHOTS.md` (how each
+  image in `docs/images/` is taken; retake them when the UI they show
+  changes).
+- `site/` — the website (Jekyll, from Konsoll's), published to GitHub Pages
+  at <https://rask-project.github.io/kode/> by `.github/workflows/pages.yml`;
+  its images come from `docs/images/` and `assets/` (`tools/site-assets.sh`),
+  never copied into git. `site/README.md` has the layout.
 
 ## Build and run
 
