@@ -164,12 +164,25 @@ void TestEditorView::wordNavigationAndDeletion()
     QCOMPARE(editor.cursorPosition(), 4);
     press(editor, Qt::Key_Right, Qt::AltModifier);
     QCOMPARE(editor.cursorPosition(), 10);
+    // Punctuation is a stop of its own, as in VS Code and Qt Creator.
     press(editor, Qt::Key_Right, Qt::AltModifier);
-    QCOMPARE(editor.cursorPosition(), 22); // past "= some_name"
+    QCOMPARE(editor.cursorPosition(), 12);
+    press(editor, Qt::Key_Right, Qt::AltModifier);
+    QCOMPARE(editor.cursorPosition(), 22);
     press(editor, Qt::Key_Backspace, Qt::AltModifier);
     QCOMPARE(editor.text(), QStringLiteral("auto value = (42);"));
     press(editor, Qt::Key_Left, Qt::AltModifier);
+    QCOMPARE(editor.cursorPosition(), 11);
+    press(editor, Qt::Key_Left, Qt::AltModifier);
     QCOMPARE(editor.cursorPosition(), 5);
+    // Each caret stops at the punctuation, not at the next word further on
+    // (a space inside the quotes is skipped as a space).
+    editor.setText(QStringLiteral("['E', 'L']\n[' ', 'Z']"));
+    press(editor, Qt::Key_Down, Qt::AltModifier);
+    press(editor, Qt::Key_Right, Qt::AltModifier);
+    press(editor, Qt::Key_Right, Qt::AltModifier);
+    type(editor, QStringLiteral("|"));
+    QCOMPARE(editor.text(), QStringLiteral("['E|', 'L']\n[' ',| 'Z']"));
 }
 
 void TestEditorView::verticalMovesKeepColumn()

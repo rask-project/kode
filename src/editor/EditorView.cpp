@@ -1048,11 +1048,12 @@ qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
         if (column >= text.size()) {
             return std::min(position + 1, buffer().length());
         }
-        // Past the spaces and punctuation, then past the word.
-        while (column < text.size() && !isWordCharacter(text.at(column))) {
+        // Past the spaces, then past a word or a run of punctuation.
+        while (column < text.size() && text.at(column).isSpace()) {
             ++column;
         }
-        while (column < text.size() && isWordCharacter(text.at(column))) {
+        const bool word{column < text.size() && isWordCharacter(text.at(column))};
+        while (column < text.size() && !text.at(column).isSpace() && isWordCharacter(text.at(column)) == word) {
             ++column;
         }
         return lineStart + column;
@@ -1060,10 +1061,11 @@ qsizetype EditorView::wordBoundary(qsizetype position, bool forward) const
     if (column == 0) {
         return std::max(position - 1, qsizetype{0});
     }
-    while (column > 0 && !isWordCharacter(text.at(column - 1))) {
+    while (column > 0 && text.at(column - 1).isSpace()) {
         --column;
     }
-    while (column > 0 && isWordCharacter(text.at(column - 1))) {
+    const bool word{column > 0 && isWordCharacter(text.at(column - 1))};
+    while (column > 0 && !text.at(column - 1).isSpace() && isWordCharacter(text.at(column - 1)) == word) {
         --column;
     }
     return lineStart + column;
