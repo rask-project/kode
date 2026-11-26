@@ -1,6 +1,7 @@
 #pragma once
 
 #include <KSyntaxHighlighting/AbstractHighlighter>
+#include <KSyntaxHighlighting/FoldingRegion>
 #include <KSyntaxHighlighting/State>
 
 #include <QDeadlineTimer>
@@ -8,6 +9,8 @@
 #include <QList>
 #include <QStringList>
 #include <QTextLayout>
+
+#include <optional>
 
 namespace tekst
 {
@@ -56,9 +59,17 @@ public:
     [[nodiscard]] KSyntaxHighlighting::State startState(qsizetype line) const;
     // The formats of `line`, whose text is `text` (it must be ready).
     [[nodiscard]] QList<QTextLayout::FormatRange> formats(qsizetype line, QStringView text);
+    // How many folding regions the line formats() last took opens and leaves open.
+    [[nodiscard]] qsizetype openedRegions() const noexcept { return m_opened; }
+    // The line where the first region `line` leaves open ends; none when it
+    // leaves none open, `line` is not ready or `deadline` passes first.
+    [[nodiscard]] std::optional<qsizetype> regionEnd(qsizetype line, const QDeadlineTimer &deadline);
+    // The closest line above `line` with a region open past it.
+    [[nodiscard]] std::optional<qsizetype> regionAbove(qsizetype line, const QDeadlineTimer &deadline);
 
 protected:
     void applyFormat(int offset, int length, const KSyntaxHighlighting::Format &format) override;
+    void applyFolding(int offset, int length, KSyntaxHighlighting::FoldingRegion region) override;
 
 private:
     [[nodiscard]] QTextCharFormat charFormat(const KSyntaxHighlighting::Format &format);
@@ -70,11 +81,15 @@ private:
     QList<KSyntaxHighlighting::State> m_states;
     QHash<qint32, QTextCharFormat> m_charFormats;
     QList<QTextLayout::FormatRange> m_collected;
+    // The folding regions of the line highlighted last, in order: id + 1
+    // where one begins, -(id + 1) where one ends.
+    QList<qint32> m_regions;
     qsizetype m_valid{0};
     qsizetype m_resumeEnd{0};
     qsizetype m_checkFrom{0};
     // The line whose formats formats() collects; -1 while advancing.
     qsizetype m_collecting{-1};
+    qsizetype m_opened{0};
 };
 
 } // namespace tekst

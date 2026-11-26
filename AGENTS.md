@@ -172,7 +172,21 @@ Guidance for AI agents working in this repository.
     without walking every line); estimated from `TextBuffer::lineLengths()`
     and set exactly for the lines laid out. `EditorView` goes through
     `rowOfLine()`/`lineAtRow()`/`positionRect()`/`positionAtRow()` (the
-    identity without wrapping); each `Row` carries its `top`.
+    identity without wrapping or folds); each `Row` carries its `top`.
+  - `Folding` — `FoldIndex`, a view's folds (hidden line ranges, sorted
+    and disjoint; few, so walked), which `rowOfLine()`/`lineAtRow()`/
+    `totalRows()` map rows past, over the wrapping's; edits open the folds
+    they touch and move the rest. Blocks come from KSyntaxHighlighting's
+    folding regions (`SyntaxHighlighter::regionEnd()`/`regionAbove()`,
+    highlighting from a known state without touching the stored ones; a
+    row keeps how many regions its line opens, from its `formats()`), or
+    from indentation where the definition folds that way (Python, YAML).
+    The line that closes a region stays shown. `EditorView::fold()`/
+    `unfold()`/`unfoldAll()` (View > Code Folding, ⌥⌘← / ⌥⌘→ as in
+    Xcode), markers in the gutter (▾/▸, click to toggle) and a ⋯
+    placeholder after a folded line (click to unfold). A caret never sits
+    in hidden lines: moving there (go to line, find, undo) unfolds, ←/→
+    go past them.
   - Invisibles are drawn by the view (one `QSGGeometryNode`): Qt's
     `QTextOption::ShowTabsAndSpaces` only affects `QPainter` drawing, not
     `glyphRuns()`.
@@ -191,7 +205,7 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`,
+  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`, `tst_folding`,
   `tst_preferences`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in` (with the document types the Finder offers

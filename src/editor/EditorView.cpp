@@ -52,6 +52,8 @@ constexpr std::chrono::milliseconds highlightSlice{3};
 constexpr qsizetype highlightLookahead{1000};
 // Find: a slice of the search.
 constexpr std::chrono::milliseconds searchSlice{3};
+// How long finding where a block ends (or starts) may take.
+constexpr std::chrono::milliseconds foldSearch{250};
 
 using matching::isWordCharacter;
 
@@ -74,6 +76,8 @@ struct Shown {
     QSGTextNode *node{nullptr};
     QColor color;
 };
+
+} // namespace
 
 // The scene graph side. Children, bottom to top: the current-line band, the
 // clip of the text area (with `content`: marks, selection, rows, caret) and the
@@ -100,7 +104,13 @@ public:
     QList<QSGRectangleNode *> matches;
     QHash<quint64, Shown> rows;
     QHash<quint64, Shown> numbers;
+    QHash<qsizetype, Shown> foldMarks;
+    QHash<qsizetype, Shown> placeholders;
+    QList<QSGRectangleNode *> placeholderBacks;
 };
+
+namespace
+{
 
 std::unique_ptr<QSGClipNode> makeClip()
 {
@@ -351,6 +361,7 @@ void EditorView::startOver(const TextDocument::Place &place)
     m_cursor = std::clamp(place.caret.cursor, qsizetype{0}, buffer().length());
     m_anchor = std::clamp(place.caret.anchor, qsizetype{0}, buffer().length());
     m_others.clear();
+    m_folds.clear();
     m_preedit.clear();
     m_preferredX = -1.0;
     m_widestLine = 0.0;
@@ -384,14 +395,13 @@ void EditorView::documentReset(bool keepPlace)
 
 void EditorView::documentReplaced(qsizetype position, const QString &removed, const QString &inserted)
 {
+    const qsizetype line{buffer().lineAt(position)};
+    const qsizetype removedLines{removed.count(QLatin1Char('\n'))};
+    const qsizetype insertedLines{inserted.count(QLatin1Char('\n'))};
     if (wrap()) {
-        m_wrapIndex.linesReplaced(
-            buffer(),
-            buffer().lineAt(position),
-            removed.count(QLatin1Char('\n')),
-            inserted.count(QLatin1Char('\n'))
-        );
+        m_wrapIndex.linesReplaced(buffer(), line, removedLines, insertedLines);
     }
+    m_folds.linesReplaced(line, removedLines, insertedLines);
     // Another view's edit: the caret stays on the same text.
     if ((m_flags & Editing) == 0U) {
         m_cursor = shifted(m_cursor, position, removed.size(), inserted.size());
@@ -521,7 +531,12 @@ void EditorView::setContentY(qreal contentY)
 qreal EditorView::gutterWidth() const
 {
     const auto digits{std::max(3, static_cast<qint32>(std::log10(static_cast<qreal>(buffer().lineCount()))) + 1)};
-    return (static_cast<qreal>(digits) * m_charWidth) + (2.0 * padding);
+    return (static_cast<qreal>(digits) * m_charWidth) + (2.0 * padding) + foldColumnWidth();
+}
+
+qreal EditorView::foldColumnWidth() const
+{
+    return std::round(m_charWidth * 1.5);
 }
 
 qreal EditorView::textLeft() const
@@ -529,19 +544,43 @@ qreal EditorView::textLeft() const
     return gutterWidth() + padding;
 }
 
-qsizetype EditorView::rowOfLine(qsizetype line) const
+qsizetype EditorView::unfoldedRow(qsizetype line) const
 {
     return wrap() ? m_wrapIndex.rowOf(line) : line;
 }
 
-qsizetype EditorView::lineAtRow(qsizetype row) const
+qsizetype EditorView::unfoldedLine(qsizetype row) const
 {
     return wrap() ? m_wrapIndex.lineAt(row) : std::clamp(row, qsizetype{0}, buffer().lineCount() - 1);
 }
 
+qsizetype EditorView::rowOfLine(qsizetype line) const
+{
+    if (m_folds.isEmpty()) {
+        return unfoldedRow(line);
+    }
+    return m_folds.rowOf(line, [this](qsizetype at) { return unfoldedRow(at); });
+}
+
+qsizetype EditorView::lineAtRow(qsizetype row) const
+{
+    if (m_folds.isEmpty()) {
+        return unfoldedLine(row);
+    }
+    return m_folds.lineAt(
+        std::clamp(row, qsizetype{0}, totalRows() - 1),
+        [this](qsizetype at) { return unfoldedRow(at); },
+        [this](qsizetype at) { return unfoldedLine(at); }
+    );
+}
+
 qsizetype EditorView::totalRows() const
 {
-    return wrap() ? m_wrapIndex.totalRows() : buffer().lineCount();
+    const qsizetype rows{wrap() ? m_wrapIndex.totalRows() : buffer().lineCount()};
+    if (m_folds.isEmpty()) {
+        return rows;
+    }
+    return rows - m_folds.hiddenRows([this](qsizetype at) { return unfoldedRow(at); });
 }
 
 qreal EditorView::wrapWidth() const
@@ -716,6 +755,9 @@ void EditorView::replace(qsizetype position, qsizetype count, const QString &tex
 
 void EditorView::editedTo(TextDocument::Caret caret)
 {
+    if (m_folds.reveal(buffer().lineAt(caret.cursor))) {
+        emit contentSizeChanged();
+    }
     m_cursor = caret.cursor;
     m_anchor = caret.anchor;
     m_preferredX = -1.0;
@@ -926,6 +968,7 @@ void EditorView::moveEach(Step step)
         } else if (range.count > 0 && !step.extend) {
             position = step.forward ? range.position + range.count : range.position;
         }
+        position = skipFolded(position, step.forward);
         return TextDocument::Caret{.cursor = position, .anchor = step.extend ? caret.anchor : position};
     }};
     const TextDocument::Caret primary{moved({.cursor = m_cursor, .anchor = m_anchor})};
@@ -1010,6 +1053,10 @@ void EditorView::moveCaret(qsizetype position, Select select)
     position = std::clamp(position, qsizetype{0}, buffer().length());
     clearOthers();
     m_flags &= ~WholeWords;
+    if (m_folds.reveal(buffer().lineAt(position))) {
+        emit contentSizeChanged();
+        polish();
+    }
     const qsizetype anchor{select == Select::Extend ? m_anchor : position};
     m_document->closeMerge();
     m_preferredX = -1.0;
@@ -1319,17 +1366,22 @@ void EditorView::updateMetrics()
     const QFontMetricsF metrics{m_font};
     m_lineHeight = std::ceil(metrics.lineSpacing());
     m_charWidth = metrics.horizontalAdvance(QLatin1Char('x'));
+    m_foldableGlyph.reset();
+    m_foldedGlyph.reset();
+    m_placeholderGlyph.reset();
+    m_flags |= FoldGlyphsChanged;
 }
 
 qsizetype EditorView::firstVisibleLine() const
 {
     const auto row{static_cast<qsizetype>(std::floor((m_contentY - topPadding) / m_lineHeight))};
-    return std::clamp(lineAtRow(std::max(row, qsizetype{0})) - overscan, qsizetype{0}, buffer().lineCount() - 1);
+    return lineAtRow(std::max(row - overscan, qsizetype{0}));
 }
 
 qsizetype EditorView::lastVisibleLine() const
 {
-    return std::min(firstVisibleLine() + visibleLineCount(), buffer().lineCount());
+    const auto row{static_cast<qsizetype>(std::floor((m_contentY + height() - topPadding) / m_lineHeight))};
+    return std::min(lineAtRow(row + overscan) + 1, buffer().lineCount());
 }
 
 qsizetype EditorView::visibleLineCount() const
@@ -1430,6 +1482,7 @@ EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
         composing ? m_cursor - buffer().lineStart(line) : -1,
         highlighted ? highlighter().formats(line, text) : QList<QTextLayout::FormatRange>{}
     );
+    row.opens = highlighted ? highlighter().openedRegions() : 0;
     row.width = row.layout->lineAt(0).naturalTextWidth();
     row.text = std::move(text);
     m_widestLine = std::max(m_widestLine, row.width);
@@ -1457,7 +1510,8 @@ void EditorView::layoutRows()
         resetWrap(topLine());
     }
     const qsizetype first{firstVisibleLine()};
-    const qsizetype count{std::min(visibleLineCount(), buffer().lineCount() - first)};
+    // Folded lines between them included.
+    const qsizetype count{lastVisibleLine() - first};
     const qsizetype cursorLine{buffer().lineAt(m_cursor)};
     const qsizetype baseRow{rowOfLine(first)};
     // Down to this row (overscan included): wrapped lines take several.
@@ -1471,10 +1525,12 @@ void EditorView::layoutRows()
     }
     std::vector<Row> rows;
     std::vector<Number> numbers;
-    rows.reserve(static_cast<std::size_t>(count));
-    numbers.reserve(static_cast<std::size_t>(count));
+    const auto shown{static_cast<std::size_t>(std::min(count, visibleLineCount()))};
+    rows.reserve(shown);
+    numbers.reserve(shown);
     qsizetype rowsAbove{0};
-    for (qsizetype line{first}; line < buffer().lineCount() && baseRow + rowsAbove <= lastRow; ++line) {
+    for (qsizetype line{first}; line < buffer().lineCount() && baseRow + rowsAbove <= lastRow;
+         line = m_folds.nextShown(line + 1)) {
         Row row{takeRow(line, cursorLine)};
         row.top = static_cast<qreal>(rowsAbove) * m_lineHeight;
         const qsizetype visualLines{row.layout->lineCount()};
@@ -1619,9 +1675,13 @@ void EditorView::layoutMatches()
         if (line > m_rows.back().line) {
             break;
         }
-        const Row &row{m_rows.at(static_cast<std::size_t>(line - m_rows.front().line))};
+        // None for a folded line.
+        const auto row{std::ranges::lower_bound(m_rows, line, {}, &Row::line)};
+        if (row == m_rows.end() || row->line != line) {
+            continue;
+        }
         const qsizetype column{match.start - buffer().lineStart(line)};
-        appendRangeRects(m_matchRects, row, column, column + match.length);
+        appendRangeRects(m_matchRects, *row, column, column + match.length);
     }
 }
 
@@ -1703,6 +1763,7 @@ void EditorView::updatePolish()
     layoutMatches();
     layoutInvisibles();
     layoutMarks();
+    layoutFoldMarks();
     if (m_widestLine > widestBefore) {
         emit contentSizeChanged();
     }
@@ -1782,11 +1843,12 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
             number.id,
             number.layout.get(),
             color,
-            {gutter - padding - number.width, y}
+            {gutter - padding - foldColumnWidth() - number.width, y}
         );
     }
     removeText(node->gutter, node->numbers);
     node->numbers = std::move(numbers);
+    placeFoldMarks(window, node);
 
     if ((m_flags & InvisiblesChanged) != 0U) {
         setRectangles(node->invisibles, m_invisibleRects, lineNumberColor());
@@ -1826,6 +1888,214 @@ void EditorView::geometryChange(const QRectF &newGeometry, const QRectF &oldGeom
     }
 }
 
+// --- folding -----------------------------------------------------------------
+
+std::optional<folding::Fold> EditorView::foldUnder(qsizetype line)
+{
+    if (!highlighter().isActive()) {
+        return std::nullopt;
+    }
+    const QDeadlineTimer deadline{foldSearch};
+    if (highlighter().definition().indentationBasedFoldingEnabled()) {
+        return folding::indentedBlock(buffer(), line, indentWidth(), deadline);
+    }
+    if (!highlighter().advance(line, deadline)) {
+        return std::nullopt;
+    }
+    // The line that closes it stays shown.
+    const std::optional<qsizetype> end{highlighter().regionEnd(line, deadline)};
+    if (!end || *end - 1 < line + 1) {
+        return std::nullopt;
+    }
+    return folding::Fold{.first = line + 1, .last = *end - 1};
+}
+
+std::optional<folding::Fold> EditorView::foldAround(qsizetype line)
+{
+    if (!highlighter().isActive()) {
+        return std::nullopt;
+    }
+    const QDeadlineTimer deadline{foldSearch};
+    std::optional<qsizetype> above;
+    if (highlighter().definition().indentationBasedFoldingEnabled()) {
+        above = folding::lineAbove(buffer(), line, indentWidth(), deadline);
+    } else if (highlighter().advance(line, deadline)) {
+        above = highlighter().regionAbove(line, deadline);
+    }
+    const std::optional<folding::Fold> fold{above ? foldUnder(*above) : std::nullopt};
+    if (!fold || fold->last + 1 < line) {
+        return std::nullopt;
+    }
+    return fold;
+}
+
+void EditorView::fold()
+{
+    const qsizetype line{buffer().lineAt(m_cursor)};
+    std::optional<folding::Fold> fold{m_folds.foldedUnder(line) ? std::nullopt : foldUnder(line)};
+    if (!fold) {
+        fold = foldAround(line);
+    }
+    if (fold) {
+        applyFold(*fold);
+    }
+}
+
+void EditorView::unfold()
+{
+    if (m_folds.unfold(buffer().lineAt(m_cursor))) {
+        foldsChanged();
+    }
+}
+
+void EditorView::unfoldAll()
+{
+    if (!m_folds.isEmpty()) {
+        m_folds.clear();
+        foldsChanged();
+    }
+}
+
+void EditorView::applyFold(folding::Fold fold)
+{
+    m_folds.fold(fold);
+    const auto hidden{[&fold, this](qsizetype position) {
+        const qsizetype line{buffer().lineAt(position)};
+        return line >= fold.first && line <= fold.last;
+    }};
+    m_others.removeIf([&hidden](const TextDocument::Caret &caret) { return hidden(caret.cursor); });
+    // A caret inside goes to the folded line.
+    if (hidden(m_cursor)) {
+        const qsizetype line{fold.first - 1};
+        moveCaret(buffer().lineStart(line) + buffer().lineLength(line), Select::Collapse);
+    }
+    foldsChanged();
+}
+
+void EditorView::toggleFold(qsizetype line)
+{
+    if (m_folds.unfold(line)) {
+        foldsChanged();
+    } else if (const std::optional<folding::Fold> fold{foldUnder(line)}) {
+        applyFold(*fold);
+    }
+}
+
+void EditorView::foldsChanged()
+{
+    emit contentSizeChanged();
+    emit cursorChanged();
+    emit selectionChanged();
+    polish();
+}
+
+std::optional<qsizetype> EditorView::foldTargetAt(const QPointF &point) const
+{
+    const qreal gutter{gutterWidth()};
+    if (point.x() < gutter && point.x() >= gutter - padding - foldColumnWidth()) {
+        const auto row{static_cast<qsizetype>(std::floor((point.y() + m_contentY - topPadding) / m_lineHeight))};
+        const qsizetype line{lineAtRow(std::max(row, qsizetype{0}))};
+        const bool marked{std::ranges::any_of(m_foldMarks, [line](const FoldMark &mark) {
+            return mark.key / 2 == line;
+        })};
+        return marked ? std::optional{line} : std::nullopt;
+    }
+    const QPointF at{point.x() + m_contentX - textLeft(), point.y() + m_contentY - m_baseTop};
+    const auto placeholder{std::ranges::find_if(m_placeholders, [&at](const Placeholder &shown) {
+        return shown.rect.contains(at);
+    })};
+    return placeholder != m_placeholders.end() ? std::optional{placeholder->line} : std::nullopt;
+}
+
+qsizetype EditorView::skipFolded(qsizetype position, bool forward) const
+{
+    const std::optional<folding::Fold> fold{m_folds.hiding(buffer().lineAt(position))};
+    if (!fold) {
+        return position;
+    }
+    if (forward) {
+        return fold->last + 1 < buffer().lineCount() ? buffer().lineStart(fold->last + 1) : buffer().length();
+    }
+    const qsizetype line{fold->first - 1};
+    return buffer().lineStart(line) + buffer().lineLength(line);
+}
+
+void EditorView::layoutFoldMarks()
+{
+    // A marker by each line a block starts on (and each folded one), and a
+    // placeholder after each folded one.
+    m_foldMarks.clear();
+    m_placeholders.clear();
+    const bool active{highlighter().isActive()};
+    if (!active && m_folds.isEmpty()) {
+        return;
+    }
+    if (m_foldableGlyph == nullptr) {
+        m_foldableGlyph = layoutText(QStringLiteral("\u25BE"), -1);
+        m_foldedGlyph = layoutText(QStringLiteral("\u25B8"), -1);
+        m_placeholderGlyph = layoutText(QStringLiteral("\u22EF"), -1);
+    }
+    const bool indented{active && highlighter().definition().indentationBasedFoldingEnabled()};
+    const qreal placeholderWidth{m_placeholderGlyph->lineAt(0).naturalTextWidth() + m_charWidth};
+    for (const Row &row : m_rows) {
+        const bool folded{m_folds.foldedUnder(row.line)};
+        const bool opens{indented ? folding::opensIndentedBlock(buffer(), row.line, indentWidth()) : row.opens > 0};
+        if (!folded && !(active && opens)) {
+            continue;
+        }
+        m_foldMarks.append({.key = (row.line * 2) + (folded ? 1 : 0), .top = row.top});
+        if (folded) {
+            const QTextLine last{row.layout->lineAt(row.layout->lineCount() - 1)};
+            const qreal top{row.top + (static_cast<qreal>(last.lineNumber()) * m_lineHeight)};
+            m_placeholders.append(
+                {.rect = {last.naturalTextWidth() + (m_charWidth / 2.0), top, placeholderWidth, m_lineHeight},
+                 .line = row.line}
+            );
+        }
+    }
+}
+
+void EditorView::placeFoldMarks(QQuickWindow *window, EditorNode *node)
+{
+    if ((m_flags & FoldGlyphsChanged) != 0U) {
+        removeText(node->gutter, node->foldMarks);
+        removeText(node->textLayer, node->placeholders);
+        m_flags &= ~FoldGlyphsChanged;
+    }
+    const qreal column{foldColumnWidth()};
+    const qreal left{gutterWidth() - (padding / 2.0) - column};
+    const QColor color{lineNumberColor()};
+    QHash<qsizetype, Shown> marks;
+    for (const FoldMark &mark : std::as_const(m_foldMarks)) {
+        QTextLayout *const glyph{mark.key % 2 == 1 ? m_foldedGlyph.get() : m_foldableGlyph.get()};
+        const qreal x{left + ((column - glyph->lineAt(0).naturalTextWidth()) / 2.0)};
+        placeText(window, node->gutter, node->foldMarks, marks, mark.key, glyph, color, {x, mark.top});
+    }
+    removeText(node->gutter, node->foldMarks);
+    node->foldMarks = std::move(marks);
+
+    QHash<qsizetype, Shown> placeholders;
+    QList<QRectF> backgrounds;
+    backgrounds.reserve(m_placeholders.size());
+    for (const Placeholder &placeholder : std::as_const(m_placeholders)) {
+        const QPointF at{placeholder.rect.x() + (m_charWidth / 2.0), placeholder.rect.y()};
+        placeText(
+            window,
+            node->textLayer,
+            node->placeholders,
+            placeholders,
+            placeholder.line,
+            m_placeholderGlyph.get(),
+            color,
+            at
+        );
+        backgrounds.append(placeholder.rect.adjusted(0.0, 2.0, 0.0, -2.0));
+    }
+    removeText(node->textLayer, node->placeholders);
+    node->placeholders = std::move(placeholders);
+    syncRectangles(window, node->marksLayer, node->placeholderBacks, backgrounds, wordColor());
+}
+
 // --- input -------------------------------------------------------------------
 
 bool EditorView::handleNavigation(const QKeyEvent *event)
@@ -1846,18 +2116,18 @@ bool EditorView::handleNavigation(const QKeyEvent *event)
         if (command) {
             moveCaret(lineStart, select);
         } else if (option) {
-            moveCaret(wordBoundary(m_cursor, false), select);
+            moveCaret(skipFolded(wordBoundary(m_cursor, false), false), select);
         } else {
-            moveCaret(collapsing ? selectionStart() : m_cursor - 1, select);
+            moveCaret(collapsing ? selectionStart() : skipFolded(m_cursor - 1, false), select);
         }
         return true;
     case Qt::Key_Right:
         if (command) {
             moveCaret(lineEnd, select);
         } else if (option) {
-            moveCaret(wordBoundary(m_cursor, true), select);
+            moveCaret(skipFolded(wordBoundary(m_cursor, true), true), select);
         } else {
-            moveCaret(collapsing ? selectionEnd() : m_cursor + 1, select);
+            moveCaret(collapsing ? selectionEnd() : skipFolded(m_cursor + 1, true), select);
         }
         return true;
     case Qt::Key_Up:
@@ -2074,6 +2344,11 @@ QVariant EditorView::inputMethodQuery(Qt::InputMethodQuery query) const
 void EditorView::mousePressEvent(QMouseEvent *event)
 {
     forceActiveFocus(Qt::MouseFocusReason);
+    if (const std::optional<qsizetype> folded{foldTargetAt(event->position())}) {
+        toggleFold(*folded);
+        event->accept();
+        return;
+    }
     // A drag selects (or moves the selection): the Flickable must not take it to scroll.
     setKeepMouseGrab(true);
     const qsizetype position{positionAt(event->position())};

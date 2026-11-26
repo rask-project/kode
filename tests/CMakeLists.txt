@@ -7,6 +7,8 @@ set(editor_sources
     ../src/editor/EditorAccessible.cpp
     ../src/editor/EditorView.h
     ../src/editor/EditorView.cpp
+    ../src/editor/Folding.h
+    ../src/editor/Folding.cpp
     ../src/editor/Indentation.h
     ../src/editor/Indentation.cpp
     ../src/editor/Matching.h
@@ -155,3 +157,15 @@ target_include_directories(tst_splits PRIVATE ../src ../src/editor)
 target_link_libraries(tst_splits PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
 add_test(NAME tst_splits COMMAND tst_splits)
 set_tests_properties(tst_splits PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_folding
+    tst_folding.h
+    tst_folding.cpp
+    ../src/editor/Folding.h
+    ../src/editor/Folding.cpp
+    ../src/editor/TextBuffer.h
+    ../src/editor/TextBuffer.cpp
+)
+target_include_directories(tst_folding PRIVATE ../src/editor)
+target_link_libraries(tst_folding PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME tst_folding COMMAND tst_folding)

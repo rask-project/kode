@@ -44,4 +44,8 @@ private slots:
     void nextOccurrenceWrapsAndSkipsSelected();
     void optionArrowsAddCaretsAboveAndBelow();
     void optionShiftArrowsAddBlockSelections();
+    void foldsTheBlockAroundTheCaret();
+    void foldsTheBlockStartingOnTheCaretsLine();
+    void movesPastFoldsAndOpensThemForEdits();
+    void foldsByIndentation();
 };

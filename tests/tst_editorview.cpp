@@ -553,6 +553,98 @@ void TestEditorView::optionShiftArrowsAddBlockSelections()
     QCOMPARE(editor.text(), QStringLiteral("-\n-\n-"));
 }
 
+namespace
+{
+
+// Lines: 0 int main(), 1 {, 2 if (x) {, 3 a();, 4 b();, 5 }, 6 return 0;, 7 }.
+const QString cppSource{
+    QStringLiteral("int main()\n{\n    if (x) {\n        a();\n        b();\n    }\n    return 0;\n}\n")
+};
+
+} // namespace
+
+void TestEditorView::foldsTheBlockAroundTheCaret()
+{
+    tekst::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(cppSource);
+    const qreal height{editor.contentHeight()};
+    editor.setCursorPosition(editor.text().indexOf(QStringLiteral("b();")));
+    editor.fold();
+    // a() and b() hidden; the caret on the if, at its end; "}" still shown.
+    QCOMPARE(editor.cursorLine(), 2);
+    QCOMPARE(editor.cursorColumn(), 12);
+    const qreal folded{editor.contentHeight()};
+    QVERIFY(folded < height);
+    // Folding again from there folds the function's body around it.
+    editor.fold();
+    QVERIFY(editor.contentHeight() < folded);
+    QCOMPARE(editor.cursorLine(), 1);
+    editor.unfoldAll();
+    QCOMPARE(editor.contentHeight(), height);
+}
+
+void TestEditorView::foldsTheBlockStartingOnTheCaretsLine()
+{
+    tekst::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(cppSource);
+    const qreal height{editor.contentHeight()};
+    editor.setCursorPosition(editor.text().indexOf(QStringLiteral("b();")));
+    editor.fold();
+    const qreal folded{editor.contentHeight()};
+    editor.unfoldAll();
+    editor.setCursorPosition(editor.text().indexOf(QStringLiteral("if")));
+    editor.fold();
+    QCOMPARE(editor.contentHeight(), folded);
+    QCOMPARE(editor.cursorLine(), 2);
+    editor.unfold();
+    QCOMPARE(editor.contentHeight(), height);
+}
+
+void TestEditorView::movesPastFoldsAndOpensThemForEdits()
+{
+    tekst::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(cppSource);
+    const qreal height{editor.contentHeight()};
+    editor.setCursorPosition(editor.text().indexOf(QStringLiteral("if")));
+    editor.fold();
+    // ↓ and → go past the hidden lines, ← comes back.
+    press(editor, Qt::Key_Down);
+    QCOMPARE(editor.cursorLine(), 5);
+    press(editor, Qt::Key_Up);
+    QCOMPARE(editor.cursorLine(), 2);
+    press(editor, Qt::Key_End);
+    press(editor, Qt::Key_Right);
+    QCOMPARE(editor.cursorLine(), 5);
+    QCOMPARE(editor.cursorColumn(), 0);
+    press(editor, Qt::Key_Left);
+    QCOMPARE(editor.cursorLine(), 2);
+    // Two lines hidden. A line added above moves the fold (one line more
+    // shown); going to a hidden line opens it.
+    const qreal folded{editor.contentHeight()};
+    const qreal lineHeight{(height - folded) / 2.0};
+    editor.setCursorPosition(0);
+    press(editor, Qt::Key_Return);
+    QCOMPARE(editor.contentHeight(), folded + lineHeight);
+    QVERIFY(editor.goToLine(QStringLiteral("5")));
+    QCOMPARE(editor.contentHeight(), height + lineHeight);
+}
+
+void TestEditorView::foldsByIndentation()
+{
+    tekst::EditorView editor;
+    editor.setSyntax(QStringLiteral("Python"));
+    editor.setText(QStringLiteral("def f():\n    a = 1\n\n    return a\nx = f()\n"));
+    const qreal height{editor.contentHeight()};
+    editor.fold();
+    QCOMPARE(editor.cursorLine(), 0);
+    QVERIFY(editor.contentHeight() < height);
+    press(editor, Qt::Key_Down);
+    QCOMPARE(editor.cursorLine(), 4);
+}
+
 QTEST_MAIN(TestEditorView)
 
 void TestEditorView::nextOccurrenceSelectsTheWordThenTheNextOne()

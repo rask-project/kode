@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Folding.h"
 #include "TextBuffer.h"
 #include "TextDocument.h"
 #include "WrapIndex.h"
@@ -30,6 +31,7 @@ namespace tekst
 {
 
 class EditorAccessible;
+class EditorNode;
 
 namespace indentation
 {
@@ -228,6 +230,13 @@ public:
     Q_INVOKABLE void replaceCurrent(const QString &replacement);
     // Replaces every match, as one undoable edit; returns how many.
     Q_INVOKABLE qint32 replaceAll(const QString &replacement);
+    // Folds the block that starts on the caret's line, else the one around
+    // it (the caret goes to the folded line); the gutter's markers and the
+    // placeholder after a folded line fold and unfold too.
+    Q_INVOKABLE void fold();
+    // Unfolds what is folded under the caret's line.
+    Q_INVOKABLE void unfold();
+    Q_INVOKABLE void unfoldAll();
 
 signals:
     void documentChanged();
@@ -293,6 +302,8 @@ private:
         qreal width{0.0};
         // Its top, relative to m_baseLine's (rows above it may wrap).
         qreal top{0.0};
+        // The folding regions it opens and leaves open.
+        qsizetype opens{0};
     };
     static constexpr quint64 Plain{0U};
     static constexpr quint64 Highlighted{1U};
@@ -305,6 +316,19 @@ private:
         qsizetype line{-1};
         std::unique_ptr<QTextLayout> layout;
         qreal width{0.0};
+    };
+
+    // A fold marker in the gutter: its line * 2 (+ 1 when folded), and top
+    // relative to m_baseLine's.
+    struct FoldMark {
+        qsizetype key{0};
+        qreal top{0.0};
+    };
+
+    // What follows a folded line (relative to m_baseLine), unfolding it when clicked.
+    struct Placeholder {
+        QRectF rect;
+        qsizetype line{0};
     };
 
     // How a move treats the selection.
@@ -336,6 +360,8 @@ private:
     static constexpr quint64 InvisiblesChanged{1U << 6U};
     // selectNextOccurrence() started from a caret (a word): it adds whole words only.
     static constexpr quint64 WholeWords{1U << 7U};
+    // The fold markers' glyphs changed (the font did): their nodes are filled again.
+    static constexpr quint64 FoldGlyphsChanged{1U << 8U};
 
     [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
     [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
@@ -386,6 +412,20 @@ private:
     void moveCaret(qsizetype position, Select select);
     void moveVertically(qsizetype lines, Select select);
     [[nodiscard]] qsizetype wordBoundary(qsizetype position, bool forward) const;
+    // Where a block starting on `line` folds; none when nothing does.
+    [[nodiscard]] std::optional<folding::Fold> foldUnder(qsizetype line);
+    // The block around `line` (starting above it).
+    [[nodiscard]] std::optional<folding::Fold> foldAround(qsizetype line);
+    void applyFold(folding::Fold fold);
+    void toggleFold(qsizetype line);
+    void foldsChanged();
+    // The line whose fold marker or placeholder is at `point`.
+    [[nodiscard]] std::optional<qsizetype> foldTargetAt(const QPointF &point) const;
+    // A move by one character into folded lines goes past them.
+    [[nodiscard]] qsizetype skipFolded(qsizetype position, bool forward) const;
+    [[nodiscard]] qreal foldColumnWidth() const;
+    void layoutFoldMarks();
+    void placeFoldMarks(QQuickWindow *window, EditorNode *node);
     [[nodiscard]] bool handleMoveEach(const QKeyEvent *event);
     [[nodiscard]] bool handleNavigation(const QKeyEvent *event);
     [[nodiscard]] bool handleDeletion(const QKeyEvent *event);
@@ -430,8 +470,11 @@ private:
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
     [[nodiscard]] qsizetype positionAt(const QPointF &point) const;
     [[nodiscard]] qreal textLeft() const;
-    // Visual rows: the same as lines unless they wrap.
+    // Visual rows: the same as lines unless they wrap or fold.
     [[nodiscard]] qsizetype rowOfLine(qsizetype line) const;
+    // The same without folds.
+    [[nodiscard]] qsizetype unfoldedRow(qsizetype line) const;
+    [[nodiscard]] qsizetype unfoldedLine(qsizetype row) const;
     [[nodiscard]] qsizetype lineAtRow(qsizetype row) const;
     [[nodiscard]] qsizetype totalRows() const;
     // How wide wrapped lines are laid out.
@@ -461,7 +504,12 @@ private:
     std::unique_ptr<TextDocument> m_ownDocument;
     QPointer<TextDocument> m_document;
     WrapIndex m_wrapIndex;
+    folding::FoldIndex m_folds;
     std::unique_ptr<TextSearch> m_search;
+    // The fold markers' glyphs (made when first needed) and the placeholder's.
+    std::unique_ptr<QTextLayout> m_foldableGlyph;
+    std::unique_ptr<QTextLayout> m_foldedGlyph;
+    std::unique_ptr<QTextLayout> m_placeholderGlyph;
     // Move-only rows: std::vector (QList needs copyable elements).
     std::vector<Row> m_rows;
     std::vector<Number> m_numbers;
@@ -477,6 +525,8 @@ private:
     QList<QRectF> m_matchRects;
     // Dots for spaces and dashes for tabs, when shown.
     QList<QRectF> m_invisibleRects;
+    QList<FoldMark> m_foldMarks;
+    QList<Placeholder> m_placeholders;
     QRectF m_caretRect;
     QString m_preedit;
     QString m_syntaxTheme;

@@ -475,6 +475,35 @@ ApplicationWindow {
                     onTriggered: Preferences.showInvisibles = checked
                 }
             }
+            // As in Xcode's Editor > Code Folding.
+            Menu {
+                title: qsTr("Code Folding")
+
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Fold")
+                        shortcut: "Ctrl+Alt+Left"
+                        enabled: root.editor !== null
+                        onTriggered: root.editor.fold()
+                    }
+                }
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Unfold")
+                        shortcut: "Ctrl+Alt+Right"
+                        enabled: root.editor !== null
+                        onTriggered: root.editor.unfold()
+                    }
+                }
+                MenuItem {
+                    action: Action {
+                        text: qsTr("Unfold All")
+                        shortcut: "Ctrl+Alt+Shift+Right"
+                        enabled: root.editor !== null
+                        onTriggered: root.editor.unfoldAll()
+                    }
+                }
+            }
             MenuSeparator {}
             Menu {
                 id: themeMenu

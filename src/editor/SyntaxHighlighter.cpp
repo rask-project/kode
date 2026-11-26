@@ -9,10 +9,14 @@
 
 #include <QFileInfo>
 
+#include <QHash>
+
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <utility>
 
 namespace tekst
@@ -20,6 +24,23 @@ namespace tekst
 
 namespace
 {
+
+// The regions `events` (see m_regions) begin and leave open, in order.
+QList<qint32> openRegions(const QList<qint32> &events)
+{
+    QList<qint32> open;
+    for (const qint32 event : events) {
+        if (event > 0) {
+            open.append(event);
+            continue;
+        }
+        const auto found{std::ranges::find(std::views::reverse(open), -event)};
+        if (found != std::views::reverse(open).end()) {
+            open.erase(std::prev(found.base()));
+        }
+    }
+    return open;
+}
 
 // Tekst's own themes, in the app's resources (assets/themes): the
 // repository looks in <path>/themes.
@@ -251,11 +272,75 @@ QList<QTextLayout::FormatRange> SyntaxHighlighter::formats(qsizetype line, QStri
         return {};
     }
     m_collected.clear();
+    m_regions.clear();
     m_collecting = line;
     // The end state is known already.
     std::ignore = highlightLine(text, startState(line));
     m_collecting = -1;
+    m_opened = openRegions(m_regions).size();
     return m_collected;
+}
+
+std::optional<qsizetype> SyntaxHighlighter::regionEnd(qsizetype line, const QDeadlineTimer &deadline)
+{
+    if (!isActive() || !isReady(line)) {
+        return std::nullopt;
+    }
+    m_regions.clear();
+    KSyntaxHighlighting::State state{highlightLine(m_buffer->line(line), startState(line))};
+    const QList<qint32> open{openRegions(m_regions)};
+    if (open.isEmpty()) {
+        return std::nullopt;
+    }
+    // The outermost one, through those of its kind opened inside it.
+    const qint32 region{open.constFirst()};
+    auto depth{std::ranges::count(open, region)};
+    for (qsizetype next{line + 1}; next < m_buffer->lineCount(); ++next) {
+        if ((next - line) % linesPerCheck == 0 && deadline.hasExpired()) {
+            return std::nullopt;
+        }
+        m_regions.clear();
+        state = highlightLine(m_buffer->line(next), state);
+        for (const qint32 event : std::as_const(m_regions)) {
+            if (std::abs(event) == region) {
+                depth += event > 0 ? 1 : -1;
+            }
+            if (depth == 0) {
+                return next;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<qsizetype> SyntaxHighlighter::regionAbove(qsizetype line, const QDeadlineTimer &deadline)
+{
+    // Backwards, an end skips the begin that matches it.
+    QHash<qint32, qsizetype> closed;
+    for (qsizetype above{line - 1}; above >= 0 && isActive() && isReady(above); --above) {
+        if ((line - above) % linesPerCheck == 0 && deadline.hasExpired()) {
+            return std::nullopt;
+        }
+        m_regions.clear();
+        std::ignore = highlightLine(m_buffer->line(above), startState(above));
+        for (const qint32 event : std::views::reverse(m_regions)) {
+            qsizetype &count{closed[std::abs(event)]};
+            if (event < 0) {
+                ++count;
+            } else if (count == 0) {
+                return above;
+            } else {
+                --count;
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+void SyntaxHighlighter::applyFolding(int /*offset*/, int /*length*/, KSyntaxHighlighting::FoldingRegion region)
+{
+    const qint32 id{region.id() + 1};
+    m_regions.append(region.type() == KSyntaxHighlighting::FoldingRegion::Begin ? id : -id);
 }
 
 void SyntaxHighlighter::applyFormat(int offset, int length, const KSyntaxHighlighting::Format &format)
