@@ -58,7 +58,7 @@ public:
     Q_INVOKABLE void fileMoved(const QUrl &from, const QUrl &to);
     // `url` is a folder on disk (a window's folder, not a document).
     Q_INVOKABLE [[nodiscard]] static bool isFolder(const QUrl &url);
-    // `folder` without a trailing slash, to compare and name it.
+    // `folder` without a trailing slash, links resolved, to compare, name and key it.
     Q_INVOKABLE [[nodiscard]] static QUrl cleanFolder(const QUrl &folder);
 
 signals:

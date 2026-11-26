@@ -104,7 +104,12 @@ void OpenDocuments::fileMoved(const QUrl &from, const QUrl &to)
 
 QUrl OpenDocuments::cleanFolder(const QUrl &folder)
 {
-    return folder.isLocalFile() ? QUrl::fromLocalFile(QDir::cleanPath(folder.toLocalFile())) : folder;
+    if (!folder.isLocalFile()) {
+        return folder;
+    }
+    // The real path: the Finder sends /private/tmp for /tmp, and the folder keys its session.
+    const QString canonical{QFileInfo{folder.toLocalFile()}.canonicalFilePath()};
+    return QUrl::fromLocalFile(canonical.isEmpty() ? QDir::cleanPath(folder.toLocalFile()) : canonical);
 }
 
 void OpenDocuments::restore(const QStringList &files)

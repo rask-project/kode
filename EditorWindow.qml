@@ -430,6 +430,7 @@ ApplicationWindow {
                     text: qsTr("Close Folder")
                     enabled: root.folder.toString() !== ""
                     onTriggered: {
+                        root.app.saveFolder(root);
                         root.folder = "";
                         root.sidebarVisible = false;
                     }
@@ -951,7 +952,7 @@ ApplicationWindow {
             nativeWindow: windowStyle
             onFileChosen: file => root.app.openFiles([file], root)
             onOpenFolderRequested: folderDialog.open()
-            onFolderChosen: folder => root.folder = OpenDocuments.cleanFolder(folder)
+            onFolderChosen: folder => root.app.openFolder(folder, root)
             // Its documents close first (unsaved ones asked about); Cancel keeps it all.
             onTrashRequested: url => {
                 const documents = OpenDocuments.documentsIn(url);

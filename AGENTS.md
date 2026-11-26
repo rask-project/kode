@@ -47,9 +47,13 @@ Guidance for AI agents working in this repository.
   split; from the Finder or the Dock a file already in view is shown
   there; each split moves off a closing document itself, to the start
   page when none is left: the windows stay), document errors and changes on disk (alerts
-  on the last active window), the session (`Session`: the open files and
-  each window's geometry and splits, saved on quit and when the last window
-  closes, reopened at launch), the quit review (`QuitGuard`) and the
+  on the last active window), each folder's session (`Session`: the
+  documents a folder's window had open — its splits' and those in the
+  folder — with its geometry and splits, saved when the window closes, its
+  folder changes and on quit; reopened when the folder opens, in a new
+  window replacing an unused one; a folder never opened starts on the start
+  page; launched without a folder, one window without one, nothing
+  restored), the quit review (`QuitGuard`) and the
   app-wide Settings and About windows.
 - `EditorWindow.qml` — a window without a title: the `Sidebar` with the
   window's `folder` (hidden without one; the sidebar button after the
@@ -143,8 +147,9 @@ Guidance for AI agents working in this repository.
   (post-order, no recursion). Views are `Kode.EditorPane`, made from the
   module in the engine's root context (an inline `Component` is bound to
   its file's context under `ComponentBehavior: Bound`).
-- `src/Session.{h,cpp}` — `Session` (QML singleton): what to reopen, in
-  QSettings `session/state`.
+- `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
+  in QSettings `session/folders` (JSON by canonical folder URL:
+  `OpenDocuments::cleanFolder()` resolves links, as the Finder does).
 - `src/Document.{h,cpp}` — `Document` (QML type): an open file; owns its
   text (`textDocument`, a `TextDocument`), loads it and saves it back through `QSaveFile`, keeping its encoding,
   byte order mark and line ending (changing them marks it modified);

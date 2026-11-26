@@ -10,8 +10,9 @@ import Kode
 
 // The app: its windows (EditorWindow) over the documents they share
 // (OpenDocuments), opening files, closing documents in every split that
-// shows them, the session reopened at launch and the review of unsaved
-// documents before quitting. One Settings window for all of them.
+// shows them, each folder's session (saved when its window closes,
+// reopened with the folder) and the review of unsaved documents before
+// quitting. One Settings window for all of them.
 Item {
     id: app
 
@@ -23,7 +24,7 @@ Item {
 
     // A window with the folder and splits of `state` (see
     // EditorWindow.state()), else one split with a new document (none in a
-    // window opened on a folder: the start page, or another open document).
+    // window opened on a folder: the start page).
     function openWindow(state: var): EditorWindow {
         const folder = state && OpenDocuments.isFolder(state.folder ?? "") ? state.folder : "";
         const window = windowComponent.createObject(app, {
@@ -38,9 +39,10 @@ Item {
             window.width = state.width;
             window.height = state.height;
         }
-        if (!state || !window.splits.restore(state.splits))
+        if (!state || !window.splits.restore(state.splits ?? []))
             window.splits.addView({
-                document: folder !== "" ? null : OpenDocuments.create()
+                document: folder !== "" ? null : OpenDocuments.create(),
+                startEmpty: folder !== ""
             });
         if (state && state.visibility === "fullscreen")
             window.showFullScreen();
@@ -51,6 +53,8 @@ Item {
         window.raise();
         window.requestActivate();
         app.lastActiveWindow = window;
+        // Once a window's menu bar exists: it adds "Check for Updates…" to the app menu.
+        Updater.start();
         return window;
     }
 
@@ -98,21 +102,68 @@ Item {
         }
     }
 
-    // `folder` in `window`'s sidebar, shown. From outside the app a window
-    // already on it comes forward, else the last active window takes it if
-    // it has none, else a new window opens on it.
+    // `folder` in a window's sidebar, with the documents it had open when
+    // its window last closed (none the first time). From outside the app
+    // (`window` null) a window already on it comes forward, else a new one
+    // opens with its splits, replacing a window nobody used yet. In `window`
+    // (Open Folder, the sidebar), it takes the folder, saving the one it had.
     function openFolder(given: url, window: EditorWindow) {
         const folder = OpenDocuments.cleanFolder(given);
         RecentDocuments.add(folder);
-        const owner = window ? null : app.windows.find(candidate => candidate.folder.toString() === folder.toString());
-        const idle = app.lastActiveWindow && app.lastActiveWindow.folder.toString() === "" ? app.lastActiveWindow : null;
-        const target = window ?? owner ?? idle ?? app.openWindow({
-            folder: folder
-        });
-        target.folder = folder;
-        target.sidebarVisible = true;
-        target.raise();
-        target.requestActivate();
+        const state = Session.folderState(folder);
+        if (window) {
+            app.saveFolder(window);
+            window.folder = folder;
+            window.sidebarVisible = true;
+            OpenDocuments.restore(state.documents ?? []);
+            const shown = (state.splits ?? []).find(node => node.file);
+            const document = shown ? OpenDocuments.find(shown.file) : null;
+            if (document)
+                window.showDocument(document, null);
+            return;
+        }
+        const owner = app.windows.find(candidate => candidate.folder.toString() === folder.toString());
+        if (owner) {
+            owner.raise();
+            owner.requestActivate();
+            return;
+        }
+        const idle = app.windows.filter(candidate => app.isUnused(candidate));
+        OpenDocuments.restore(state.documents ?? []);
+        app.openWindow(Object.assign({}, state, {
+            folder: folder,
+            sidebar: true
+        }));
+        for (const unused of idle)
+            app.closeUnused(unused);
+    }
+
+    // No folder, and nothing but the start page or a new untouched document.
+    function isUnused(window: EditorWindow): bool {
+        return window.folder.toString() === "" && window.splits.views.every(view => !(view as EditorPane).document || (view as EditorPane).untouched);
+    }
+
+    function closeUnused(window: EditorWindow) {
+        const documents = window.splits.views.map(view => (view as EditorPane).document).filter(document => document);
+        window.close();
+        for (const document of documents) {
+            if (!app.isShown(document as Document))
+                OpenDocuments.close(document as Document);
+        }
+    }
+
+    // What `window` has open in its folder, for the next time the folder opens.
+    function saveFolder(window: EditorWindow) {
+        if (window.folder.toString() === "")
+            return;
+        const inSplits = window.splits.views.map(view => (view as EditorPane).fileUrl.toString());
+        const inFolder = OpenDocuments.documentsIn(window.folder).map(document => (document as Document).fileUrl.toString());
+        // Oldest first, so reopening them in order keeps the most recent on top.
+        const recentFirst = OpenDocuments.documents.map(document => (document as Document).fileUrl.toString());
+        const files = recentFirst.filter(file => file.startsWith("file:") && (inSplits.includes(file) || inFolder.includes(file))).reverse();
+        Session.saveFolder(window.folder, Object.assign(window.state(), {
+            documents: files
+        }));
     }
 
     // The next (1) or previous (-1) document by name, in `window`'s active split.
@@ -127,9 +178,9 @@ Item {
     }
 
     function windowClosed(window: EditorWindow) {
-        // The last window closing ends the app: it is what reopens next time.
-        if (app.windows.length === 1 && !QuitGuard.quitting)
-            app.saveSession();
+        // Quitting saved them all before closing anything.
+        if (!QuitGuard.quitting)
+            app.saveFolder(window);
         const index = app.windows.indexOf(window);
         if (index >= 0)
             app.windows.splice(index, 1);
@@ -141,15 +192,6 @@ Item {
         Qt.callLater(() => window.destroy());
     }
 
-    function saveSession() {
-        // Oldest first, so reopening them in order keeps the most recent on top.
-        const files = OpenDocuments.documents.map(document => (document as Document).fileUrl.toString()).filter(file => file.startsWith("file:")).reverse();
-        Session.save({
-            documents: files,
-            windows: app.windows.map(window => window.state())
-        });
-    }
-
     // Reviews every unsaved document in the last active window, then quits.
     function quit() {
         const window = app.lastActiveWindow ?? app.windows[0];
@@ -158,7 +200,8 @@ Item {
             return;
         }
         window.review(OpenDocuments.modifiedDocuments(), () => {
-            app.saveSession();
+            for (const open of app.windows)
+                app.saveFolder(open);
             QuitGuard.quit();
         });
     }
@@ -253,16 +296,22 @@ Item {
         }
     }
 
+    // Launched to open a folder or files (the Finder, `kode`), they arrive
+    // just after launching; launched alone, a window without a folder.
+    Timer {
+        id: launchTimer
+
+        interval: 300
+        onTriggered: {
+            if (app.windows.length === 0)
+                app.openWindow(null);
+        }
+    }
+
     Component.onCompleted: {
-        const session = Session.state();
-        OpenDocuments.restore(session.documents ?? []);
-        for (const state of session.windows ?? [])
-            app.openWindow(state);
         if (app.initialFile.toString() !== "")
             app.openFiles([app.initialFile], null);
-        if (app.windows.length === 0)
-            app.openWindow(null);
-        // Once a window's menu bar exists: it adds "Check for Updates…" to the app menu.
-        Updater.start();
+        else
+            launchTimer.start();
     }
 }

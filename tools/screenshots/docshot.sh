@@ -7,10 +7,11 @@
 #   setup [BUILD_DIR]        build an isolated copy of the app (own settings
 #                            domain and bundle id), the Swift helpers and the
 #                            demo project
-#   session [dark|light]     write the demo session (the project in the
-#                            sidebar, two splits) and the appearance; the
-#                            app must be stopped
-#   launch                   start the copy (window at 60,90, 1560×880 pt)
+#   session [dark|light]     write the demo project's session (the project
+#                            in the sidebar, two splits) and the appearance;
+#                            the app must be stopped
+#   launch                   start the copy on the demo project (window at
+#                            60,90, 1560×880 pt)
 #   stop                     quit the copy, the backdrop and the HUD
 #
 #   wallpaper                capture the desktop wallpaper (no windows, no
@@ -224,16 +225,16 @@ cmd_session() {
     *) die "usage: session [dark|light]" ;;
     esac
     defaults write "$DOMAIN" appearance.colorScheme -int "$scheme"
-    local url="file://$PROJECT" json
+    local url="file://$(cd "$PROJECT" && pwd -P)" json
     json=$(
         cat <<EOF
-{"documents":["$url/src/Forecast.cpp","$url/qml/ForecastView.qml","$url/README.md"],
- "windows":[{"x":60,"y":90,"width":1560,"height":880,"visibility":"normal",
-  "folder":"$url","sidebar":true,"sidebarWidth":250,
-  "splits":[{"file":"$url/src/Forecast.cpp"},{"file":"$url/qml/ForecastView.qml"},{"split":1}]}]}
+{"$url":{"documents":["$url/README.md","$url/qml/ForecastView.qml","$url/src/Forecast.cpp"],
+ "x":60,"y":90,"width":1560,"height":880,"visibility":"normal",
+ "folder":"$url","sidebar":true,"sidebarWidth":250,
+ "splits":[{"file":"$url/src/Forecast.cpp"},{"file":"$url/qml/ForecastView.qml"},{"split":1}]}}
 EOF
     )
-    defaults write "$DOMAIN" session.state -data "$(printf '%s' "$json" | tr -d '\n' | xxd -p | tr -d '\n')"
+    defaults write "$DOMAIN" session.folders -data "$(printf '%s' "$json" | tr -d '\n' | xxd -p | tr -d '\n')"
 }
 
 # --- running -------------------------------------------------------------
@@ -243,7 +244,7 @@ cmd_launch() {
     [[ -n $(pid_of app || true) ]] && die "already running (pid $(pid_of app))"
     (
         cd "$DIR/home" || exit 1
-        nohup "$APP" >"$DIR/app.log" 2>&1 &
+        nohup "$APP" "$PROJECT" >"$DIR/app.log" 2>&1 &
         echo $! >"$DIR/app.pid"
     )
     local i

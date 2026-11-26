@@ -19,6 +19,8 @@ Item {
 
     // A restored split: the document of this file.
     property url initialFile
+    // A new window's split on a folder: the start page, not another folder's document.
+    property bool startEmpty: false
     property Document document: null
     property bool active: false
     // The window has more than one split.
@@ -127,7 +129,7 @@ Item {
         if (!pane.document && pane.initialFile.toString() !== "")
             pane.document = OpenDocuments.open(pane.initialFile);
         // None open: the start page.
-        if (!pane.document)
+        if (!pane.document && !pane.startEmpty)
             pane.document = OpenDocuments.other(null);
     }
 

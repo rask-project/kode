@@ -10,20 +10,31 @@ namespace kode
 namespace
 {
 
-const QString stateKey{QStringLiteral("session/state")};
+const QString foldersKey{QStringLiteral("session/folders")};
+// The app-wide session of earlier versions.
+const QString oldStateKey{QStringLiteral("session/state")};
+
+QJsonObject folders(const QSettings &settings)
+{
+    return QJsonDocument::fromJson(settings.value(foldersKey).toByteArray()).object();
+}
 
 } // namespace
 
 Session::Session(QObject *parent) : QObject(parent) {}
 
-QVariantMap Session::state()
+QVariantMap Session::folderState(const QUrl &folder)
 {
-    return QJsonDocument::fromJson(QSettings{}.value(stateKey).toByteArray()).object().toVariantMap();
+    return folders(QSettings{}).value(folder.toString()).toObject().toVariantMap();
 }
 
-void Session::save(const QVariantMap &state)
+void Session::saveFolder(const QUrl &folder, const QVariantMap &state)
 {
-    QSettings{}.setValue(stateKey, QJsonDocument{QJsonObject::fromVariantMap(state)}.toJson(QJsonDocument::Compact));
+    QSettings settings;
+    QJsonObject all{folders(settings)};
+    all.insert(folder.toString(), QJsonObject::fromVariantMap(state));
+    settings.setValue(foldersKey, QJsonDocument{all}.toJson(QJsonDocument::Compact));
+    settings.remove(oldStateKey);
 }
 
 } // namespace kode

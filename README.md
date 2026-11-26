@@ -43,7 +43,7 @@ modules.
   reopen or save with.
 - **A Mac document app**: Open Recent, Open With and Open in Kode from the
   Finder, a sheet for unsaved changes, changes on disk reloaded, and the
-  session restored; it can be the default editor.
+  files each folder had open reopened with it; it can be the default editor.
 - **A `kode` command** for the Terminal, as VS Code's `code`: `kode .`,
   `kode file`, even a file that doesn't exist yet.
 - **Native look**: a translucent, blurred window, the system's accent and
