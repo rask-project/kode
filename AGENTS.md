@@ -30,7 +30,7 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`, `ToolbarGroup`/`ToolbarButton`, the Settings controls), `Rask.Dialogs`
+  (`SearchBar`, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler`, `RecentDocuments`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
@@ -45,30 +45,37 @@ Guidance for AI agents working in this repository.
   each window's geometry and splits, saved on quit and when the last window
   closes, reopened at launch), the quit review (`QuitGuard`) and the
   app-wide Settings and About windows.
-- `EditorWindow.qml` — a window, as in Xcode without a sidebar: no title,
-  a toolbar with Back and Forward (`ToolbarGroup`, SF Symbols) through the
-  active split's history, its splits (`Splits` + `PaneLayout`), the menus
+- `EditorWindow.qml` — a window without a title: its splits reach the top
+  (the bars of the splits there fill the title bar, the top-left one after
+  the window buttons), Ctrl+Tab for the active split's switcher, its splits (`Splits` + `PaneLayout`), the menus
   (actions go to the active split), the file dialogs and the "Save
   changes?" sheet (`review()` asks about each modified document in turn).
   Closing a window keeps the documents open unless it is the last one.
   `showDocument()` (not `show()`: that is the window's) puts a document in a
   split and closes the untouched new document it replaces.
-- `EditorPane.qml` — one split: a jump bar as in Xcode with the documents
-  pop-up (every open document, by name; `Popup.Native`), close document
-  and the split buttons, then `SearchBar`, `GoToLine`, `TextEditor` and
+- `EditorPane.qml` — one split: a bar as in Qt Creator with Back and
+  Forward, the documents pop-up (every open document, by name;
+  `Popup.Native`), close document and the split buttons (`topInset`/
+  `leadingInset` when it sits in the title bar; the window stays put while
+  the pointer is on a button), then `SearchBar`, `GoToLine`, `TextEditor` and
   `StatusBar`. Shows one `Document` (`document`); other splits may show the
   same one, each with its own caret and scroll. Its `DocumentHistory` feeds
-  Back and Forward; when its document closes it goes back to the previous
+  Back and Forward and the Ctrl+Tab switcher; when its document closes it goes back to the previous
   one. Icons are SF Symbols by name (`icon.name`, `IconImage`): Qt asks
   the system for them, nothing is drawn or bundled.
 - `PaneLayout.qml` — a window's split tree as nested `SplitView`s; each
   leaf is a slot its view is reparented into, so rebuilding keeps views.
+  Each node knows whether it touches the window's top and left edges, for
+  the insets of the bars in the title bar.
+- `DocumentSwitcher.qml` — the Ctrl+Tab popup, as in Qt Creator: a split's
+  documents by recent use; Tab moves on while Control is held, releasing
+  it shows the one selected, Escape cancels.
 - `src/OpenDocuments.{h,cpp}` — `OpenDocuments` (QML singleton): every
   open `Document`, owned (`deleteLater`), most recently shown first, by
   name for the menu; one document per file; untitled ones numbered.
 - `src/DocumentHistory.{h,cpp}` — `DocumentHistory`: the documents a
-  split showed, back and forward as in a browser; closed documents are
-  forgotten.
+  split showed, back and forward as in a browser, and by recent use
+  (`recent`, for Ctrl+Tab); closed documents are forgotten.
 - `src/Splits.{h,cpp}` — `Splits` (one per window) and `SplitNode`: the
   binary split tree; leaves own their view (`deleteLater`: a view may go
   from its own signal); split, remove a split (the last view stays),

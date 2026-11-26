@@ -222,4 +222,24 @@ void TestSplits::forgetsClosedDocuments()
     QCOMPARE(history.current(), c);
 }
 
+void TestSplits::keepsTheSplitsRecentDocuments()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const a{documents.create()};
+    tekst::Document *const b{documents.create()};
+    tekst::Document *const c{documents.create()};
+    tekst::DocumentHistory history;
+    history.visit(a);
+    history.visit(b);
+    history.visit(c);
+    history.visit(a);
+    QCOMPARE(history.recent(), (QVariantList{QVariant::fromValue(a), QVariant::fromValue(c), QVariant::fromValue(b)}));
+    // Going back is a use too.
+    QCOMPARE(history.back(), c);
+    history.visit(c);
+    QCOMPARE(history.recent().constFirst(), QVariant::fromValue(c));
+    history.forget(c);
+    QCOMPARE(history.recent(), (QVariantList{QVariant::fromValue(a), QVariant::fromValue(b)}));
+}
+
 QTEST_MAIN(TestSplits)

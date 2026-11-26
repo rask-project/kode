@@ -7,11 +7,12 @@ import QtQuick.Controls.impl
 
 import Rask.Controls
 import Rask.Platform
+import Rask.Window
 
 import Tekst
 
-// One split of a window: a jump bar as in Xcode with the open documents
-// (pick the one shown), close document and the split buttons, then the find
+// One split of a window: a bar as in Qt Creator with Back and Forward, the
+// open documents (pick the one shown), close document and the split buttons, then the find
 // bar, the editor and the status bar. It shows one of OpenDocuments; other
 // splits may show the same one, each with its own caret and scroll.
 Item {
@@ -23,6 +24,12 @@ Item {
     property bool active: false
     // The window has more than one split.
     property bool removable: false
+    // At the window's top the bar fills the title bar (this tall) and, at
+    // its left too, starts after the window buttons (leadingInset).
+    property real topInset: 0
+    property real leadingInset: 0
+    // Kept from moving while the pointer is on a button of the bar.
+    property NativeWindow nativeWindow: null
 
     readonly property EditorView editor: textEditor.editor
     // The documents this split showed, for Back and Forward.
@@ -57,6 +64,11 @@ Item {
         searchBar.text = textEditor.editor.selectedText();
     }
 
+    // Ctrl+Tab: the switcher over this split's documents by recent use.
+    function switchDocuments(step: int) {
+        switcher.step(step);
+    }
+
     function showGoToLine() {
         goToLine.open();
     }
@@ -77,6 +89,16 @@ Item {
 
     DocumentHistory {
         id: documentHistory
+    }
+
+    DocumentSwitcher {
+        id: switcher
+
+        x: (pane.width - width) / 2
+        y: bar.height + 40
+        documents: documentHistory.recent
+        onChosen: document => pane.documentChosen(document)
+        onClosed: pane.focusEditor()
     }
 
     Connections {
@@ -110,6 +132,10 @@ Item {
         icon.height: 15
         ToolTip.visible: hovered && ToolTip.text !== ""
         ToolTip.delay: 600
+        onHoveredChanged: {
+            if (pane.nativeWindow)
+                pane.nativeWindow.movable = !hovered;
+        }
 
         background: Rectangle {
             radius: 6
@@ -122,18 +148,19 @@ Item {
             sourceSize.height: barButton.icon.height
             fillMode: Image.Pad
             color: barButton.hovered ? SystemColors.label : SystemColors.secondaryLabel
+            opacity: barButton.enabled ? 1 : 0.35
         }
     }
 
-    // The jump bar, as in Xcode: which document (from every open one), close
-    // it, and the split buttons.
+    // The bar, as in Qt Creator: Back and Forward, which document (from
+    // every open one), close it, and the split buttons.
     Item {
         id: bar
 
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 34
+        height: Math.max(pane.topInset, 34)
 
         Rectangle {
             anchors.bottom: parent.bottom
@@ -148,6 +175,36 @@ Item {
                 pane.activated();
                 pane.focusEditor();
             }
+            // In the title bar, empty space does the system's double click.
+            onDoubleTapped: {
+                if (pane.topInset > 0 && pane.nativeWindow)
+                    pane.nativeWindow.titleBarDoubleClicked();
+            }
+        }
+
+        BarButton {
+            id: backButton
+
+            anchors.left: parent.left
+            anchors.leftMargin: 8 + pane.leadingInset
+            anchors.verticalCenter: parent.verticalCenter
+            icon.name: "chevron.backward"
+            enabled: documentHistory.canGoBack
+            Accessible.name: qsTr("Back")
+            ToolTip.text: qsTr("Go Back")
+            onClicked: pane.goBack()
+        }
+
+        BarButton {
+            id: forwardButton
+
+            anchors.left: backButton.right
+            anchors.verticalCenter: parent.verticalCenter
+            icon.name: "chevron.forward"
+            enabled: documentHistory.canGoForward
+            Accessible.name: qsTr("Forward")
+            ToolTip.text: qsTr("Go Forward")
+            onClicked: pane.goForward()
         }
 
         // A pop-up button: the document's icon and name, the menu's arrows at its end.
@@ -157,8 +214,8 @@ Item {
             // Room left by the other buttons.
             readonly property real room: splitButtons.x - x - closeButton.width - 16
 
-            anchors.left: parent.left
-            anchors.leftMargin: 8
+            anchors.left: forwardButton.right
+            anchors.leftMargin: 4
             anchors.verticalCenter: parent.verticalCenter
             // The title's own width plus the icon, the arrows, spacing and padding.
             width: Math.max(80, Math.min(Math.max(240, titleLabel.implicitWidth + 54), room))

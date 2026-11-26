@@ -5,15 +5,14 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 
 import Rask.Application
-import Rask.Controls
 import Rask.Dialogs
 import Rask.Platform
 import Rask.Window
 
 import Tekst
 
-// An editor window: a toolbar as in Xcode (Back and Forward), the
-// editor splits (Splits, PaneLayout) each showing one of the open
+// An editor window: its splits up to the top (the bars there fill the
+// title bar, after the window buttons), the editor splits (Splits, PaneLayout) each showing one of the open
 // documents, the menus, and the file dialogs and "Save changes?" sheet.
 // Main.qml keeps the window list and the documents shared by all windows.
 ApplicationWindow {
@@ -665,52 +664,28 @@ ApplicationWindow {
         }
     }
 
-    // The toolbar, as in Xcode without a title: Back and Forward through
-    // the documents the active split showed, after the window buttons.
-    Item {
-        id: toolbar
-
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: Math.max(root.SafeArea.margins.top, 44)
-
-        TapHandler {
-            onDoubleTapped: windowStyle.titleBarDoubleClicked()
-        }
-
-        ToolbarGroup {
-            anchors.left: parent.left
-            anchors.leftMargin: windowStyle.leadingInset + 12
-            anchors.verticalCenter: parent.verticalCenter
-            nativeWindow: windowStyle
-
-            ToolbarButton {
-                icon.name: "chevron.backward"
-                enabled: root.activeView?.history.canGoBack ?? false
-                Accessible.name: qsTr("Back")
-                ToolTip.text: qsTr("Go Back")
-                onClicked: root.activeView.goBack()
-            }
-            ToolbarButton {
-                icon.name: "chevron.forward"
-                enabled: root.activeView?.history.canGoForward ?? false
-                Accessible.name: qsTr("Forward")
-                ToolTip.text: qsTr("Go Forward")
-                onClicked: root.activeView.goForward()
-            }
-        }
-    }
-
     PaneLayout {
-        anchors.top: toolbar.bottom
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.fill: parent
         splits: windowSplits
+        // The splits reach the window's top: those there fill the title bar.
+        topInset: Math.max(root.SafeArea.margins.top, 34)
+        leadingInset: root.visibility === Window.FullScreen ? 0 : windowStyle.leadingInset
+        nativeWindow: windowStyle
         onDocumentChosen: (view, document) => root.showDocument(document, view)
         onReviewRequested: (document, action) => root.review([document], action)
         onCloseDocumentRequested: document => root.closeDocument(document)
+    }
+
+    // Ctrl+Tab, Ctrl+Shift+Tab: the active split's switcher (Meta is Control on macOS).
+    Shortcut {
+        sequences: ["Meta+Tab"]
+        enabled: root.activeView !== null
+        onActivated: root.activeView.switchDocuments(1)
+    }
+    Shortcut {
+        sequences: ["Meta+Shift+Tab", "Meta+Backtab", "Meta+Shift+Backtab"]
+        enabled: root.activeView !== null
+        onActivated: root.activeView.switchDocuments(-1)
     }
 
     // Files dropped on the window open in the active split.

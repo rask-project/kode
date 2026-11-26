@@ -15,6 +15,18 @@ constexpr qsizetype maximumEntries{100};
 
 DocumentHistory::DocumentHistory(QObject *parent) : QObject(parent) {}
 
+QVariantList DocumentHistory::recent() const
+{
+    QVariantList documents;
+    documents.reserve(m_recent.size());
+    for (const QPointer<Document> &document : m_recent) {
+        if (!document.isNull()) {
+            documents.emplace_back(QVariant::fromValue(document.data()));
+        }
+    }
+    return documents;
+}
+
 Document *DocumentHistory::current() const
 {
     return m_current >= 0 ? m_entries.at(m_current).data() : nullptr;
@@ -26,7 +38,11 @@ void DocumentHistory::visit(Document *document)
         return;
     }
     remove(nullptr);
+    const bool touched{touch(document)};
     if (m_current >= 0 && m_entries.at(m_current) == document) {
+        if (touched) {
+            emit changed();
+        }
         return;
     }
     m_entries.resize(m_current + 1);
@@ -88,7 +104,21 @@ void DocumentHistory::remove(const Document *document)
         }
     }
     m_entries = std::move(kept);
+    m_recent.removeIf([document](const QPointer<Document> &entry) { return entry.isNull() || entry == document; });
     m_current = m_entries.isEmpty() ? -1 : std::max<qsizetype>(current, 0);
+}
+
+bool DocumentHistory::touch(Document *document)
+{
+    if (!m_recent.isEmpty() && m_recent.constFirst() == document) {
+        return false;
+    }
+    m_recent.removeAll(document);
+    m_recent.prepend(document);
+    if (m_recent.size() > maximumEntries) {
+        m_recent.removeLast();
+    }
+    return true;
 }
 
 } // namespace tekst

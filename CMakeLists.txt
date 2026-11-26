@@ -80,6 +80,7 @@ qt_add_qml_module(tekst
     # For qmllint and qmlcachegen: where rask's modules are built.
     IMPORT_PATH "${CMAKE_CURRENT_BINARY_DIR}/external/rask/qml"
     QML_FILES
+        DocumentSwitcher.qml
         EditorPane.qml
         EditorWindow.qml
         GoToLine.qml

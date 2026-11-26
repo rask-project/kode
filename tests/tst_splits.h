@@ -26,6 +26,7 @@ private slots:
     void goesBackAndForward();
     void visitingDropsWhatWasAhead();
     void forgetsClosedDocuments();
+    void keepsTheSplitsRecentDocuments();
 
 private:
     QQmlEngine m_engine;
