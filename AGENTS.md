@@ -133,7 +133,7 @@ Guidance for AI agents working in this repository.
     (`m_others`) at the next occurrences of the selection (whole words when
     it started from a caret); ⌥↑/↓ (`addCaretVertically()`) add one on the
     row above/below at the same column (⌥⇧: with the selection's columns, a
-    block); typing, deleting, pasting and ←/→ (with ⌥, ⌘, ⇧) act at each,
+    block); typing, deleting, pasting, ←/→ (with ⌥, ⌘, ⇧) and Home/End act at each,
     any other move or Escape leaves one. It
     sits in a `Flickable` (`contentX/Y`, `contentWidth/Height`); its edits
     go through `replace()`, which records undo in the document. `updatePolish()` (GUI thread) lays out the lines in view

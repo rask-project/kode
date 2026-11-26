@@ -529,6 +529,15 @@ void TestEditorView::optionShiftArrowsAddBlockSelections()
     press(editor, Qt::Key_Right, Qt::ControlModifier | Qt::ShiftModifier);
     type(editor, QStringLiteral("!"));
     QCOMPARE(editor.text(), QStringLiteral("aZ!\naZ!\naZ!"));
+    // Home and End move every caret (⇧: selecting).
+    press(editor, Qt::Key_Home);
+    type(editor, QStringLiteral("["));
+    press(editor, Qt::Key_End);
+    type(editor, QStringLiteral("]"));
+    QCOMPARE(editor.text(), QStringLiteral("[aZ!]\n[aZ!]\n[aZ!]"));
+    press(editor, Qt::Key_Home, Qt::ShiftModifier);
+    type(editor, QStringLiteral("-"));
+    QCOMPARE(editor.text(), QStringLiteral("-\n-\n-"));
 }
 
 QTEST_MAIN(TestEditorView)

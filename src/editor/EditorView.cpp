@@ -1958,7 +1958,14 @@ bool EditorView::handleMoveEach(const QKeyEvent *event)
         addCaretVertically(key == Qt::Key_Down ? 1 : -1, shift);
         return true;
     }
-    if (m_others.isEmpty() || (key != Qt::Key_Left && key != Qt::Key_Right)) {
+    if (m_others.isEmpty()) {
+        return false;
+    }
+    if (key == Qt::Key_Home || key == Qt::Key_End) {
+        moveEach({.forward = key == Qt::Key_End, .word = false, .line = true, .extend = shift});
+        return true;
+    }
+    if (key != Qt::Key_Left && key != Qt::Key_Right) {
         return false;
     }
     moveEach({.forward = key == Qt::Key_Right, .word = option, .line = command, .extend = shift});
