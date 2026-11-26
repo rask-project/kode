@@ -52,7 +52,8 @@ Guidance for AI agents working in this repository.
   window buttons, ⌃⌘S), its splits reach the top
   (the bars of the splits there fill the title bar, the top-left one after
   the window buttons), Ctrl+Tab for the active split's switcher, its splits (`Splits` + `PaneLayout`), the menus
-  (actions go to the active split), the file dialogs and the "Save
+  (actions go to the active split), the editor's right-click menu (the
+  same `Action`s, so their shortcuts show; `Popup.Native`), the file dialogs and the "Save
   changes?" sheet (`review()` asks about each modified document in turn).
   Closing a window keeps the documents open unless it is the last one.
   `showDocument()` (not `show()`: that is the window's) puts a document in a
@@ -189,7 +190,9 @@ Guidance for AI agents working in this repository.
     it started from a caret); ⌥↑/↓ (`addCaretVertically()`) add one on the
     row above/below at the same column (⌥⇧: with the selection's columns, a
     block); typing, deleting, pasting, ←/→ (with ⌥, ⌘, ⇧) and Home/End act at each,
-    any other move or Escape leaves one. It
+    any other move or Escape leaves one. A right click (⌃click) moves
+    the caret there unless it lands on the selection and emits
+    `contextMenuRequested()`, queued (a native menu runs its own loop). It
     sits in a `Flickable` (`contentX/Y`, `contentWidth/Height`); its edits
     go through `replace()`, which records undo in the document. `updatePolish()` (GUI thread) lays out the lines in view
     (`QTextLayout`), reusing rows by their *text* (an edit above a line moves

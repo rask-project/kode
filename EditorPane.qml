@@ -51,6 +51,8 @@ Item {
     signal newDocumentRequested
     signal openRequested
     signal openFolderRequested
+    // A right click in the editor.
+    signal contextMenuRequested
 
     function focusEditor() {
         textEditor.editor.forceActiveFocus();
@@ -403,6 +405,7 @@ Item {
             if (textEditor.editor.activeFocus)
                 pane.activated();
         }
+        editor.onContextMenuRequested: pane.contextMenuRequested()
     }
 
     Loader {

@@ -87,6 +87,15 @@ Item {
         tree.contentY = tree.originY;
     }
 
+    // For the editor's menu too: any file, in the folder or not.
+    function copyPath(url: url) {
+        fileTree.copyPath(url);
+    }
+
+    function revealInFinder(url: url) {
+        fileTree.revealInFinder(url);
+    }
+
     // Opens the folders down to `url` and scrolls to it.
     function show(url: url) {
         const index = fileTree.indexOf(url);

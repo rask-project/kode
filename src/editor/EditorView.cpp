@@ -288,7 +288,7 @@ EditorView::EditorView(QQuickItem *parent)
     setFlag(ItemHasContents);
     setFlag(ItemAcceptsInputMethod);
     setFlag(ItemIsFocusScope);
-    setAcceptedMouseButtons(Qt::LeftButton);
+    setAcceptedMouseButtons(Qt::LeftButton | Qt::RightButton);
     setFlag(ItemAcceptsDrops);
     setActiveFocusOnTab(true);
     setCursor(Qt::IBeamCursor);
@@ -2724,6 +2724,11 @@ QVariant EditorView::inputMethodQuery(Qt::InputMethodQuery query) const
 void EditorView::mousePressEvent(QMouseEvent *event)
 {
     forceActiveFocus(Qt::MouseFocusReason);
+    if (event->button() == Qt::RightButton) {
+        pressForContextMenu(event->position());
+        event->accept();
+        return;
+    }
     if (const std::optional<qsizetype> folded{foldTargetAt(event->position())}) {
         toggleFold(*folded);
         event->accept();
@@ -2756,6 +2761,10 @@ void EditorView::mousePressEvent(QMouseEvent *event)
 
 void EditorView::mouseMoveEvent(QMouseEvent *event)
 {
+    if (!event->buttons().testFlag(Qt::LeftButton)) {
+        event->accept();
+        return;
+    }
     if ((m_flags & DragPending) != 0U) {
         const qreal distance{(event->position() - m_pressPoint).manhattanLength()};
         if (distance >= QGuiApplication::styleHints()->startDragDistance()) {
@@ -2772,12 +2781,26 @@ void EditorView::mouseMoveEvent(QMouseEvent *event)
 void EditorView::mouseReleaseEvent(QMouseEvent *event)
 {
     setKeepMouseGrab(false);
+    if (event->button() != Qt::LeftButton) {
+        event->accept();
+        return;
+    }
     // A click on the selection that did not become a drag places the caret.
     if ((m_flags & DragPending) != 0U) {
         m_flags &= ~DragPending;
         moveCaret(positionAt(event->position()), Select::Collapse);
     }
     event->accept();
+}
+
+void EditorView::pressForContextMenu(const QPointF &point)
+{
+    const qsizetype position{positionAt(point)};
+    if (!hasSelection() || position < selectionStart() || position >= selectionEnd()) {
+        moveCaret(position, Select::Collapse);
+    }
+    // Queued: a native menu runs its own event loop, not inside this press.
+    QMetaObject::invokeMethod(this, &EditorView::contextMenuRequested, Qt::QueuedConnection);
 }
 
 void EditorView::startDrag()
@@ -2866,6 +2889,10 @@ void EditorView::dropEvent(QDropEvent *event)
 
 void EditorView::mouseDoubleClickEvent(QMouseEvent *event)
 {
+    if (event->button() != Qt::LeftButton) {
+        event->accept();
+        return;
+    }
     const qsizetype position{positionAt(event->position())};
     const qsizetype start{wordBoundary(std::min(position + 1, buffer().length()), false)};
     const qsizetype end{wordBoundary(start, true)};

@@ -192,6 +192,67 @@ ApplicationWindow {
         }
     }
 
+    // The editor's right-click menu: the menu bar's actions, with their shortcuts.
+    Menu {
+        id: editorMenu
+
+        readonly property url file: root.activeDocument ? root.activeDocument.fileUrl : ""
+
+        popupType: Popup.Native
+
+        MenuItem {
+            action: cutAction
+        }
+        MenuItem {
+            action: copyAction
+        }
+        MenuItem {
+            action: pasteAction
+        }
+        MenuSeparator {}
+        MenuItem {
+            action: selectNextOccurrenceAction
+        }
+        MenuItem {
+            action: selectBlockAction
+        }
+        MenuItem {
+            action: selectAllAction
+        }
+        MenuSeparator {}
+        MenuItem {
+            action: useSelectionForFindAction
+        }
+        MenuSeparator {}
+        MenuItem {
+            action: lineCommentAction
+        }
+        MenuItem {
+            action: blockCommentAction
+        }
+        MenuItem {
+            action: reindentAction
+        }
+        MenuSeparator {}
+        MenuItem {
+            action: foldAction
+        }
+        MenuItem {
+            action: unfoldAction
+        }
+        MenuSeparator {}
+        MenuItem {
+            text: qsTr("Copy Path")
+            enabled: editorMenu.file.toString() !== ""
+            onTriggered: sidebar.copyPath(editorMenu.file)
+        }
+        MenuItem {
+            text: qsTr("Reveal in Finder")
+            enabled: editorMenu.file.toString() !== ""
+            onTriggered: sidebar.revealInFinder(editorMenu.file)
+        }
+    }
+
     FileDialog {
         id: openDialog
 
@@ -405,6 +466,8 @@ ApplicationWindow {
             MenuSeparator {}
             MenuItem {
                 action: Action {
+                    id: cutAction
+
                     text: qsTr("Cut")
                     enabled: root.editor?.hasSelection ?? false
                     shortcut: StandardKey.Cut
@@ -413,6 +476,8 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
+                    id: copyAction
+
                     text: qsTr("Copy")
                     enabled: root.editor?.hasSelection ?? false
                     shortcut: StandardKey.Copy
@@ -421,6 +486,8 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
+                    id: pasteAction
+
                     text: qsTr("Paste")
                     enabled: root.editor?.canPaste ?? false
                     shortcut: StandardKey.Paste
@@ -429,6 +496,8 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
+                    id: selectAllAction
+
                     text: qsTr("Select All")
                     enabled: root.editor !== null
                     shortcut: StandardKey.SelectAll
@@ -437,6 +506,8 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
+                    id: selectNextOccurrenceAction
+
                     // ⌃D: ⌘D splits. Typing then happens at every one.
                     text: qsTr("Select Next Occurrence")
                     enabled: root.editor !== null
@@ -447,6 +518,8 @@ ApplicationWindow {
             MenuItem {
                 // As Qt Creator's Select Block Up; again for the block around it.
                 action: Action {
+                    id: selectBlockAction
+
                     text: qsTr("Select Block")
                     enabled: root.editor !== null
                     shortcut: "Ctrl+U"
@@ -481,6 +554,8 @@ ApplicationWindow {
             MenuItem {
                 // ⌘/ as in Xcode, VS Code and Qt Creator.
                 action: Action {
+                    id: lineCommentAction
+
                     text: qsTr("Toggle Line Comment")
                     enabled: root.editor !== null
                     shortcut: "Ctrl+/"
@@ -489,6 +564,8 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
+                    id: blockCommentAction
+
                     text: qsTr("Toggle Block Comment")
                     enabled: root.editor !== null
                     shortcut: "Ctrl+Alt+/"
@@ -498,6 +575,8 @@ ApplicationWindow {
             MenuItem {
                 // As in Xcode.
                 action: Action {
+                    id: reindentAction
+
                     text: qsTr("Re-Indent")
                     enabled: root.editor !== null
                     shortcut: "Meta+I"
@@ -550,6 +629,8 @@ ApplicationWindow {
                 }
                 MenuItem {
                     action: Action {
+                        id: useSelectionForFindAction
+
                         text: qsTr("Use Selection for Find")
                         enabled: root.editor?.hasSelection ?? false
                         shortcut: "Ctrl+E"
@@ -618,6 +699,8 @@ ApplicationWindow {
 
                 MenuItem {
                     action: Action {
+                        id: foldAction
+
                         text: qsTr("Fold")
                         shortcut: "Ctrl+Alt+Left"
                         enabled: root.editor !== null
@@ -626,6 +709,8 @@ ApplicationWindow {
                 }
                 MenuItem {
                     action: Action {
+                        id: unfoldAction
+
                         text: qsTr("Unfold")
                         shortcut: "Ctrl+Alt+Right"
                         enabled: root.editor !== null
@@ -892,6 +977,7 @@ ApplicationWindow {
             onNewDocumentRequested: root.newDocument()
             onOpenRequested: openDialog.open()
             onOpenFolderRequested: folderDialog.open()
+            onContextMenuRequested: editorMenu.popup()
         }
     }
 

@@ -26,6 +26,7 @@ Item {
     signal newDocumentRequested
     signal openRequested
     signal openFolderRequested
+    signal contextMenuRequested
 
     NodeLoader {
         anchors.fill: parent
@@ -122,6 +123,9 @@ Item {
                 }
                 function onOpenFolderRequested() {
                     layout.openFolderRequested();
+                }
+                function onContextMenuRequested() {
+                    layout.contextMenuRequested();
                 }
             }
         }

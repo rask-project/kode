@@ -295,6 +295,8 @@ signals:
     void indentationChanged();
     void defaultIndentationChanged();
     void layoutOptionsChanged();
+    // A right click (or ⌃click), the caret moved there unless on the selection.
+    void contextMenuRequested();
 
 protected:
     void updatePolish() override;
@@ -560,6 +562,7 @@ private:
     void restartBlink();
     [[nodiscard]] qsizetype lastVisibleLine() const;
     void startDrag();
+    void pressForContextMenu(const QPointF &point);
     void setDropPosition(qsizetype position);
     void setColor(QRgb &field, const QColor &color);
 
