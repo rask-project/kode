@@ -7,14 +7,14 @@ import Rask.Platform
 
 import Tekst
 
-// The Ctrl+Tab switcher, as in Qt Creator: a split's documents by recent
-// use. Ctrl+Tab (Ctrl+Shift+Tab) opens it on the next (last) one and moves
+// The Ctrl+Tab switcher, as in Qt Creator: the open documents, the split's
+// most recently shown first. Ctrl+Tab (Ctrl+Shift+Tab) opens it on the next (last) one and moves
 // on while Control stays down; releasing Control shows the one selected,
 // Escape closes it without a change.
 Popup {
     id: switcher
 
-    // Most recently shown first (DocumentHistory.recent).
+    // In switching order (DocumentHistory.recentAmong()).
     property list<Document> documents: []
     property int current: 0
 

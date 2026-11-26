@@ -242,4 +242,23 @@ void TestSplits::keepsTheSplitsRecentDocuments()
     QCOMPARE(history.recent(), (QVariantList{QVariant::fromValue(a), QVariant::fromValue(b)}));
 }
 
+void TestSplits::ordersEveryOpenDocumentForTheSwitcher()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const a{documents.create()};
+    tekst::Document *const b{documents.create()};
+    tekst::Document *const c{documents.create()};
+    tekst::Document *const d{documents.create()};
+    tekst::DocumentHistory history;
+    history.visit(c);
+    history.visit(a);
+    // The split's own first (a, c), then the rest as given (d, b).
+    const QVariantList
+        open{QVariant::fromValue(d), QVariant::fromValue(a), QVariant::fromValue(b), QVariant::fromValue(c)};
+    QCOMPARE(
+        history.recentAmong(open),
+        (QVariantList{QVariant::fromValue(a), QVariant::fromValue(c), QVariant::fromValue(d), QVariant::fromValue(b)})
+    );
+}
+
 QTEST_MAIN(TestSplits)

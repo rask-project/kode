@@ -27,6 +27,29 @@ QVariantList DocumentHistory::recent() const
     return documents;
 }
 
+QVariantList DocumentHistory::recentAmong(const QVariantList &documents) const
+{
+    // By pointer: QVariants holding object pointers do not compare equal reliably.
+    const auto pointer{[](const QVariant &document) { return document.value<QObject *>(); }};
+    QList<QObject *> seen;
+    seen.reserve(m_recent.size());
+    std::ranges::transform(m_recent, std::back_inserter(seen), [](const QPointer<Document> &document) {
+        return static_cast<QObject *>(document.data());
+    });
+    QVariantList ordered;
+    ordered.reserve(documents.size());
+    for (const QObject *document : seen) {
+        const auto found{std::ranges::find(documents, document, pointer)};
+        if (document != nullptr && found != documents.end()) {
+            ordered.emplace_back(*found);
+        }
+    }
+    std::ranges::copy_if(documents, std::back_inserter(ordered), [&seen, &pointer](const QVariant &document) {
+        return !seen.contains(pointer(document));
+    });
+    return ordered;
+}
+
 Document *DocumentHistory::current() const
 {
     return m_current >= 0 ? m_entries.at(m_current).data() : nullptr;

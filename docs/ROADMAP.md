@@ -383,7 +383,7 @@ The window then lost its title (no sidebar yet: the project view comes
 later): the splits reach the top, the bars of those there filling the
 title bar. Each bar has Back and Forward (⌃⌘← / ⌃⌘→) through the
 documents that split showed (`DocumentHistory`) and a wider documents
-pop-up; Ctrl+Tab switches among that split's documents by recent use, as
+pop-up; Ctrl+Tab switches among the open documents, that split's most recent first, as
 in Qt Creator (`DocumentSwitcher`). Every icon is an SF Symbol
 (`icon.name`). `Rask.Controls` got `ToolbarGroup`/`ToolbarButton` (a glass
 toolbar capsule) along the way, unused here for now.

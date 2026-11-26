@@ -64,8 +64,11 @@ Item {
         searchBar.text = textEditor.editor.selectedText();
     }
 
-    // Ctrl+Tab: the switcher over this split's documents by recent use.
+    // Ctrl+Tab: the switcher over every open document, this split's most
+    // recent first; the order is taken when it opens.
     function switchDocuments(step: int) {
+        if (!switcher.opened)
+            switcher.documents = documentHistory.recentAmong(OpenDocuments.documents);
         switcher.step(step);
     }
 
@@ -96,7 +99,6 @@ Item {
 
         x: (pane.width - width) / 2
         y: bar.height + 40
-        documents: documentHistory.recent
         onChosen: document => pane.documentChosen(document)
         onClosed: pane.focusEditor()
     }

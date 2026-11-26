@@ -27,6 +27,7 @@ private slots:
     void visitingDropsWhatWasAhead();
     void forgetsClosedDocuments();
     void keepsTheSplitsRecentDocuments();
+    void ordersEveryOpenDocumentForTheSwitcher();
 
 private:
     QQmlEngine m_engine;

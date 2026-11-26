@@ -29,6 +29,9 @@ public:
     [[nodiscard]] bool canGoForward() const noexcept { return m_current + 1 < m_entries.size(); }
     [[nodiscard]] QVariantList recent() const;
 
+    // `documents` (the open ones) for the Ctrl+Tab switcher: those this split
+    // showed, most recent first, then the others in their order.
+    Q_INVOKABLE [[nodiscard]] QVariantList recentAmong(const QVariantList &documents) const;
     // The document shown now, or null.
     Q_INVOKABLE [[nodiscard]] tekst::Document *current() const;
     // `document` is shown now (nothing changes when it already is).
