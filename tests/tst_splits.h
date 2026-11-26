@@ -21,6 +21,7 @@ private slots:
     void savesAndRestoresTheLayout();
     void opensEachFileOnce();
     void reportsMissingFiles();
+    void opensACommandsNewFile();
     void keepsTheMostRecentFirst();
     void numbersUntitledDocuments();
     void goesBackAndForward();

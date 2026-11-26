@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
+import Rask.Application
 import Rask.Controls
 import Rask.Platform
 import Rask.Window
@@ -249,6 +250,55 @@ Window {
                     Switch {
                         checked: Preferences.syncWithEditor
                         onToggled: Preferences.syncWithEditor = checked
+                    }
+                }
+            }
+
+            // Read again each time the window shows: the Finder can change them too.
+            FormGroup {
+                id: integration
+
+                property bool isDefault: false
+                property bool commandInstalled: false
+
+                function refresh() {
+                    integration.isDefault = DefaultApplication.isDefault("Text");
+                    integration.commandInstalled = CommandLineTool.isInstalled("kode");
+                }
+
+                Component.onCompleted: refresh()
+
+                Connections {
+                    target: root
+
+                    function onVisibleChanged() {
+                        if (root.visible)
+                            integration.refresh();
+                    }
+                }
+
+                FormRow {
+                    label: qsTr("Default editor")
+                    detail: integration.isDefault ? qsTr("Text and code files open with Kode") : qsTr("Open text and code files with Kode on a double click")
+                    showSeparator: false
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        enabled: !integration.isDefault
+                        text: integration.isDefault ? qsTr("Default") : qsTr("Make Default")
+                        // Launch Services applies it a few seconds later.
+                        onClicked: integration.isDefault = DefaultApplication.makeDefault("Text")
+                    }
+                }
+                FormRow {
+                    label: qsTr("Command line tool")
+                    detail: qsTr("“kode .” or “kode FILE” in the Terminal, as VS Code’s “code”")
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        enabled: !integration.commandInstalled
+                        text: integration.commandInstalled ? qsTr("Installed") : qsTr("Install")
+                        onClicked: integration.commandInstalled = CommandLineTool.install("kode")
                     }
                 }
             }

@@ -14,17 +14,28 @@ permalink: /download/
     <img src="{{ '/assets/kode.png' | relative_url }}" alt="" width="112" height="112">
     <div>
       <h2>Kode for Mac</h2>
-      <p>Free and open source. Kode is young: there is no packaged release yet, so for now you build it from source (below). Releases will appear on GitHub.</p>
-      <a class="button" href="{{ site.github_url }}/releases" data-download>Releases on GitHub</a>
+      <p>Free and open source. A disk image with the app, signed ad hoc.</p>
+      <a class="button" href="{{ site.releases_url }}" data-download>Download .dmg</a>
       <div class="download-meta">
         <span data-version="Version %v" hidden></span>
         <span>macOS 14.4 or later</span>
         <span>Apple Silicon</span>
+        <a href="{{ site.github_url }}/releases">All releases</a>
       </div>
     </div>
   </div>
 
   <div class="prose">
+    <h2>Install</h2>
+    <ol class="steps">
+      <li>Open the <code>.dmg</code> and drag <strong>Kode</strong> to <strong>Applications</strong>.</li>
+      <li>
+        <p>Kode is not notarized by Apple yet, so Gatekeeper blocks the first launch. Clear the quarantine flag once:</p>
+        <div class="code-copy"><pre><code>xattr -dr com.apple.quarantine /Applications/Kode.app</code></pre></div>
+        <p>or open it, then choose <strong>System Settings ▸ Privacy &amp; Security ▸ Open Anyway</strong>.</p>
+      </li>
+    </ol>
+
     <h2>Build from source</h2>
     <p>You need Qt 6.12, CMake 3.21+, Ninja and the Xcode command-line tools (a C++23 compiler). KDE's syntax-highlighting library comes as a submodule and is built along the way.</p>
     <div class="code-copy"><pre><code>git clone --recurse-submodules https://github.com/rask-project/kode.git
@@ -36,9 +47,12 @@ cmake --build build
 open build/Kode.app</code></pre></div>
     <p>The app is signed ad hoc after the build. Move <code>build/Kode.app</code> to <strong>Applications</strong> to keep it.</p>
 
-    <h2>Open files from the Terminal</h2>
-    <p>Kode opens a file or a folder given on the command line:</p>
-    <div class="code-copy"><pre><code>open -a /Applications/Kode.app ~/Projects/aurora</code></pre></div>
+    <h2>The <code>kode</code> command</h2>
+    <p>Like VS Code's <code>code</code>: in <strong>Settings ▸ Files ▸ Command line tool</strong>, click <strong>Install</strong> (macOS asks for your password once). Then:</p>
+    <div class="code-copy"><pre><code>kode .              # the current folder in the sidebar
+kode src/main.cpp   # a file, in the running Kode
+kode notes/new.md   # a new file, written when you save</code></pre></div>
+    <p><strong>Settings ▸ Files ▸ Default editor</strong> makes Kode open text and code files on a double click, and the Finder offers <strong>Open in Kode</strong> on a folder's or a file's right-click menu.</p>
     <p>The <a href="{{ site.github_url }}#readme">README</a> covers the tests, the project layout and how the screenshots are made.</p>
   </div>
 </div>

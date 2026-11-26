@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21.1)
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS target architecture")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "Minimum supported macOS version")
 
-project(Kode VERSION 0.1.0 LANGUAGES CXX OBJCXX)
+project(Kode VERSION 1.0.0 LANGUAGES CXX OBJCXX)
 
 execute_process(
     COMMAND git rev-parse --short=7 HEAD
@@ -57,7 +57,7 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.12 REQUIRED COMPONENTS Quick QuickControls2 QuickDialogs2)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Quick QuickControls2 QuickDialogs2 Svg)
 include(cmake/KSyntaxHighlighting.cmake)
 
 qt_standard_project_setup(REQUIRES 6.12)
@@ -71,8 +71,12 @@ add_subdirectory(external/rask)
 
 qt_add_executable(kode
     main.cpp
+    bin/kode
     ${KODE_APP_ICON_FILES}
 )
+
+# The `kode` command (Settings ▸ Files links it into /usr/local/bin).
+set_source_files_properties(bin/kode PROPERTIES MACOSX_PACKAGE_LOCATION Resources/bin)
 
 set_source_files_properties(TitleBarButtons.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
@@ -176,6 +180,23 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     string(APPEND KODE_BUNDLE_ID ".debug")
 endif()
 
+# What the bundle offers the Finder: the document types (Open With, Make
+# Default) and "Open in Kode" (cmake/FinderKeys.plist.in). Launch Services
+# lists every copy of an app it has seen, so Debug builds leave them out: a
+# development build next to the installed app would duplicate them.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(default_finder_integration OFF)
+else()
+    set(default_finder_integration ON)
+endif()
+set(KODE_FINDER_INTEGRATION ${default_finder_integration} CACHE BOOL
+    "Declare the document types and the Finder Service in the bundle")
+set(KODE_FINDER_PLIST_KEYS "")
+if(KODE_FINDER_INTEGRATION)
+    file(READ cmake/FinderKeys.plist.in KODE_FINDER_PLIST_KEYS)
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS cmake/FinderKeys.plist.in)
+
 set_target_properties(kode PROPERTIES
     OUTPUT_NAME "Kode"
     MACOSX_BUNDLE_BUNDLE_NAME "Kode"
@@ -198,6 +219,8 @@ target_link_libraries(kode
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+        # The SVG image plugin, for the Settings icons: deployed with it.
+        Qt6::Svg
         KF6::SyntaxHighlighting
         Rask::Application
         Rask::Controls
@@ -225,11 +248,34 @@ if(APPLE)
         VERBATIM
     )
 
+    # A Developer ID for a notarizable release (docs/RELEASE.md); empty: ad hoc.
+    set(KODE_CODESIGN_IDENTITY "" CACHE STRING "Developer ID Application identity for the installed bundle")
+    set(deploy_tool_options_arg)
+    if(KODE_CODESIGN_IDENTITY)
+        qt_policy(SET QTP0007 NEW)
+        list(APPEND deploy_tool_options_arg "-sign-for-notarization=${KODE_CODESIGN_IDENTITY}")
+    endif()
+
+    # The self-contained bundle (Qt, its plugins and QML modules) in
+    # ${CMAKE_INSTALL_PREFIX}: `cmake --build … --target package-macos`.
     qt_generate_deploy_qml_app_script(
         TARGET kode
         OUTPUT_SCRIPT deploy_script
+        DEPLOY_TOOL_OPTIONS ${deploy_tool_options_arg}
     )
     install(SCRIPT ${deploy_script})
+    install(CODE "
+        set(APP_BUNDLE \"\${CMAKE_INSTALL_PREFIX}/Kode.app\")
+        set(CODESIGN_IDENTITY \"${KODE_CODESIGN_IDENTITY}\")
+        include(\"${CMAKE_CURRENT_SOURCE_DIR}/cmake/PruneBundle.cmake\")
+    ")
+
+    add_custom_target(package-macos
+        COMMAND ${CMAKE_COMMAND} --install ${CMAKE_BINARY_DIR} --config $<CONFIG>
+        DEPENDS kode
+        COMMENT "Deploying the self-contained Kode bundle to ${CMAKE_INSTALL_PREFIX}"
+        VERBATIM
+    )
 endif()
 
 option(KODE_BUILD_TOOLS "Build the Kode tools (editor benchmark)" ${PROJECT_IS_TOP_LEVEL})

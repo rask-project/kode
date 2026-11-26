@@ -205,8 +205,9 @@ What is left:
   editor's text, selection (unemphasized in an inactive window), caret and
   line-number colors, following light/dark and the accent live.
 - Done: window settings — blur on/off and opacity, in the Settings window.
-- The installed bundle (`cmake --install`, `qt_generate_deploy_qml_app_script`)
-  runs without the build tree: Qt, the `rask` dylibs.
+- Done: the installed bundle (`package-macos`: `qt_generate_deploy_qml_app_script`,
+  then `cmake/PruneBundle.cmake`) runs without the build tree: Qt, the
+  `rask` dylibs.
 
 **Done when:** Kode's colors come from the system and the installed bundle
 runs on a machine without the build tree.
@@ -444,15 +445,18 @@ the sidebar and its width are saved with the session.
 
 ### Stage 9 — Polish and distribution
 
+- Done: release via GitHub Actions (`.github/workflows/release.yml`: a `v*`
+  tag publishes the ad-hoc-signed `.dmg`/`.zip`; `docs/RELEASE.md`), 1.0.0;
+  the website (`site/`); the `kode` command, "Open in Kode" and Make
+  Default (`Rask.Application`).
 - **`Rask.Updater`** (link it, `rask_sparkle_plist_keys()` in `Info.plist`,
-  `Updater.start()`) + appcast + release via GitHub Actions
+  `Updater.start()`) + appcast
   (Developer ID signing and notarization, as in `konsoll/docs/RELEASE.md`;
   every embedded `Rask.*` dylib and QML plugin signed with the hardened
   runtime).
 - Liquid Glass (`Rask.Window`'s `GlassEffect`, `GlassSurface` as fallback) on
   the tab strip/status bar on macOS 26.
 - **`Rask.Style`** (a Qt Quick Controls style for macOS) adopted by Kode.
-- Website (GitHub Pages) following the Konsoll/Metronom pattern.
 
 ---
 

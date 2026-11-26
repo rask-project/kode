@@ -21,6 +21,7 @@ private slots:
     void refusesCharactersTheEncodingLacks();
     void tracksModified();
     void clearsToUntitled();
+    void startsAFileNotWrittenYet();
     void reloadsAChangeOnDisk();
     void reportsAChangeOnDiskWhenModified();
     void ignoresItsOwnSaves();

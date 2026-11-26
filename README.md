@@ -41,8 +41,11 @@ modules.
 - **Comments, indentation and re-indenting** by the language and the brackets.
 - **Encodings and line endings** detected and kept, with 20 encodings to
   reopen or save with.
-- **A Mac document app**: Open Recent, Open With, a sheet for unsaved
-  changes, changes on disk reloaded, and the session restored.
+- **A Mac document app**: Open Recent, Open With and Open in Kode from the
+  Finder, a sheet for unsaved changes, changes on disk reloaded, and the
+  session restored; it can be the default editor.
+- **A `kode` command** for the Terminal, as VS Code's `code`: `kode .`,
+  `kode file`, even a file that doesn't exist yet.
 - **Native look**: a translucent, blurred window, the system's accent and
   selection colors, SF Symbols, and light or dark.
 
@@ -153,8 +156,40 @@ The method and every number are in [docs/editor-bench.md](docs/editor-bench.md).
 
 ## Install
 
-Kode has no packaged release yet: build it from source (below). It needs
-macOS 14.4 or later on Apple Silicon.
+Download `Kode-VERSION-arm64.dmg` (or `.zip`) from the
+[Releases](https://github.com/rask-project/kode/releases) page and move
+**Kode** to `/Applications`. Requires macOS 14.4+ on Apple Silicon.
+
+The app is ad-hoc signed but not notarized by Apple, so Gatekeeper blocks the
+first launch. Clear the quarantine flag once:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Kode.app
+```
+
+or open it, then choose **System Settings → Privacy & Security → Open
+Anyway**.
+
+### The `kode` command
+
+As VS Code's `code`: **Settings ▸ Files ▸ Command line tool ▸ Install**
+links `/usr/local/bin/kode` to the script inside the app (macOS asks for
+your password once). Then, in the Terminal:
+
+```sh
+kode .              # the current folder in the sidebar
+kode src/main.cpp   # a file, in the running Kode
+kode notes/new.md   # a file that does not exist yet: written when you save
+```
+
+### The Finder
+
+Release builds offer Kode in **Open With** for text and code files and
+folders, and add **Open in Kode** to the Finder's right-click menu (under
+Quick Actions or Services). **Settings ▸ Files ▸ Default editor ▸ Make
+Default** makes Kode open text and code files on a double click. Debug
+builds leave all this out, so a development copy doesn't show up twice
+next to the installed app (`-DKODE_FINDER_INTEGRATION=ON` turns it on).
 
 ## Building
 
@@ -172,6 +207,8 @@ ctest --test-dir build/Qt_6_12_0_for_macOS_Debug --output-on-failure
 open build/Qt_6_12_0_for_macOS_Debug/Kode.app
 ```
 
+`--target package-macos` makes the self-contained bundle in
+`build/…/dist/Kode.app`; [docs/RELEASE.md](docs/RELEASE.md) covers releases.
 [docs/ROADMAP.md](docs/ROADMAP.md) has the plan, and [AGENTS.md](AGENTS.md)
 has the project's layout and rules. [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md)
 explains how the images above are taken. The website lives in [site/](site/).

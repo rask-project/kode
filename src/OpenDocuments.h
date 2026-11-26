@@ -35,7 +35,9 @@ public:
     [[nodiscard]] qint32 count() const noexcept { return static_cast<qint32>(m_documents.size()); }
 
     // The document of `file`, read now if it is not open yet; null (and
-    // errorOccurred()) when it cannot be read.
+    // errorOccurred()) when it cannot be read. A `kode:///path` URL (the
+    // `kode` command) may name a file that does not exist yet: it opens
+    // empty, and saving writes it.
     Q_INVOKABLE kode::Document *open(const QUrl &file);
     // Opens each of `files` still there, silently (a restored session).
     Q_INVOKABLE void restore(const QStringList &files);

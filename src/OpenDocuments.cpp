@@ -12,6 +12,17 @@ namespace kode
 namespace
 {
 
+const QString commandScheme{QStringLiteral("kode")};
+
+// A `kode:///path` URL as the file it names.
+QUrl localFile(const QUrl &url)
+{
+    if (url.scheme() != commandScheme || !url.path().startsWith(QLatin1Char('/'))) {
+        return url;
+    }
+    return QUrl::fromLocalFile(QDir::cleanPath(url.path()));
+}
+
 QVariantList toList(const std::vector<Document *> &documents)
 {
     QVariantList list;
@@ -55,12 +66,17 @@ Document *OpenDocuments::find(const QUrl &file) const
 
 Document *OpenDocuments::open(const QUrl &file)
 {
-    if (Document *const open{find(file)}) {
+    const QUrl local{localFile(file)};
+    if (Document *const open{find(local)}) {
         return open;
     }
     Pointer document{std::make_unique<Document>().release()};
     connect(document.get(), &Document::errorOccurred, this, &OpenDocuments::errorOccurred);
-    if (!document->load(file)) {
+    if (file.scheme() == commandScheme && local.isLocalFile() && !QFileInfo::exists(local.toLocalFile())) {
+        document->startFile(local);
+        return adopt(std::move(document));
+    }
+    if (!document->load(local)) {
         return nullptr;
     }
     return adopt(std::move(document));

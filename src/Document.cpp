@@ -1,5 +1,6 @@
 #include "Document.h"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QSaveFile>
@@ -123,7 +124,8 @@ void Document::watch()
     }
     m_fileModified = info.lastModified();
     m_fileSize = info.size();
-    if (m_watcher.files().isEmpty()) {
+    // A file not written yet (startFile()): its folder says when it appears.
+    if (m_watcher.files().isEmpty() && info.exists()) {
         m_watcher.addPath(path);
     }
 }
@@ -223,6 +225,18 @@ void Document::clear()
     watch();
 }
 
+void Document::startFile(const QUrl &fileUrl)
+{
+    m_text.setText({});
+    m_text.detectSyntax(fileUrl.fileName());
+    m_format = {};
+    m_flags = 0U;
+    emit formatChanged();
+    emit modifiedChanged();
+    setFileUrl(fileUrl);
+    watch();
+}
+
 std::expected<void, QString> Document::write(const QUrl &fileUrl) const
 {
     const QString path{fileUrl.toLocalFile()};
@@ -236,6 +250,8 @@ std::expected<void, QString> Document::write(const QUrl &fileUrl) const
                                    .arg(path, m_format.encoding)};
     }
 
+    // A file the `kode` command named may be in folders that do not exist yet.
+    QDir{}.mkpath(QFileInfo{path}.absolutePath());
     QSaveFile file{path};
     if (!file.open(QIODevice::WriteOnly)) {
         return std::unexpected{tr("“%1” could not be saved: %2").arg(path, file.errorString())};

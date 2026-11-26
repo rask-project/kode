@@ -81,7 +81,7 @@ Item {
             const document = OpenDocuments.open(file);
             if (!document)
                 continue;
-            RecentDocuments.add(file);
+            RecentDocuments.add(document.fileUrl);
             const shown = window ? [] : app.viewsOf(document);
             if (shown.length > 0) {
                 const owner = app.windows.find(candidate => candidate.splits.views.includes(shown[0]));

@@ -1,0 +1,28 @@
+#!/bin/sh
+# kode [FILE | FOLDER]...: opens them in Kode, the running one or a new one,
+# as VS Code's `code`. A file that does not exist yet opens as a new
+# document, written when it is saved. Bundled in Kode.app/Contents/Resources/bin
+# and linked as /usr/local/bin/kode from Settings ▸ Files.
+set -eu
+
+app=$(cd "$(dirname "$(realpath "$0")")/../../.." && pwd -P)
+
+if [ $# -eq 0 ]; then
+    exec open -a "$app"
+fi
+
+for path in "$@"; do
+    case $path in
+    /*) ;;
+    *) path=$PWD/$path ;;
+    esac
+    if [ -e "$path" ]; then
+        open -a "$app" "$path"
+        continue
+    fi
+    # open refuses a missing file: a kode: URL takes its path to the app instead.
+    url=$(osascript -l JavaScript \
+        -e 'function run(argv) { return "kode://" + argv[0].split("/").map(encodeURIComponent).join("/") }' \
+        "$path")
+    open -a "$app" "$url"
+done

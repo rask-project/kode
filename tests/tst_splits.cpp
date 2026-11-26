@@ -135,6 +135,20 @@ void TestSplits::reportsMissingFiles()
     QCOMPARE(documents.count(), 0);
 }
 
+// `kode new.txt`: a kode: URL names a file that does not exist yet.
+void TestSplits::opensACommandsNewFile()
+{
+    kode::OpenDocuments documents;
+    const QString path{m_files.filePath(QStringLiteral("new file.txt"))};
+    QUrl url{QUrl::fromLocalFile(path)};
+    url.setScheme(QStringLiteral("kode"));
+    kode::Document *const document{documents.open(url)};
+    QVERIFY(document != nullptr);
+    QCOMPARE(document->fileUrl(), QUrl::fromLocalFile(path));
+    QCOMPARE(documents.open(url), document);
+    QCOMPARE(documents.open(QUrl::fromLocalFile(path)), document);
+}
+
 void TestSplits::keepsTheMostRecentFirst()
 {
     kode::OpenDocuments documents;

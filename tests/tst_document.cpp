@@ -205,6 +205,21 @@ void TestDocument::clearsToUntitled()
     QCOMPARE(errors.count(), 1);
 }
 
+void TestDocument::startsAFileNotWrittenYet()
+{
+    kode::EditorView editor;
+    kode::Document document;
+    editor.setDocument(document.textDocument());
+    const QUrl file{QUrl::fromLocalFile(path(QStringLiteral("new/folders/notes.md")))};
+    document.startFile(file);
+    QCOMPARE(document.fileUrl(), file);
+    QVERIFY(!document.modified());
+    QCOMPARE(document.textDocument()->syntax(), QStringLiteral("Markdown"));
+    editor.insert(QStringLiteral("# Notes\n"));
+    QVERIFY(document.save());
+    QCOMPARE(readFile(file.toLocalFile()), QByteArray{"# Notes\n"});
+}
+
 void TestDocument::reloadsAChangeOnDisk()
 {
     const QString file{path(QStringLiteral("watched.txt"))};

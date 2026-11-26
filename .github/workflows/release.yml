@@ -1,0 +1,119 @@
+name: Release
+
+# Push a tag (git tag v1.0.0 && git push origin v1.0.0) to build the
+# self-contained app and publish it as a GitHub Release. The bundle is
+# ad-hoc signed (no Apple Developer ID), so it is not notarized: users clear
+# the quarantine flag once after downloading (README, "Install").
+#
+# A tag with a suffix (v1.1.0-beta.1, v1.1.0-rc.1) publishes a pre-release
+# instead: it can point at a feature branch's commit, and the latest release
+# stays the one users get (it is never marked Latest).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release and upload its assets
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  QT_VERSION: "6.12.0"
+  AQT_VERSION: "==3.3.*"
+
+jobs:
+  release:
+    name: Build and publish (macOS arm64)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # git describe --tags for the display version
+          submodules: recursive # external/rask, KSyntaxHighlighting
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          aqtversion: ${{ env.AQT_VERSION }}
+          cache: true
+
+      - name: Install tools
+        run: brew install ninja
+
+      - name: Configure
+        run: |
+          cmake -S . -B build/release -G Ninja \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+
+      - name: Build
+        run: cmake --build build/release
+
+      - name: Test
+        run: ctest --test-dir build/release --output-on-failure
+
+      - name: Package (ad-hoc signed)
+        run: |
+          cmake --build build/release --target package-macos
+          APP=build/release/dist/Kode.app
+          # The install step deploys Qt into the bundle, prunes what Kode
+          # never loads and signs it ad hoc (cmake/PruneBundle.cmake).
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+          VERSION=${GITHUB_REF_NAME#v}
+          mkdir -p out
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "out/Kode-$VERSION-arm64.zip"
+
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname Kode -srcfolder "$STAGE" -ov -format UDZO \
+            "out/Kode-$VERSION-arm64.dmg"
+
+          (cd out && shasum -a 256 Kode-* > SHA256SUMS.txt)
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # docs/releases/<tag>.md, when present, opens the notes.
+          NOTES="docs/releases/$GITHUB_REF_NAME.md"
+          if [ -f "$NOTES" ]; then cp "$NOTES" "$RUNNER_TEMP/notes.md"; else : > "$RUNNER_TEMP/notes.md"; fi
+          cat >> "$RUNNER_TEMP/notes.md" <<'EOF'
+
+          ## Install
+
+          Open the `.dmg` and drag **Kode** to **Applications**. Kode is not
+          notarized by Apple, so clear the quarantine flag once:
+
+          ```sh
+          xattr -dr com.apple.quarantine /Applications/Kode.app
+          ```
+
+          Or open it, then allow it in **System Settings → Privacy & Security →
+          Open Anyway**. Requires macOS 14.4+ on Apple Silicon.
+          EOF
+          # A stable release lists the changes since the previous stable one,
+          # not since a pre-release in between.
+          PREVIOUS=$(git tag --list 'v*' --sort=-v:refname | grep -v -- - | grep -vxF "$GITHUB_REF_NAME" | head -n 1 || true)
+          FLAGS=(--latest)
+          if [ -n "$PREVIOUS" ]; then FLAGS+=(--notes-start-tag "$PREVIOUS"); fi
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            FLAGS=(--prerelease --latest=false)
+            {
+              echo
+              echo "> **Pre-release** built from \`${GITHUB_SHA::7}\` for testing; the latest"
+              echo "> release remains the stable version."
+            } >> "$RUNNER_TEMP/notes.md"
+          fi
+          gh release create "$GITHUB_REF_NAME" out/* "${FLAGS[@]}" \
+            --title "Kode ${GITHUB_REF_NAME#v}" \
+            --notes-file "$RUNNER_TEMP/notes.md" --generate-notes
