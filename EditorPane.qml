@@ -123,6 +123,9 @@ Item {
     component BarButton: T.ToolButton {
         id: barButton
 
+        // Shown when the pointer rests on it.
+        property string toolTip
+
         implicitWidth: 28
         implicitHeight: 26
         padding: 0
@@ -130,8 +133,6 @@ Item {
         hoverEnabled: true
         icon.width: 15
         icon.height: 15
-        ToolTip.visible: hovered && ToolTip.text !== ""
-        ToolTip.delay: 600
         onHoveredChanged: {
             if (pane.nativeWindow)
                 pane.nativeWindow.movable = !hovered;
@@ -140,6 +141,10 @@ Item {
         background: Rectangle {
             radius: 6
             color: barButton.hovered ? Qt.alpha(SystemColors.label, barButton.down ? 0.16 : 0.08) : "transparent"
+        }
+
+        HelpTag {
+            text: barButton.toolTip
         }
 
         contentItem: IconImage {
@@ -191,7 +196,7 @@ Item {
             icon.name: "chevron.backward"
             enabled: documentHistory.canGoBack
             Accessible.name: qsTr("Back")
-            ToolTip.text: qsTr("Go Back")
+            toolTip: qsTr("Go Back")
             onClicked: pane.goBack()
         }
 
@@ -203,7 +208,7 @@ Item {
             icon.name: "chevron.forward"
             enabled: documentHistory.canGoForward
             Accessible.name: qsTr("Forward")
-            ToolTip.text: qsTr("Go Forward")
+            toolTip: qsTr("Go Forward")
             onClicked: pane.goForward()
         }
 
@@ -223,7 +228,7 @@ Item {
             rightPadding: 8
             Accessible.name: qsTr("Open documents")
             // The file's path.
-            ToolTip.text: pane.fileUrl.toString().startsWith("file://") ? decodeURIComponent(pane.fileUrl.toString().slice(7)) : ""
+            toolTip: pane.fileUrl.toString().startsWith("file://") ? decodeURIComponent(pane.fileUrl.toString().slice(7)) : ""
             onClicked: documentsMenu.popup(documentButton, 0, documentButton.height)
 
             contentItem: Item {
@@ -303,7 +308,7 @@ Item {
             icon.width: 12
             icon.height: 12
             Accessible.name: qsTr("Close document")
-            ToolTip.text: qsTr("Close Document")
+            toolTip: qsTr("Close Document")
             onClicked: pane.closeDocumentRequested()
         }
 
@@ -318,20 +323,20 @@ Item {
             BarButton {
                 icon.name: "square.split.2x1"
                 Accessible.name: qsTr("Split side by side")
-                ToolTip.text: qsTr("Split Side by Side")
+                toolTip: qsTr("Split Side by Side")
                 onClicked: pane.splitRequested(Qt.Horizontal)
             }
             BarButton {
                 icon.name: "square.split.1x2"
                 Accessible.name: qsTr("Split top and bottom")
-                ToolTip.text: qsTr("Split Top and Bottom")
+                toolTip: qsTr("Split Top and Bottom")
                 onClicked: pane.splitRequested(Qt.Vertical)
             }
             BarButton {
                 visible: pane.removable
                 icon.name: "xmark.rectangle"
                 Accessible.name: qsTr("Remove split")
-                ToolTip.text: qsTr("Remove Split")
+                toolTip: qsTr("Remove Split")
                 onClicked: pane.removeRequested()
             }
         }

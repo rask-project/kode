@@ -30,7 +30,7 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`, the Settings controls), `Rask.Dialogs`
+  (`SearchBar`, `HelpTag` for tooltips, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler`, `RecentDocuments`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
