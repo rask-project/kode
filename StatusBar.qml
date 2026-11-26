@@ -12,6 +12,7 @@ Item {
     id: root
 
     required property EditorView editor
+    // Null while the document closes: the menus outlive it briefly.
     required property Document document
 
     // Reading the file again as `encoding` (the window asks about unsaved changes).
@@ -46,7 +47,7 @@ Item {
         anchors.right: lineEndingLabel.left
         anchors.rightMargin: 20
         anchors.verticalCenter: parent.verticalCenter
-        text: root.document.byteOrderMark ? qsTr("%1 with BOM").arg(root.document.encoding) : root.document.encoding
+        text: root.document?.byteOrderMark ? qsTr("%1 with BOM").arg(root.document.encoding) : (root.document?.encoding ?? "")
         color: encodingArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
         font.pixelSize: 11
 
@@ -69,10 +70,10 @@ Item {
             id: reopenMenu
 
             title: qsTr("Reopen with Encoding")
-            enabled: root.document.fileUrl.toString() !== ""
+            enabled: (root.document?.fileUrl.toString() ?? "") !== ""
 
             Instantiator {
-                model: root.document.encodings
+                model: root.document?.encodings ?? []
 
                 delegate: MenuItem {
                     required property string modelData
@@ -91,14 +92,14 @@ Item {
             title: qsTr("Save with Encoding")
 
             Instantiator {
-                model: root.document.encodings
+                model: root.document?.encodings ?? []
 
                 delegate: MenuItem {
                     required property string modelData
 
                     text: modelData
                     checkable: true
-                    checked: root.document.encoding === modelData
+                    checked: root.document?.encoding === modelData
                     onTriggered: root.document.encoding = modelData
                 }
 
@@ -114,7 +115,7 @@ Item {
         anchors.right: indentationLabel.left
         anchors.rightMargin: 20
         anchors.verticalCenter: parent.verticalCenter
-        text: root.document.crlf ? "CRLF" : "LF"
+        text: root.document?.crlf ? "CRLF" : "LF"
         color: lineEndingArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
         font.pixelSize: 11
 
@@ -136,13 +137,13 @@ Item {
         MenuItem {
             text: qsTr("LF (macOS, Linux)")
             checkable: true
-            checked: !root.document.crlf
+            checked: !(root.document?.crlf ?? false)
             onTriggered: root.document.crlf = false
         }
         MenuItem {
             text: qsTr("CRLF (Windows)")
             checkable: true
-            checked: root.document.crlf
+            checked: root.document?.crlf ?? false
             onTriggered: root.document.crlf = true
         }
     }
