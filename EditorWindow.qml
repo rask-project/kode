@@ -698,13 +698,21 @@ ApplicationWindow {
         onActivated: root.activeView.switchDocuments(-1)
     }
 
-    // Files dropped on the window open in the active split.
+    // Files dropped on the window open in the split they were dropped on.
     DropArea {
+        id: dropArea
+
         anchors.fill: parent
         keys: ["text/uri-list"]
         onDropped: drop => {
             if (!drop.hasUrls)
                 return;
+            const target = windowSplits.views.find(view => {
+                const pane = view as EditorPane;
+                return pane.contains(pane.mapFromItem(dropArea, drop.x, drop.y));
+            });
+            if (target)
+                windowSplits.activate(target);
             root.app.openFiles(drop.urls, root);
             drop.acceptProposedAction();
         }
