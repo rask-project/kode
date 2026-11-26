@@ -52,6 +52,10 @@ constexpr std::chrono::milliseconds highlightSlice{3};
 constexpr qsizetype highlightLookahead{1000};
 // Find: a slice of the search.
 constexpr std::chrono::milliseconds searchSlice{3};
+// How long finding the block at the caret may take, for its indent guide.
+constexpr std::chrono::milliseconds guideSearch{2};
+// How far a blank line looks for the lines around it, for its indent guides.
+constexpr qsizetype guideNeighbours{100};
 // How long finding where a block ends (or starts) may take.
 constexpr std::chrono::milliseconds foldSearch{250};
 
@@ -92,6 +96,8 @@ public:
     QSGTransformNode *content{nullptr};
     QSGNode *marksLayer{nullptr};
     QSGGeometryNode *invisibles{nullptr};
+    QSGGeometryNode *guides{nullptr};
+    QSGGeometryNode *scopeGuides{nullptr};
     QSGNode *selectionLayer{nullptr};
     QSGNode *textLayer{nullptr};
     QSGRectangleNode *caret{nullptr};
@@ -457,8 +463,8 @@ void EditorView::setColor(QRgb &field, const QColor &color)
         return;
     }
     field = color.rgba();
-    // The invisibles take their color with their geometry.
-    m_flags |= InvisiblesChanged;
+    // The invisibles and guides take their color with their geometry.
+    m_flags |= InvisiblesChanged | GuidesChanged;
     emit colorsChanged();
     update();
 }
@@ -619,6 +625,16 @@ void EditorView::setWrap(bool wrap)
     m_flags = wrap ? (m_flags | Wrap) : (m_flags & ~Wrap);
     emit layoutOptionsChanged();
     resetWrap(anchor);
+}
+
+void EditorView::setShowIndentGuides(bool show)
+{
+    if (showIndentGuides() == show) {
+        return;
+    }
+    m_flags = show ? (m_flags | ShowIndentGuides) : (m_flags & ~ShowIndentGuides);
+    emit layoutOptionsChanged();
+    polish();
 }
 
 void EditorView::setShowInvisibles(bool show)
@@ -1715,6 +1731,71 @@ void EditorView::layoutInvisibles()
     }
 }
 
+qsizetype EditorView::guideIndent(const Row &row) const
+{
+    const qsizetype width{indentWidth()};
+    const qsizetype indent{folding::indentOf(row.text, width)};
+    if (indent >= 0) {
+        return indent;
+    }
+    const auto neighbour{[this, &row, width](qsizetype step) {
+        for (qsizetype line{row.line + step}, seen{0};
+             line >= 0 && line < buffer().lineCount() && seen < guideNeighbours;
+             line += step, ++seen) {
+            const qsizetype found{folding::indentOf(buffer().line(line), width)};
+            if (found >= 0) {
+                return found;
+            }
+        }
+        return qsizetype{0};
+    }};
+    return std::min(neighbour(-1), neighbour(1));
+}
+
+std::optional<folding::Fold> EditorView::caretBlock() const
+{
+    const QDeadlineTimer deadline{guideSearch};
+    const qsizetype line{buffer().lineAt(m_cursor)};
+    if (std::optional<folding::Fold> block{folding::indentedBlock(buffer(), line, indentWidth(), deadline)}) {
+        return block;
+    }
+    const std::optional<qsizetype> above{folding::lineAbove(buffer(), line, indentWidth(), deadline)};
+    std::optional<folding::Fold> block{
+        above ? folding::indentedBlock(buffer(), *above, indentWidth(), deadline) : std::nullopt
+    };
+    if (!block || block->last < line) {
+        return std::nullopt;
+    }
+    return block;
+}
+
+void EditorView::layoutGuides()
+{
+    // A line at each indentation level a row is indented past, in the middle
+    // of the level's first column, down its visual rows.
+    QList<QRectF> guides;
+    QList<QRectF> scope;
+    if (showIndentGuides() && !m_rows.empty()) {
+        const qsizetype width{indentWidth()};
+        const std::optional<folding::Fold> block{caretBlock()};
+        const qsizetype scopeColumn{block ? folding::indentOf(buffer().line(block->first - 1), width) : qsizetype{-1}};
+        for (const Row &row : m_rows) {
+            const qsizetype indent{guideIndent(row)};
+            const qreal height{static_cast<qreal>(row.layout->lineCount()) * m_lineHeight};
+            const bool inBlock{block && row.line >= block->first && row.line <= block->last};
+            for (qsizetype column{0}; column < indent; column += width) {
+                const qreal x{std::round((static_cast<qreal>(column) + 0.5) * m_charWidth)};
+                (inBlock && column == scopeColumn ? scope : guides).append({x, row.top, 1.0, height});
+            }
+        }
+    }
+    if (guides != m_guideRects || scope != m_scopeGuideRects) {
+        m_guideRects = std::move(guides);
+        m_scopeGuideRects = std::move(scope);
+        m_flags |= GuidesChanged;
+    }
+}
+
 void EditorView::layoutMarks()
 {
     // The bracket at the caret and its pair, and the word at the caret with
@@ -1762,6 +1843,7 @@ void EditorView::updatePolish()
     layoutDecorations();
     layoutMatches();
     layoutInvisibles();
+    layoutGuides();
     layoutMarks();
     layoutFoldMarks();
     if (m_widestLine > widestBefore) {
@@ -1791,6 +1873,10 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->marksLayer = marksLayer.get();
         auto invisibles{makeRectanglesNode()};
         created->invisibles = invisibles.get();
+        auto guides{makeRectanglesNode()};
+        created->guides = guides.get();
+        auto scopeGuides{makeRectanglesNode()};
+        created->scopeGuides = scopeGuides.get();
         created->selectionLayer = selectionLayer.get();
         created->textLayer = textLayer.get();
         created->caret = caret.get();
@@ -1799,6 +1885,8 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         content->appendChildNode(marksLayer.release());
         content->appendChildNode(selectionLayer.release());
         content->appendChildNode(invisibles.release());
+        content->appendChildNode(guides.release());
+        content->appendChildNode(scopeGuides.release());
         content->appendChildNode(textLayer.release());
         content->appendChildNode(caretLayer.release());
         content->appendChildNode(caret.release());
@@ -1808,7 +1896,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->appendChildNode(gutter.release());
         node = created.release();
         // A new window (the view moved to another one) starts without nodes.
-        m_flags |= InvisiblesChanged;
+        m_flags |= InvisiblesChanged | GuidesChanged;
     }
 
     // Scrolling moves the two transforms; the nodes inside move only when
@@ -1853,6 +1941,15 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
     if ((m_flags & InvisiblesChanged) != 0U) {
         setRectangles(node->invisibles, m_invisibleRects, lineNumberColor());
         m_flags &= ~InvisiblesChanged;
+    }
+    if ((m_flags & GuidesChanged) != 0U) {
+        QColor guide{textColor()};
+        guide.setAlphaF(0.12F);
+        QColor scope{caretColor()};
+        scope.setAlphaF(0.7F);
+        setRectangles(node->guides, m_guideRects, guide);
+        setRectangles(node->scopeGuides, m_scopeGuideRects, scope);
+        m_flags &= ~GuidesChanged;
     }
     syncRectangles(window, node->marksLayer, node->matches, m_matchRects, matchColor());
     syncRectangles(window, node->marksLayer, node->words, m_wordRects, wordColor());

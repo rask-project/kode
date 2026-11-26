@@ -151,6 +151,15 @@ Window {
                         onToggled: Preferences.showInvisibles = checked
                     }
                 }
+                FormRow {
+                    label: qsTr("Show indent guides")
+                    detail: qsTr("A line per indentation level; the block at the caret's stands out")
+
+                    Switch {
+                        checked: Preferences.showIndentGuides
+                        onToggled: Preferences.showIndentGuides = checked
+                    }
+                }
             }
 
             FormGroup {

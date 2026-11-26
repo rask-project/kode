@@ -391,7 +391,9 @@ as in VS Code and Qt Creator: typing then changes them all at once.
 ⌥↑/↓ add a caret on the line above/below (⌥⇧↑/↓ keep the selection's
 columns, a block selection), and ⇧←/→ extend every caret's selection.
 Code folding: by KSyntaxHighlighting's regions or by indentation, from
-the gutter's markers or View > Code Folding (⌥⌘← / ⌥⌘→, as in Xcode). Every icon is an SF Symbol
+the gutter's markers or View > Code Folding (⌥⌘← / ⌥⌘→, as in Xcode).
+Indent guides, the caret's block in the accent color, as Neovim's
+indent-blankline (View > Show Indent Guides, on by default). Every icon is an SF Symbol
 (`icon.name`). `Rask.Controls` got `ToolbarGroup`/`ToolbarButton` (a glass
 toolbar capsule) along the way, unused here for now.
 

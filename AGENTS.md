@@ -187,6 +187,11 @@ Guidance for AI agents working in this repository.
     placeholder after a folded line (click to unfold). A caret never sits
     in hidden lines: moving there (go to line, find, undo) unfolds, ←/→
     go past them.
+  - Indent guides (`showIndentGuides`, as Neovim's indent-blankline): a
+    1 px line per indentation level of each row in view (a blank line takes
+    its neighbours' lesser indentation), the one of the indented block at
+    the caret (`caretBlock()`, a 2 ms bounded scan) in the caret's color;
+    two geometry nodes, refilled only when they change.
   - Invisibles are drawn by the view (one `QSGGeometryNode`): Qt's
     `QTextOption::ShowTabsAndSpaces` only affects `QPainter` drawing, not
     `glyphRuns()`.

@@ -428,6 +428,7 @@ Item {
         editor.syntaxTheme: Syntaxes.themeName(Preferences.theme, Appearance.dark)
         editor.wrap: Preferences.wrap
         editor.showInvisibles: Preferences.showInvisibles
+        editor.showIndentGuides: Preferences.showIndentGuides
         editor.font: Preferences.font
         editor.defaultIndentWithTabs: Preferences.indentWithTabs
         editor.defaultIndentWidth: Preferences.indentWidth

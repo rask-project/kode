@@ -9,7 +9,7 @@ namespace tekst
 {
 
 // The user's preferences, kept in QSettings (the only copy) and shared by
-// every window: the editor's font and theme, wrapping and invisibles, the
+// every window: the editor's font and theme, wrapping, invisibles and indent guides, the
 // indentation for new documents, the window's blur and opacity.
 class Preferences : public QObject
 {
@@ -27,6 +27,7 @@ class Preferences : public QObject
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
     Q_PROPERTY(bool wrap READ wrap WRITE setWrap NOTIFY changed)
     Q_PROPERTY(bool showInvisibles READ showInvisibles WRITE setShowInvisibles NOTIFY changed)
+    Q_PROPERTY(bool showIndentGuides READ showIndentGuides WRITE setShowIndentGuides NOTIFY changed)
     // For new documents and files whose indentation cannot be told.
     Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY changed)
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY changed)
@@ -51,6 +52,8 @@ public:
     void setWrap(bool wrap);
     [[nodiscard]] static bool showInvisibles();
     void setShowInvisibles(bool show);
+    [[nodiscard]] static bool showIndentGuides();
+    void setShowIndentGuides(bool show);
     [[nodiscard]] static bool indentWithTabs();
     void setIndentWithTabs(bool tabs);
     [[nodiscard]] static qint32 indentWidth();

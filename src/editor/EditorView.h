@@ -106,6 +106,8 @@ class EditorView : public QQuickItem
     Q_PROPERTY(bool wrap READ wrap WRITE setWrap NOTIFY layoutOptionsChanged)
     // Spaces and tabs drawn as dots and arrows.
     Q_PROPERTY(bool showInvisibles READ showInvisibles WRITE setShowInvisibles NOTIFY layoutOptionsChanged)
+    // A line at each indentation level, the one of the block at the caret in the caret's color.
+    Q_PROPERTY(bool showIndentGuides READ showIndentGuides WRITE setShowIndentGuides NOTIFY layoutOptionsChanged)
     // Indent with tabs (else spaces), `indentWidth` columns per level.
     Q_PROPERTY(bool indentWithTabs READ indentWithTabs WRITE setIndentWithTabs NOTIFY indentationChanged)
     Q_PROPERTY(qint32 indentWidth READ indentWidth WRITE setIndentWidth NOTIFY indentationChanged)
@@ -156,6 +158,8 @@ public:
     void setWrap(bool wrap);
     [[nodiscard]] bool showInvisibles() const noexcept { return (m_flags & ShowInvisibles) != 0U; }
     void setShowInvisibles(bool show);
+    [[nodiscard]] bool showIndentGuides() const noexcept { return (m_flags & ShowIndentGuides) != 0U; }
+    void setShowIndentGuides(bool show);
     [[nodiscard]] bool indentWithTabs() const noexcept { return m_document->indentWithTabs(); }
     void setIndentWithTabs(bool tabs) { m_document->setIndentWithTabs(tabs); }
     [[nodiscard]] qint32 indentWidth() const noexcept { return m_document->indentWidth(); }
@@ -362,6 +366,9 @@ private:
     static constexpr quint64 WholeWords{1U << 7U};
     // The fold markers' glyphs changed (the font did): their nodes are filled again.
     static constexpr quint64 FoldGlyphsChanged{1U << 8U};
+    static constexpr quint64 ShowIndentGuides{1U << 9U};
+    // m_guideRects/m_scopeGuideRects changed since the scene last took them.
+    static constexpr quint64 GuidesChanged{1U << 10U};
 
     [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
     [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
@@ -442,6 +449,12 @@ private:
     void layoutMarks();
     void layoutMatches();
     void layoutInvisibles();
+    void layoutGuides();
+    // The columns `row`'s line is indented by; a blank line's, as its
+    // neighbours (the lesser), so guides go through it.
+    [[nodiscard]] qsizetype guideIndent(const Row &row) const;
+    // The indented block the caret is in (or that starts on its line).
+    [[nodiscard]] std::optional<folding::Fold> caretBlock() const;
     void setSearch(const QString &pattern, bool caseSensitive, bool regularExpression);
     // Searches a slice, then again from the event loop until done.
     void searchAhead();
@@ -525,6 +538,9 @@ private:
     QList<QRectF> m_matchRects;
     // Dots for spaces and dashes for tabs, when shown.
     QList<QRectF> m_invisibleRects;
+    // Indent guides: 1 px wide, a rectangle per row and level.
+    QList<QRectF> m_guideRects;
+    QList<QRectF> m_scopeGuideRects;
     QList<FoldMark> m_foldMarks;
     QList<Placeholder> m_placeholders;
     QRectF m_caretRect;

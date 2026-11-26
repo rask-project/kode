@@ -17,6 +17,7 @@ const QString fontSizeKey{QStringLiteral("view/fontSize")};
 const QString themeKey{QStringLiteral("view/theme")};
 const QString wrapKey{QStringLiteral("view/wrap")};
 const QString showInvisiblesKey{QStringLiteral("view/showInvisibles")};
+const QString showIndentGuidesKey{QStringLiteral("view/showIndentGuides")};
 const QString indentWithTabsKey{QStringLiteral("editor/indentWithTabs")};
 const QString indentWidthKey{QStringLiteral("editor/indentWidth")};
 const QString windowBlurKey{QStringLiteral("window/blur")};
@@ -94,6 +95,16 @@ bool Preferences::showInvisibles()
 void Preferences::setShowInvisibles(bool show)
 {
     store(showInvisiblesKey, show);
+}
+
+bool Preferences::showIndentGuides()
+{
+    return QSettings().value(showIndentGuidesKey, true).toBool();
+}
+
+void Preferences::setShowIndentGuides(bool show)
+{
+    store(showIndentGuidesKey, show);
 }
 
 bool Preferences::indentWithTabs()

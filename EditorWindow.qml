@@ -475,6 +475,14 @@ ApplicationWindow {
                     onTriggered: Preferences.showInvisibles = checked
                 }
             }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Show Indent Guides")
+                    checkable: true
+                    checked: Preferences.showIndentGuides
+                    onTriggered: Preferences.showIndentGuides = checked
+                }
+            }
             // As in Xcode's Editor > Code Folding.
             Menu {
                 title: qsTr("Code Folding")
