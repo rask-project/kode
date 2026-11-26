@@ -125,6 +125,9 @@ Item {
 
         // Shown when the pointer rests on it.
         property string toolTip
+        // Not `enabled`: IconImage draws the symbol once, in the state the
+        // button had then, so the button stays enabled and this only fades it.
+        property bool available: true
 
         implicitWidth: 28
         implicitHeight: 26
@@ -140,7 +143,7 @@ Item {
 
         background: Rectangle {
             radius: 6
-            color: barButton.hovered ? Qt.alpha(SystemColors.label, barButton.down ? 0.16 : 0.08) : "transparent"
+            color: barButton.hovered && barButton.available ? Qt.alpha(SystemColors.label, barButton.down ? 0.16 : 0.08) : "transparent"
         }
 
         HelpTag {
@@ -152,8 +155,8 @@ Item {
             sourceSize.width: barButton.icon.width
             sourceSize.height: barButton.icon.height
             fillMode: Image.Pad
-            color: barButton.hovered ? SystemColors.label : SystemColors.secondaryLabel
-            opacity: barButton.enabled ? 1 : 0.35
+            color: SystemColors.label
+            opacity: !barButton.available ? 0.35 : (barButton.hovered ? 1 : 0.8)
         }
     }
 
@@ -194,7 +197,7 @@ Item {
             anchors.leftMargin: 8 + pane.leadingInset
             anchors.verticalCenter: parent.verticalCenter
             icon.name: "chevron.backward"
-            enabled: documentHistory.canGoBack
+            available: documentHistory.canGoBack
             Accessible.name: qsTr("Back")
             toolTip: qsTr("Go Back")
             onClicked: pane.goBack()
@@ -206,7 +209,7 @@ Item {
             anchors.left: backButton.right
             anchors.verticalCenter: parent.verticalCenter
             icon.name: "chevron.forward"
-            enabled: documentHistory.canGoForward
+            available: documentHistory.canGoForward
             Accessible.name: qsTr("Forward")
             toolTip: qsTr("Go Forward")
             onClicked: pane.goForward()
