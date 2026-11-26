@@ -1,5 +1,6 @@
 #include "tst_splits.h"
 
+#include "DocumentHistory.h"
 #include "OpenDocuments.h"
 #include "Splits.h"
 
@@ -119,14 +120,18 @@ void TestSplits::opensEachFileOnce()
     QCOMPARE(documents.count(), 1);
     QCOMPARE(opened->textDocument()->text(), QStringLiteral("text\n"));
 
-    const QSignalSpy errors{&documents, &tekst::OpenDocuments::errorOccurred};
-    QCOMPARE(documents.open(QUrl::fromLocalFile(m_files.filePath(QStringLiteral("missing.txt")))), nullptr);
-    QCOMPARE(errors.count(), 1);
-    QCOMPARE(documents.count(), 1);
-
     const QSignalSpy closing{&documents, &tekst::OpenDocuments::documentClosing};
     documents.close(opened);
     QCOMPARE(closing.count(), 1);
+    QCOMPARE(documents.count(), 0);
+}
+
+void TestSplits::reportsMissingFiles()
+{
+    tekst::OpenDocuments documents;
+    const QSignalSpy errors{&documents, &tekst::OpenDocuments::errorOccurred};
+    QCOMPARE(documents.open(QUrl::fromLocalFile(m_files.filePath(QStringLiteral("missing.txt")))), nullptr);
+    QCOMPARE(errors.count(), 1);
     QCOMPARE(documents.count(), 0);
 }
 
@@ -151,6 +156,70 @@ void TestSplits::numbersUntitledDocuments()
     QCOMPARE(second->fileName(), QStringLiteral("Untitled 2"));
     documents.close(first);
     QCOMPARE(second->fileName(), QStringLiteral("Untitled"));
+}
+
+void TestSplits::goesBackAndForward()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const a{documents.create()};
+    tekst::Document *const b{documents.create()};
+    tekst::Document *const c{documents.create()};
+    tekst::DocumentHistory history;
+    history.visit(a);
+    history.visit(b);
+    history.visit(b);
+    history.visit(c);
+    QVERIFY(history.canGoBack());
+    QVERIFY(!history.canGoForward());
+    QCOMPARE(history.back(), b);
+    QCOMPARE(history.back(), a);
+    QCOMPARE(history.back(), nullptr);
+    QCOMPARE(history.forward(), b);
+    QCOMPARE(history.forward(), c);
+    QCOMPARE(history.forward(), nullptr);
+}
+
+void TestSplits::visitingDropsWhatWasAhead()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const a{documents.create()};
+    tekst::Document *const b{documents.create()};
+    tekst::Document *const c{documents.create()};
+    tekst::DocumentHistory history;
+    history.visit(a);
+    history.visit(b);
+    history.visit(c);
+    QCOMPARE(history.back(), b);
+    history.visit(a);
+    QVERIFY(!history.canGoForward());
+    QCOMPARE(history.back(), b);
+    QCOMPARE(history.back(), a);
+    QVERIFY(!history.canGoBack());
+}
+
+void TestSplits::forgetsClosedDocuments()
+{
+    tekst::OpenDocuments documents;
+    tekst::Document *const a{documents.create()};
+    tekst::Document *const b{documents.create()};
+    tekst::Document *const c{documents.create()};
+    tekst::DocumentHistory history;
+    history.visit(a);
+    history.visit(b);
+    history.visit(a);
+    history.visit(c);
+    history.forget(a);
+    // b, c: the two a's went, and c is still current.
+    QCOMPARE(history.current(), c);
+    QCOMPARE(history.back(), b);
+    QVERIFY(!history.canGoBack());
+    QCOMPARE(history.forward(), c);
+    // A deleted document leaves no entry behind.
+    documents.close(b);
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QVERIFY(!history.canGoForward());
+    QCOMPARE(history.back(), nullptr);
+    QCOMPARE(history.current(), c);
 }
 
 QTEST_MAIN(TestSplits)

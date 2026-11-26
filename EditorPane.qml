@@ -3,14 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Templates as T
-import QtQuick.Shapes
+import QtQuick.Controls.impl
 
 import Rask.Controls
 import Rask.Platform
 
 import Tekst
 
-// One split of a window, as in Qt Creator: a bar with the open documents
+// One split of a window: a jump bar as in Xcode with the open documents
 // (pick the one shown), close document and the split buttons, then the find
 // bar, the editor and the status bar. It shows one of OpenDocuments; other
 // splits may show the same one, each with its own caret and scroll.
@@ -25,6 +25,8 @@ Item {
     property bool removable: false
 
     readonly property EditorView editor: textEditor.editor
+    // The documents this split showed, for Back and Forward.
+    readonly property DocumentHistory history: documentHistory
     readonly property url fileUrl: document ? document.fileUrl : ""
     readonly property string title: document ? document.fileName : ""
     readonly property bool modified: document ? document.modified : false
@@ -59,6 +61,35 @@ Item {
         goToLine.open();
     }
 
+    function goBack() {
+        const document = documentHistory.back();
+        if (document)
+            pane.documentChosen(document);
+    }
+
+    function goForward() {
+        const document = documentHistory.forward();
+        if (document)
+            pane.documentChosen(document);
+    }
+
+    onDocumentChanged: documentHistory.visit(pane.document)
+
+    DocumentHistory {
+        id: documentHistory
+    }
+
+    Connections {
+        target: OpenDocuments
+
+        // Showing it, the split goes back to the one before (none: another one).
+        function onDocumentClosing(document: Document) {
+            documentHistory.forget(document);
+            if (pane.document === document)
+                pane.document = documentHistory.current() ?? OpenDocuments.other(document);
+        }
+    }
+
     Component.onCompleted: {
         if (!pane.document && pane.initialFile.toString() !== "")
             pane.document = OpenDocuments.open(pane.initialFile);
@@ -66,31 +97,43 @@ Item {
             pane.document = OpenDocuments.other(null) ?? OpenDocuments.create();
     }
 
-    // Flat, a light fill under the pointer (the macOS style draws a bezel).
+    // Flat, an SF Symbol and a light fill under the pointer (the macOS style draws a bezel).
     component BarButton: T.ToolButton {
         id: barButton
 
-        implicitWidth: 26
-        implicitHeight: 22
-        padding: 4
+        implicitWidth: 28
+        implicitHeight: 26
+        padding: 0
         focusPolicy: Qt.NoFocus
         hoverEnabled: true
+        icon.width: 15
+        icon.height: 15
+        ToolTip.visible: hovered && ToolTip.text !== ""
+        ToolTip.delay: 600
 
         background: Rectangle {
-            radius: 5
+            radius: 6
             color: barButton.hovered ? Qt.alpha(SystemColors.label, barButton.down ? 0.16 : 0.08) : "transparent"
+        }
+
+        contentItem: IconImage {
+            name: barButton.icon.name
+            sourceSize.width: barButton.icon.width
+            sourceSize.height: barButton.icon.height
+            fillMode: Image.Pad
+            color: barButton.hovered ? SystemColors.label : SystemColors.secondaryLabel
         }
     }
 
-    // The bar: documents, close, splits.
-    Rectangle {
+    // The jump bar, as in Xcode: which document (from every open one), close
+    // it, and the split buttons.
+    Item {
         id: bar
 
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: 28
-        color: Qt.alpha(SystemColors.label, pane.active ? 0.06 : 0.03)
+        height: 34
 
         Rectangle {
             anchors.bottom: parent.bottom
@@ -100,73 +143,73 @@ Item {
             color: Qt.alpha(SystemColors.label, 0.1)
         }
 
-        // Which document the split shows, from every open one.
+        TapHandler {
+            onTapped: {
+                pane.activated();
+                pane.focusEditor();
+            }
+        }
+
+        // A pop-up button: the document's icon and name, the menu's arrows at its end.
         BarButton {
             id: documentButton
 
+            // Room left by the other buttons.
+            readonly property real room: splitButtons.x - x - closeButton.width - 16
+
             anchors.left: parent.left
-            anchors.leftMargin: 6
+            anchors.leftMargin: 8
             anchors.verticalCenter: parent.verticalCenter
-            implicitWidth: documentRow.implicitWidth + 16
+            // The title's own width plus the icon, the arrows, spacing and padding.
+            width: Math.max(80, Math.min(Math.max(240, titleLabel.implicitWidth + 54), room))
+            leftPadding: 8
+            rightPadding: 8
             Accessible.name: qsTr("Open documents")
+            // The file's path.
+            ToolTip.text: pane.fileUrl.toString().startsWith("file://") ? decodeURIComponent(pane.fileUrl.toString().slice(7)) : ""
             onClicked: documentsMenu.popup(documentButton, 0, documentButton.height)
 
             contentItem: Item {
                 Row {
                     id: documentRow
 
+                    anchors.left: parent.left
+                    anchors.right: arrows.left
+                    anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: 6
 
-                    Label {
+                    IconImage {
                         anchors.verticalCenter: parent.verticalCenter
-                        // Room left by the split buttons.
-                        width: Math.min(implicitWidth, Math.max(40, splitButtons.x - documentButton.x - closeButton.width - 40))
+                        name: "doc.text"
+                        sourceSize.width: 15
+                        sourceSize.height: 15
+                        fillMode: Image.Pad
+                        color: SystemColors.secondaryLabel
+                    }
+
+                    Label {
+                        id: titleLabel
+
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Math.min(implicitWidth, documentRow.width - 21)
                         text: pane.modified ? pane.title + " •" : pane.title
                         color: pane.active ? SystemColors.label : SystemColors.secondaryLabel
+                        font.pixelSize: 13
                         elide: Text.ElideMiddle
                     }
+                }
 
-                    // The pop-up arrows: a chevron up over a chevron down.
-                    Shape {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 7
-                        height: 10
-                        preferredRendererType: Shape.CurveRenderer
+                IconImage {
+                    id: arrows
 
-                        ShapePath {
-                            strokeColor: SystemColors.secondaryLabel
-                            strokeWidth: 1.3
-                            fillColor: "transparent"
-                            capStyle: ShapePath.RoundCap
-                            joinStyle: ShapePath.RoundJoin
-
-                            PathMove {
-                                x: 0.5
-                                y: 3.5
-                            }
-                            PathLine {
-                                x: 3.5
-                                y: 0.5
-                            }
-                            PathLine {
-                                x: 6.5
-                                y: 3.5
-                            }
-                            PathMove {
-                                x: 0.5
-                                y: 6.5
-                            }
-                            PathLine {
-                                x: 3.5
-                                y: 9.5
-                            }
-                            PathLine {
-                                x: 6.5
-                                y: 6.5
-                            }
-                        }
-                    }
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "chevron.up.chevron.down"
+                    sourceSize.width: 11
+                    sourceSize.height: 11
+                    fillMode: Image.Pad
+                    color: SystemColors.secondaryLabel
                 }
             }
         }
@@ -199,65 +242,40 @@ Item {
             anchors.left: documentButton.right
             anchors.leftMargin: 2
             anchors.verticalCenter: parent.verticalCenter
+            icon.name: "xmark"
+            icon.width: 12
+            icon.height: 12
             Accessible.name: qsTr("Close document")
-            ToolTip.visible: hovered
-            ToolTip.delay: 600
             ToolTip.text: qsTr("Close Document")
             onClicked: pane.closeDocumentRequested()
-
-            contentItem: Glyph {
-                kind: "close"
-            }
         }
 
         Row {
             id: splitButtons
 
             anchors.right: parent.right
-            anchors.rightMargin: 6
+            anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             spacing: 2
 
             BarButton {
+                icon.name: "square.split.2x1"
                 Accessible.name: qsTr("Split side by side")
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
                 ToolTip.text: qsTr("Split Side by Side")
                 onClicked: pane.splitRequested(Qt.Horizontal)
-
-                contentItem: Glyph {
-                    kind: "sideBySide"
-                }
             }
             BarButton {
+                icon.name: "square.split.1x2"
                 Accessible.name: qsTr("Split top and bottom")
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
                 ToolTip.text: qsTr("Split Top and Bottom")
                 onClicked: pane.splitRequested(Qt.Vertical)
-
-                contentItem: Glyph {
-                    kind: "topAndBottom"
-                }
             }
             BarButton {
                 visible: pane.removable
+                icon.name: "xmark.rectangle"
                 Accessible.name: qsTr("Remove split")
-                ToolTip.visible: hovered
-                ToolTip.delay: 600
                 ToolTip.text: qsTr("Remove Split")
                 onClicked: pane.removeRequested()
-
-                contentItem: Glyph {
-                    kind: "removeSplit"
-                }
-            }
-        }
-
-        TapHandler {
-            onTapped: {
-                pane.activated();
-                pane.focusEditor();
             }
         }
     }
@@ -348,66 +366,6 @@ Item {
             editor: textEditor.editor
             document: pane.document
             onReopenRequested: encoding => pane.reviewRequested(() => pane.document.reopen(encoding))
-        }
-    }
-
-    // The bar's glyphs, drawn: × and the split icons.
-    component Glyph: Item {
-        id: glyph
-
-        required property string kind
-
-        implicitWidth: 14
-        implicitHeight: 14
-
-        // ×: in "close" and over the box in "removeSplit".
-        Repeater {
-            model: glyph.kind === "close" ? [45, -45] : []
-
-            Rectangle {
-                required property int modelData
-
-                anchors.centerIn: parent
-                width: 10
-                height: 1.5
-                radius: 0.75
-                rotation: modelData
-                color: SystemColors.secondaryLabel
-            }
-        }
-
-        // A window with its halves.
-        Rectangle {
-            anchors.centerIn: parent
-            width: 13
-            height: 11
-            visible: glyph.kind !== "close"
-            radius: 2
-            color: "transparent"
-            border.width: 1.2
-            border.color: SystemColors.secondaryLabel
-
-            Rectangle {
-                anchors.centerIn: parent
-                width: glyph.kind === "sideBySide" ? 1.2 : parent.width
-                height: glyph.kind === "topAndBottom" ? 1.2 : parent.height
-                visible: glyph.kind === "sideBySide" || glyph.kind === "topAndBottom"
-                color: SystemColors.secondaryLabel
-            }
-
-            Repeater {
-                model: glyph.kind === "removeSplit" ? [45, -45] : []
-
-                Rectangle {
-                    required property int modelData
-
-                    anchors.centerIn: parent
-                    width: 7
-                    height: 1.2
-                    rotation: modelData
-                    color: SystemColors.secondaryLabel
-                }
-            }
         }
     }
 }

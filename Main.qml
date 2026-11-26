@@ -199,18 +199,14 @@ Item {
     Connections {
         target: OpenDocuments
 
-        // The splits showing a closing document show another one; with
-        // none left, the windows close.
+        // The splits showing a closing document move off it themselves
+        // (EditorPane); with no document left, the windows close.
         function onDocumentClosing(document: Document) {
-            const next = OpenDocuments.other(document);
-            if (!next) {
-                for (const window of app.windows)
-                    window.closeApproved = true;
-                Qt.callLater(() => app.windows.slice().forEach(window => window.close()));
+            if (OpenDocuments.other(document))
                 return;
-            }
-            for (const view of app.viewsOf(document))
-                view.document = next;
+            for (const window of app.windows)
+                window.closeApproved = true;
+            Qt.callLater(() => app.windows.slice().forEach(window => window.close()));
         }
         function onErrorOccurred(message: string) {
             errorAlert.informativeText = message;

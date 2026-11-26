@@ -9,7 +9,7 @@
 
 // Splits with stand-in views (QtObjects with the properties it reads) and
 // OpenDocuments: splitting, removing splits, the saved layout, the list of
-// open documents.
+// open documents, the history of a split.
 class TestSplits : public QObject
 {
     Q_OBJECT
@@ -20,8 +20,12 @@ private slots:
     void activatesViewsInTurn();
     void savesAndRestoresTheLayout();
     void opensEachFileOnce();
+    void reportsMissingFiles();
     void keepsTheMostRecentFirst();
     void numbersUntitledDocuments();
+    void goesBackAndForward();
+    void visitingDropsWhatWasAhead();
+    void forgetsClosedDocuments();
 
 private:
     QQmlEngine m_engine;

@@ -379,6 +379,12 @@ list for the Dock); `Session` reopens the documents and each window's
 geometry and splits. ⌘N new document, ⇧⌘N new window, ⌘W close document,
 ⌘D / ⇧⌘D split side by side / top and bottom, ⌥⌘D remove split.
 
+The window then took Xcode's layout (no sidebar yet: the project view comes
+later): no title, a toolbar with Back and Forward (⌃⌘← / ⌃⌘→) through
+the documents each split showed (`DocumentHistory`), a jump bar per split
+with a wider documents pop-up, and SF Symbols for every icon
+(`icon.name`; `Rask.Controls` got `ToolbarGroup`/`ToolbarButton`).
+
 - Multiple windows, one per document (⌘N opens a new window); window
   controller in `Main.qml`.
 - `NativeWindow.representedFile` → proxy icon in the title bar and path menu

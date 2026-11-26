@@ -5,13 +5,14 @@ import QtQuick.Controls
 import QtQuick.Dialogs
 
 import Rask.Application
+import Rask.Controls
 import Rask.Dialogs
 import Rask.Platform
 import Rask.Window
 
 import Tekst
 
-// An editor window: the active document's name in the title bar, the
+// An editor window: a toolbar as in Xcode (Back and Forward), the
 // editor splits (Splits, PaneLayout) each showing one of the open
 // documents, the menus, and the file dialogs and "Save changes?" sheet.
 // Main.qml keeps the window list and the documents shared by all windows.
@@ -114,7 +115,7 @@ ApplicationWindow {
     height: 640
     minimumWidth: 400
     minimumHeight: 240
-    // Feeds the Window menu and the window switcher; the title bar is drawn below.
+    // Feeds the Window menu and the window switcher; the title bar shows none.
     title: activeDocument ? activeDocument.fileName : "Tekst"
     flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     color: "transparent"
@@ -163,12 +164,6 @@ ApplicationWindow {
             if (view.document)
                 OpenDocuments.touch(view.document);
         }
-    }
-
-    SystemPalette {
-        id: systemPalette
-
-        colorGroup: root.active ? SystemPalette.Active : SystemPalette.Inactive
     }
 
     FileDialog {
@@ -520,10 +515,47 @@ ApplicationWindow {
             }
         }
         Menu {
+            title: qsTr("Navigate")
+
+            MenuItem {
+                action: Action {
+                    text: qsTr("Go Back")
+                    enabled: root.activeView?.history.canGoBack ?? false
+                    shortcut: "Meta+Ctrl+Left"
+                    onTriggered: root.activeView.goBack()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Go Forward")
+                    enabled: root.activeView?.history.canGoForward ?? false
+                    shortcut: "Meta+Ctrl+Right"
+                    onTriggered: root.activeView.goForward()
+                }
+            }
+            MenuSeparator {}
+            MenuItem {
+                action: Action {
+                    text: qsTr("Next Document")
+                    enabled: OpenDocuments.count > 1
+                    shortcut: "Ctrl+}"
+                    onTriggered: root.app.showAdjacentDocument(root, 1)
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Previous Document")
+                    enabled: OpenDocuments.count > 1
+                    shortcut: "Ctrl+{"
+                    onTriggered: root.app.showAdjacentDocument(root, -1)
+                }
+            }
+        }
+        Menu {
             id: windowMenu
 
             // Where the list of windows starts: after the items above it.
-            readonly property int windowListOffset: 12
+            readonly property int windowListOffset: 9
 
             title: qsTr("Window")
 
@@ -586,23 +618,6 @@ ApplicationWindow {
                 }
             }
             MenuSeparator {}
-            MenuItem {
-                action: Action {
-                    text: qsTr("Next Document")
-                    enabled: OpenDocuments.count > 1
-                    shortcut: "Ctrl+}"
-                    onTriggered: root.app.showAdjacentDocument(root, 1)
-                }
-            }
-            MenuItem {
-                action: Action {
-                    text: qsTr("Previous Document")
-                    enabled: OpenDocuments.count > 1
-                    shortcut: "Ctrl+{"
-                    onTriggered: root.app.showAdjacentDocument(root, -1)
-                }
-            }
-            MenuSeparator {}
 
             // Every window by name, the active one checked.
             Instantiator {
@@ -650,32 +665,45 @@ ApplicationWindow {
         }
     }
 
-    // The title bar: the active document's name, with the window buttons on its left.
+    // The toolbar, as in Xcode without a title: Back and Forward through
+    // the documents the active split showed, after the window buttons.
     Item {
-        id: titleBar
+        id: toolbar
 
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: Math.max(root.SafeArea.margins.top, 40)
+        height: Math.max(root.SafeArea.margins.top, 44)
 
         TapHandler {
             onDoubleTapped: windowStyle.titleBarDoubleClicked()
         }
 
-        Label {
-            anchors.centerIn: parent
-            width: Math.min(implicitWidth, parent.width - 2 * 90)
-            text: !root.activeDocument ? "Tekst" : (root.activeDocument.modified ? qsTr("%1 — Edited").arg(root.activeDocument.fileName) : root.activeDocument.fileName)
-            color: systemPalette.windowText
-            opacity: root.active ? 1 : 0.5
-            font.weight: Font.DemiBold
-            elide: Text.ElideMiddle
+        ToolbarGroup {
+            anchors.left: parent.left
+            anchors.leftMargin: windowStyle.leadingInset + 12
+            anchors.verticalCenter: parent.verticalCenter
+            nativeWindow: windowStyle
+
+            ToolbarButton {
+                icon.name: "chevron.backward"
+                enabled: root.activeView?.history.canGoBack ?? false
+                Accessible.name: qsTr("Back")
+                ToolTip.text: qsTr("Go Back")
+                onClicked: root.activeView.goBack()
+            }
+            ToolbarButton {
+                icon.name: "chevron.forward"
+                enabled: root.activeView?.history.canGoForward ?? false
+                Accessible.name: qsTr("Forward")
+                ToolTip.text: qsTr("Go Forward")
+                onClicked: root.activeView.goForward()
+            }
         }
     }
 
     PaneLayout {
-        anchors.top: titleBar.bottom
+        anchors.top: toolbar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom

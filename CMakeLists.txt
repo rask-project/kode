@@ -91,6 +91,8 @@ qt_add_qml_module(tekst
     SOURCES
         src/Document.h
         src/Document.cpp
+        src/DocumentHistory.h
+        src/DocumentHistory.cpp
         src/Preferences.h
         src/Preferences.cpp
         src/Session.h
@@ -141,7 +143,7 @@ target_include_directories(tekst PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
-set_property(SOURCE main.cpp src/Document.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
+set_property(SOURCE main.cpp src/Document.cpp src/DocumentHistory.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/EditorAccessible.cpp
     src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/TextSearch.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 

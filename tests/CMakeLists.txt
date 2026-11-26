@@ -143,6 +143,8 @@ qt_add_executable(tst_splits
     ../src/Splits.cpp
     ../src/OpenDocuments.h
     ../src/OpenDocuments.cpp
+    ../src/DocumentHistory.h
+    ../src/DocumentHistory.cpp
     ../src/Document.h
     ../src/Document.cpp
     ../src/TextCodec.h

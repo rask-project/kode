@@ -30,7 +30,7 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Tekst uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`, the Settings controls), `Rask.Dialogs`
+  (`SearchBar`, `ToolbarGroup`/`ToolbarButton`, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler`, `RecentDocuments`). Changes to those go to the `rask` repository first, then
   the submodule is bumped here.
@@ -39,29 +39,36 @@ Guidance for AI agents working in this repository.
 - `Main.qml` — the app root (no window of its own): the window list over
   the documents they share (`OpenDocuments`), opening files (in the active
   split; from the Finder or the Dock a file already in view is shown
-  there), the splits of a closing document moving to another one (none
-  left: the windows close), document errors and changes on disk (alerts
+  there), the windows closing with the last document (each split moves
+  off a closing document itself), document errors and changes on disk (alerts
   on the last active window), the session (`Session`: the open files and
   each window's geometry and splits, saved on quit and when the last window
   closes, reopened at launch), the quit review (`QuitGuard`) and the
   app-wide Settings and About windows.
-- `EditorWindow.qml` — a window, as in Qt Creator: the active document's
-  name in the title bar, its splits (`Splits` + `PaneLayout`), the menus
+- `EditorWindow.qml` — a window, as in Xcode without a sidebar: no title,
+  a toolbar with Back and Forward (`ToolbarGroup`, SF Symbols) through the
+  active split's history, its splits (`Splits` + `PaneLayout`), the menus
   (actions go to the active split), the file dialogs and the "Save
   changes?" sheet (`review()` asks about each modified document in turn).
   Closing a window keeps the documents open unless it is the last one.
   `showDocument()` (not `show()`: that is the window's) puts a document in a
   split and closes the untouched new document it replaces.
-- `EditorPane.qml` — one split: a bar with the documents menu (every open
-  document, by name; `Popup.Native`), close document and the split
-  buttons (glyphs drawn in QML), then `SearchBar`, `GoToLine`,
-  `TextEditor` and `StatusBar`. Shows one `Document` (`document`); other
-  splits may show the same one, each with its own caret and scroll.
+- `EditorPane.qml` — one split: a jump bar as in Xcode with the documents
+  pop-up (every open document, by name; `Popup.Native`), close document
+  and the split buttons, then `SearchBar`, `GoToLine`, `TextEditor` and
+  `StatusBar`. Shows one `Document` (`document`); other splits may show the
+  same one, each with its own caret and scroll. Its `DocumentHistory` feeds
+  Back and Forward; when its document closes it goes back to the previous
+  one. Icons are SF Symbols by name (`icon.name`, `IconImage`): Qt asks
+  the system for them, nothing is drawn or bundled.
 - `PaneLayout.qml` — a window's split tree as nested `SplitView`s; each
   leaf is a slot its view is reparented into, so rebuilding keeps views.
 - `src/OpenDocuments.{h,cpp}` — `OpenDocuments` (QML singleton): every
   open `Document`, owned (`deleteLater`), most recently shown first, by
   name for the menu; one document per file; untitled ones numbered.
+- `src/DocumentHistory.{h,cpp}` — `DocumentHistory`: the documents a
+  split showed, back and forward as in a browser; closed documents are
+  forgotten.
 - `src/Splits.{h,cpp}` — `Splits` (one per window) and `SplitNode`: the
   binary split tree; leaves own their view (`deleteLater`: a view may go
   from its own signal); split, remove a split (the last view stays),
@@ -168,7 +175,7 @@ Guidance for AI agents working in this repository.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
   randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`,
-  `tst_preferences`, `tst_splits` with stand-in views and `OpenDocuments`), run offscreen with
+  `tst_preferences`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in` (with the document types the Finder offers
   Tekst for), `AppIcons.cmake` (compiles `assets/tekst.icon`
