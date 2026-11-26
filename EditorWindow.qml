@@ -376,6 +376,15 @@ ApplicationWindow {
                     onTriggered: root.editor.selectAll()
                 }
             }
+            MenuItem {
+                action: Action {
+                    // ⌃D: ⌘D splits. Typing then happens at every one.
+                    text: qsTr("Select Next Occurrence")
+                    enabled: root.editor !== null
+                    shortcut: "Meta+D"
+                    onTriggered: root.editor.selectNextOccurrence()
+                }
+            }
             MenuSeparator {}
             MenuItem {
                 action: Action {

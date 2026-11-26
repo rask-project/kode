@@ -91,8 +91,10 @@ public:
     QSGNode *selectionLayer{nullptr};
     QSGNode *textLayer{nullptr};
     QSGRectangleNode *caret{nullptr};
+    QSGNode *caretLayer{nullptr};
     QSGTransformNode *gutter{nullptr};
     QList<QSGRectangleNode *> selection;
+    QList<QSGRectangleNode *> otherCarets;
     QList<QSGRectangleNode *> brackets;
     QList<QSGRectangleNode *> words;
     QList<QSGRectangleNode *> matches;
@@ -348,6 +350,7 @@ void EditorView::startOver(const TextDocument::Place &place)
     }
     m_cursor = std::clamp(place.caret.cursor, qsizetype{0}, buffer().length());
     m_anchor = std::clamp(place.caret.anchor, qsizetype{0}, buffer().length());
+    m_others.clear();
     m_preedit.clear();
     m_preferredX = -1.0;
     m_widestLine = 0.0;
@@ -393,6 +396,10 @@ void EditorView::documentReplaced(qsizetype position, const QString &removed, co
     if ((m_flags & Editing) == 0U) {
         m_cursor = shifted(m_cursor, position, removed.size(), inserted.size());
         m_anchor = shifted(m_anchor, position, removed.size(), inserted.size());
+        for (TextDocument::Caret &other : m_others) {
+            other.cursor = shifted(other.cursor, position, removed.size(), inserted.size());
+            other.anchor = shifted(other.anchor, position, removed.size(), inserted.size());
+        }
         m_preedit.clear();
     }
     notifyTextChanged(position, removed, inserted);
@@ -699,6 +706,8 @@ QString EditorView::selectedText() const
 
 void EditorView::replace(qsizetype position, qsizetype count, const QString &text, bool mergeable)
 {
+    // An edit only the main caret makes (Return, Tab, a drop…): the others go.
+    m_others.clear();
     m_flags |= Editing;
     m_document->replace(position, count, text, mergeable, {.cursor = m_cursor, .anchor = m_anchor});
     m_flags &= ~Editing;
@@ -717,8 +726,68 @@ void EditorView::editedTo(TextDocument::Caret caret)
     polish();
 }
 
+template <typename RangeOf> void EditorView::replaceEach(RangeOf rangeOf, const QString &text, bool mergeable)
+{
+    const TextDocument::Range primary{rangeOf(TextDocument::Caret{.cursor = m_cursor, .anchor = m_anchor})};
+    QList<TextDocument::Range> ranges;
+    ranges.reserve(m_others.size() + 1);
+    ranges.append(primary);
+    std::ranges::transform(m_others, std::back_inserter(ranges), rangeOf);
+    std::ranges::sort(ranges, {}, &TextDocument::Range::position);
+    // Overlapping ranges (or carets at one place) join.
+    QList<TextDocument::Range> joined;
+    joined.reserve(ranges.size());
+    for (const TextDocument::Range &range : ranges) {
+        if (joined.isEmpty()) {
+            joined.append(range);
+            continue;
+        }
+        TextDocument::Range &last{joined.last()};
+        const qsizetype lastEnd{last.position + last.count};
+        if (range.position < lastEnd || range.position == last.position) {
+            last.count = std::max(lastEnd, range.position + range.count) - last.position;
+        } else {
+            joined.append(range);
+        }
+    }
+    m_flags |= Editing;
+    m_document->replaceEach(joined, text, mergeable, {.cursor = m_cursor, .anchor = m_anchor});
+    m_flags &= ~Editing;
+    // Each caret after its text; the earlier ranges shift the later ones.
+    m_others.clear();
+    qsizetype shift{0};
+    qsizetype caret{-1};
+    for (const TextDocument::Range &range : joined) {
+        const qsizetype after{range.position + shift + text.size()};
+        shift += text.size() - range.count;
+        const bool main{primary.position >= range.position && primary.position <= range.position + range.count};
+        if (main && caret < 0) {
+            caret = after;
+        } else {
+            m_others.append({.cursor = after, .anchor = after});
+        }
+    }
+    editedTo({.cursor = caret, .anchor = caret});
+}
+
+namespace
+{
+
+// A caret's selection, or the empty range at it.
+TextDocument::Range selectionOf(const TextDocument::Caret &caret)
+{
+    const qsizetype start{std::min(caret.cursor, caret.anchor)};
+    return {.position = start, .count = std::max(caret.cursor, caret.anchor) - start};
+}
+
+} // namespace
+
 void EditorView::insert(const QString &text)
 {
+    if (!m_others.isEmpty()) {
+        replaceEach(selectionOf, text, text.size() == 1);
+        return;
+    }
     replace(selectionStart(), selectionEnd() - selectionStart(), text, !hasSelection() && text.size() == 1);
 }
 
@@ -731,6 +800,7 @@ void EditorView::deleteSelection()
 
 void EditorView::undo()
 {
+    m_others.clear();
     m_flags |= Editing;
     const std::optional<TextDocument::Caret> caret{m_document->undo()};
     m_flags &= ~Editing;
@@ -741,6 +811,7 @@ void EditorView::undo()
 
 void EditorView::redo()
 {
+    m_others.clear();
     m_flags |= Editing;
     const std::optional<TextDocument::Caret> caret{m_document->redo()};
     m_flags &= ~Editing;
@@ -765,6 +836,106 @@ void EditorView::selectAll()
     select(0, buffer().length());
 }
 
+void EditorView::selectNextOccurrence()
+{
+    if (!hasSelection()) {
+        const qsizetype start{wordBoundary(std::min(m_cursor + 1, buffer().length()), false)};
+        const qsizetype end{wordBoundary(start, true)};
+        if (start < end && m_cursor >= start && m_cursor <= end) {
+            select(start, end);
+            m_flags |= WholeWords;
+        }
+        return;
+    }
+    const QString needle{selectedText()};
+    if (needle.contains(QLatin1Char('\n'))) {
+        return;
+    }
+    const std::optional<TextDocument::Range> found{nextOccurrence(needle, selectionEnd())};
+    if (!found) {
+        return;
+    }
+    // The new one becomes the main caret (the view follows it).
+    m_others.append({.cursor = m_cursor, .anchor = m_anchor});
+    m_document->closeMerge();
+    editedTo({.cursor = found->position + found->count, .anchor = found->position});
+}
+
+bool EditorView::covered(qsizetype start, qsizetype end) const
+{
+    const auto overlaps{[start, end](const TextDocument::Caret &caret) {
+        const TextDocument::Range range{selectionOf(caret)};
+        return start < range.position + range.count && range.position < end;
+    }};
+    return overlaps({.cursor = m_cursor, .anchor = m_anchor}) || std::ranges::any_of(m_others, overlaps);
+}
+
+std::optional<TextDocument::Range> EditorView::nextOccurrence(const QString &needle, qsizetype from) const
+{
+    const TextBuffer &text{buffer()};
+    const qsizetype lines{text.lineCount()};
+    const qsizetype firstLine{text.lineAt(from)};
+    // Each line once from `from`'s, around the end, and `from`'s again before `from`.
+    for (qsizetype step{0}; step <= lines; ++step) {
+        const qsizetype line{(firstLine + step) % lines};
+        const qsizetype lineStart{text.lineStart(line)};
+        const QString content{text.line(line)};
+        const qsizetype column{step == 0 ? from - lineStart : 0};
+        const auto wholeWord{[&content, &needle](qsizetype found) {
+            const qsizetype end{found + needle.size()};
+            return (found == 0 || !matching::isWordCharacter(content.at(found - 1))) &&
+                   (end == content.size() || !matching::isWordCharacter(content.at(end)));
+        }};
+        for (qsizetype found{content.indexOf(needle, column)}; found >= 0; found = content.indexOf(needle, found + 1)) {
+            const qsizetype position{lineStart + found};
+            if (step == lines && position >= from) {
+                return std::nullopt;
+            }
+            const bool word{(m_flags & WholeWords) == 0U || wholeWord(found)};
+            if (word && !covered(position, position + needle.size())) {
+                return TextDocument::Range{.position = position, .count = needle.size()};
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+bool EditorView::clearOthers()
+{
+    if (m_others.isEmpty()) {
+        return false;
+    }
+    m_others.clear();
+    emit selectionChanged();
+    polish();
+    return true;
+}
+
+void EditorView::moveEach(bool forward)
+{
+    const qsizetype length{buffer().length()};
+    const auto moved{[&forward, length](const TextDocument::Caret &caret) {
+        const TextDocument::Range range{selectionOf(caret)};
+        qsizetype position{std::clamp(caret.cursor + (forward ? 1 : -1), qsizetype{0}, length)};
+        if (range.count > 0) {
+            position = forward ? range.position + range.count : range.position;
+        }
+        return TextDocument::Caret{.cursor = position, .anchor = position};
+    }};
+    const TextDocument::Caret primary{moved({.cursor = m_cursor, .anchor = m_anchor})};
+    QList<TextDocument::Caret> others;
+    others.reserve(m_others.size());
+    std::ranges::transform(m_others, std::back_inserter(others), moved);
+    // Carets that meet become one.
+    std::ranges::sort(others, {}, &TextDocument::Caret::cursor);
+    const auto repeated{std::ranges::unique(others, {}, &TextDocument::Caret::cursor)};
+    others.erase(repeated.begin(), repeated.end());
+    others.removeIf([&primary](const TextDocument::Caret &caret) { return caret.cursor == primary.cursor; });
+    m_others = std::move(others);
+    m_document->closeMerge();
+    editedTo(primary);
+}
+
 void EditorView::cut()
 {
     if (hasSelection()) {
@@ -787,6 +958,10 @@ void EditorView::paste()
         return;
     }
     text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+    if (!m_others.isEmpty()) {
+        replaceEach(selectionOf, text, false);
+        return;
+    }
     replace(selectionStart(), selectionEnd() - selectionStart(), text, false);
 }
 
@@ -795,6 +970,8 @@ void EditorView::paste()
 void EditorView::moveCaret(qsizetype position, Select select)
 {
     position = std::clamp(position, qsizetype{0}, buffer().length());
+    clearOthers();
+    m_flags &= ~WholeWords;
     const qsizetype anchor{select == Select::Extend ? m_anchor : position};
     m_document->closeMerge();
     m_preferredX = -1.0;
@@ -1295,6 +1472,7 @@ void EditorView::layoutDecorations()
     // The selection, one rectangle per line in view, past the text when the
     // line's end is selected too; and the caret.
     m_selectionRects.clear();
+    m_otherCaretRects.clear();
     m_caretRect = {};
     // While text is dragged over the view, the caret shows where it would go.
     const qsizetype caret{m_dropPosition >= 0 ? m_dropPosition : m_cursor};
@@ -1307,27 +1485,52 @@ void EditorView::layoutDecorations()
             if (!m_preedit.isEmpty() && m_dropPosition < 0) {
                 column += m_preeditCursor;
             }
-            const QTextLine textLine{row.layout->lineForTextPosition(static_cast<int>(column))};
-            m_caretRect = {
-                textLine.cursorToX(static_cast<int>(column)),
-                row.top + (static_cast<qreal>(textLine.lineNumber()) * m_lineHeight),
-                caretWidth,
-                m_lineHeight
-            };
+            m_caretRect = caretRect(row, column);
         }
         if (hasSelection() && selectionEnd() > lineStart && selectionStart() <= lineEnd) {
-            appendSelectionRects(row, lineStart, lineEnd);
+            appendSelectionRects(row, lineStart, lineEnd, selectionStart(), selectionEnd());
+        }
+        layoutOthers(row, lineStart, lineEnd);
+    }
+}
+
+QRectF EditorView::caretRect(const Row &row, qsizetype column) const
+{
+    const QTextLine textLine{row.layout->lineForTextPosition(static_cast<int>(column))};
+    return {
+        textLine.cursorToX(static_cast<int>(column)),
+        row.top + (static_cast<qreal>(textLine.lineNumber()) * m_lineHeight),
+        caretWidth,
+        m_lineHeight
+    };
+}
+
+void EditorView::layoutOthers(const Row &row, qsizetype lineStart, qsizetype lineEnd)
+{
+    for (const TextDocument::Caret &other : m_others) {
+        const TextDocument::Range range{selectionOf(other)};
+        if (range.count > 0 && range.position + range.count > lineStart && range.position <= lineEnd) {
+            appendSelectionRects(row, lineStart, lineEnd, range.position, range.position + range.count);
+        }
+        if (other.cursor >= lineStart && other.cursor <= lineEnd) {
+            m_otherCaretRects.append(caretRect(row, other.cursor - lineStart));
         }
     }
 }
 
-void EditorView::appendSelectionRects(const Row &row, qsizetype lineStart, qsizetype lineEnd)
+void EditorView::appendSelectionRects(
+    const Row &row,
+    qsizetype lineStart,
+    qsizetype lineEnd,
+    qsizetype selectedFrom,
+    qsizetype selectedTo
+)
 {
     // One rectangle per visual line, past the text when the line's end is
     // selected too.
-    const qsizetype from{std::max(selectionStart(), lineStart) - lineStart};
-    const qsizetype to{std::min(selectionEnd(), lineEnd) - lineStart};
-    const bool pastEnd{selectionEnd() > lineEnd};
+    const qsizetype from{std::max(selectedFrom, lineStart) - lineStart};
+    const qsizetype to{std::min(selectedTo, lineEnd) - lineStart};
+    const bool pastEnd{selectedTo > lineEnd};
     for (qint32 index{0}; index < row.layout->lineCount(); ++index) {
         const QTextLine textLine{row.layout->lineAt(index)};
         const qsizetype start{std::max(from, qsizetype{textLine.textStart()})};
@@ -1479,6 +1682,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         auto selectionLayer{std::make_unique<QSGNode>()};
         auto textLayer{std::make_unique<QSGNode>()};
         auto caret{std::unique_ptr<QSGRectangleNode>{window->createRectangleNode()}};
+        auto caretLayer{std::make_unique<QSGNode>()};
         auto gutter{std::make_unique<QSGTransformNode>()};
         created->currentLine = currentLine.get();
         created->textClip = clip.get();
@@ -1489,11 +1693,13 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->selectionLayer = selectionLayer.get();
         created->textLayer = textLayer.get();
         created->caret = caret.get();
+        created->caretLayer = caretLayer.get();
         created->gutter = gutter.get();
         content->appendChildNode(marksLayer.release());
         content->appendChildNode(selectionLayer.release());
         content->appendChildNode(invisibles.release());
         content->appendChildNode(textLayer.release());
+        content->appendChildNode(caretLayer.release());
         content->appendChildNode(caret.release());
         clip->appendChildNode(content.release());
         created->appendChildNode(currentLine.release());
@@ -1557,6 +1763,14 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         caretShown && (dropping || (hasActiveFocus() && m_preedit.isEmpty())) ? m_caretRect : QRectF{}
     );
     node->caret->setColor(caretColor());
+    const bool caretsShown{hasActiveFocus() && m_preedit.isEmpty()};
+    syncRectangles(
+        window,
+        node->caretLayer,
+        node->otherCarets,
+        caretsShown ? m_otherCaretRects : QList<QRectF>{},
+        caretColor()
+    );
     node->currentLine->setRect(
         caretShown && !hasSelection() ? QRectF{0.0, baseY + m_caretRect.y(), width(), m_lineHeight} : QRectF{}
     );
@@ -1643,22 +1857,30 @@ bool EditorView::handleDeletion(const QKeyEvent *event)
     if (!backspace && event->key() != Qt::Key_Delete) {
         return false;
     }
+    const Qt::KeyboardModifiers modifiers{event->modifiers()};
+    const bool command{modifiers.testFlag(Qt::ControlModifier)};
+    const bool option{modifiers.testFlag(Qt::AltModifier)};
+    if (!m_others.isEmpty()) {
+        // At each caret: its selection, else as far as the key goes.
+        replaceEach(
+            [this, &backspace, &command, &option](const TextDocument::Caret &caret) {
+                if (caret.cursor != caret.anchor) {
+                    return selectionOf(caret);
+                }
+                const qsizetype target{deletionTarget(caret.cursor, backspace, command, option)};
+                const qsizetype start{std::min(caret.cursor, target)};
+                return TextDocument::Range{.position = start, .count = std::max(caret.cursor, target) - start};
+            },
+            {},
+            !command && !option
+        );
+        return true;
+    }
     if (hasSelection()) {
         deleteSelection();
         return true;
     }
-    const Qt::KeyboardModifiers modifiers{event->modifiers()};
-    const bool command{modifiers.testFlag(Qt::ControlModifier)};
-    const bool option{modifiers.testFlag(Qt::AltModifier)};
-    const qsizetype line{buffer().lineAt(m_cursor)};
-    const qsizetype lineStart{buffer().lineStart(line)};
-    // ⌘ to the line's start or end, ⌥ to the word's, otherwise one character.
-    qsizetype target{std::clamp(m_cursor + (backspace ? -1 : 1), qsizetype{0}, buffer().length())};
-    if (command) {
-        target = backspace ? lineStart : lineStart + buffer().lineLength(line);
-    } else if (option) {
-        target = wordBoundary(m_cursor, !backspace);
-    }
+    const qsizetype target{deletionTarget(m_cursor, backspace, command, option)};
     const qsizetype from{std::min(m_cursor, target)};
     const qsizetype to{std::max(m_cursor, target)};
     if (from != to) {
@@ -1667,9 +1889,40 @@ bool EditorView::handleDeletion(const QKeyEvent *event)
     return true;
 }
 
+// ⌘ to the line's start or end, ⌥ to the word's, otherwise one character.
+qsizetype EditorView::deletionTarget(qsizetype cursor, bool backspace, bool command, bool option) const
+{
+    const qsizetype line{buffer().lineAt(cursor)};
+    const qsizetype lineStart{buffer().lineStart(line)};
+    if (command) {
+        return backspace ? lineStart : lineStart + buffer().lineLength(line);
+    }
+    if (option) {
+        return wordBoundary(cursor, !backspace);
+    }
+    return std::clamp(cursor + (backspace ? -1 : 1), qsizetype{0}, buffer().length());
+}
+
+// With several carets plain ← and → move them all; any other move leaves
+// one (moveCaret()).
+bool EditorView::handleMoveEach(const QKeyEvent *event)
+{
+    const bool horizontal{event->key() == Qt::Key_Left || event->key() == Qt::Key_Right};
+    const Qt::KeyboardModifiers modifiers{event->modifiers() & ~Qt::KeypadModifier};
+    if (m_others.isEmpty() || !horizontal || modifiers != Qt::NoModifier) {
+        return false;
+    }
+    moveEach(event->key() == Qt::Key_Right);
+    return true;
+}
+
 void EditorView::keyPressEvent(QKeyEvent *event)
 {
-    if (handleNavigation(event) || handleDeletion(event)) {
+    if (handleMoveEach(event) || handleNavigation(event) || handleDeletion(event)) {
+        return;
+    }
+    // Escape leaves only the main caret.
+    if (event->key() == Qt::Key_Escape && clearOthers()) {
         return;
     }
     switch (event->key()) {
@@ -1705,7 +1958,7 @@ void EditorView::inputMethodEvent(QInputMethodEvent *event)
         const qsizetype from{std::max(qsizetype{0}, m_cursor + event->replacementStart())};
         replace(from, std::min<qsizetype>(event->replacementLength(), buffer().length() - from), commit, false);
     } else if (!commit.isEmpty()) {
-        replace(selectionStart(), selectionEnd() - selectionStart(), commit, !hasSelection() && commit.size() == 1);
+        insert(commit);
     }
 
     const QString preedit{event->preeditString()};

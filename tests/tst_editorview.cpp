@@ -490,3 +490,112 @@ void TestEditorView::switchingDocumentsKeepsEachPlace()
 }
 
 QTEST_MAIN(TestEditorView)
+
+void TestEditorView::nextOccurrenceSelectsTheWordThenTheNextOne()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("let foo = foo + bar(foo);"));
+    editor.setCursorPosition(5);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.selectedText(), QStringLiteral("foo"));
+    QCOMPARE(editor.caretCount(), 1);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.caretCount(), 2);
+    QCOMPARE(editor.selectionStart(), 10);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.caretCount(), 3);
+    QCOMPARE(editor.selectionStart(), 20);
+    // None left: nothing changes.
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.caretCount(), 3);
+}
+
+void TestEditorView::typingAtEveryOccurrenceIsOneUndo()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("let foo = foo + bar(foo);"));
+    editor.setCursorPosition(4);
+    editor.selectNextOccurrence();
+    editor.selectNextOccurrence();
+    editor.selectNextOccurrence();
+    type(editor, QStringLiteral("value"));
+    QCOMPARE(editor.text(), QStringLiteral("let value = value + bar(value);"));
+    QCOMPARE(editor.caretCount(), 3);
+    QCOMPARE(editor.cursorPosition(), 29);
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("let foo = foo + bar(foo);"));
+    QVERIFY(!editor.canUndo());
+    editor.redo();
+    QCOMPARE(editor.text(), QStringLiteral("let value = value + bar(value);"));
+}
+
+void TestEditorView::deletingAndMovingAtEveryCaret()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("ab ab ab"));
+    editor.setCursorPosition(0);
+    editor.selectNextOccurrence();
+    editor.selectNextOccurrence();
+    editor.selectNextOccurrence();
+    // → collapses each selection to its end; Backspace then deletes the b's.
+    press(editor, Qt::Key_Right);
+    press(editor, Qt::Key_Backspace);
+    QCOMPARE(editor.text(), QStringLiteral("a a a"));
+    press(editor, Qt::Key_Left);
+    type(editor, QStringLiteral("<"));
+    QCOMPARE(editor.text(), QStringLiteral("<a <a <a"));
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("a a a"));
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("ab ab ab"));
+}
+
+void TestEditorView::fromACaretOnlyWholeWords()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("item items item"));
+    editor.setCursorPosition(1);
+    editor.selectNextOccurrence();
+    editor.selectNextOccurrence();
+    // "items" is skipped: the word came from the caret.
+    QCOMPARE(editor.selectionStart(), 11);
+    // A selection made by hand matches inside words too.
+    editor.select(0, 4);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.selectionStart(), 5);
+}
+
+void TestEditorView::escapeOrAClickLeavesOneCaret()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("x x x"));
+    editor.setCursorPosition(0);
+    editor.selectNextOccurrence();
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.caretCount(), 2);
+    press(editor, Qt::Key_Escape);
+    QCOMPARE(editor.caretCount(), 1);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.caretCount(), 2);
+    press(editor, Qt::Key_Up);
+    QCOMPARE(editor.caretCount(), 1);
+    type(editor, QStringLiteral("y"));
+    QCOMPARE(editor.text().count(QLatin1Char('y')), 1);
+}
+
+void TestEditorView::nextOccurrenceWrapsAndSkipsSelected()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("one\ntwo one\none"));
+    editor.select(8, 11);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.selectionStart(), 12);
+    // Around the end: the first one.
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.selectionStart(), 0);
+    QCOMPARE(editor.caretCount(), 3);
+    editor.selectNextOccurrence();
+    QCOMPARE(editor.caretCount(), 3);
+    type(editor, QStringLiteral("1"));
+    QCOMPARE(editor.text(), QStringLiteral("1\ntwo 1\n1"));
+}

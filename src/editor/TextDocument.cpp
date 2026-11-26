@@ -7,6 +7,8 @@
 #include <KSyntaxHighlighting/Theme>
 
 #include <algorithm>
+#include <ranges>
+#include <utility>
 
 namespace tekst
 {
@@ -143,7 +145,9 @@ void TextDocument::setText(const QString &text, bool keepPlace)
     }
 }
 
-void TextDocument::record(const Edit &edit, bool mergeable, qsizetype count)
+// Typing and deleting one character at a time extend the last step, at
+// every caret alike; a new line closes the group (see replaceEach()).
+void TextDocument::record(Step step, bool mergeable)
 {
     // Forget what was undone, and the clean state if it was there.
     if (m_undoIndex < m_undo.size()) {
@@ -152,47 +156,100 @@ void TextDocument::record(const Edit &edit, bool mergeable, qsizetype count)
             m_cleanIndex = -1;
         }
     }
-    // Typing and deleting one character at a time extend the last edit; a
-    // new line closes the group, so a line typed after it is its own edit.
     const bool canMerge{mergeable && (m_flags & MergeOpen) != 0U && !m_undo.isEmpty() && m_cleanIndex != m_undoIndex};
-    if (canMerge) {
-        Edit &last{m_undo.last()};
-        if (count == 0 && last.removed.isEmpty() && last.position + last.inserted.size() == edit.position) {
-            last.inserted.append(edit.inserted);
-            last.cursorAfter = edit.cursorAfter;
-            return;
-        }
-        if (edit.inserted.isEmpty() && last.inserted.isEmpty() && edit.position + count == last.position) {
-            last.removed.prepend(edit.removed);
-            last.position = edit.position;
-            last.cursorAfter = edit.position;
-            return;
-        }
-        if (edit.inserted.isEmpty() && last.inserted.isEmpty() && edit.position == last.position) {
-            last.removed.append(edit.removed);
-            return;
-        }
+    if (canMerge && merge(m_undo.last(), step)) {
+        return;
     }
-    m_undo.append(edit);
+    m_undo.append(std::move(step));
     ++m_undoIndex;
+}
+
+// Folds `next` into `last` when each of its edits continues the matching
+// one: typing after it, or deleting before it (backspace) or at it.
+bool TextDocument::merge(Step &last, const Step &next)
+{
+    const qsizetype count{last.edits.size()};
+    if (next.edits.size() != count) {
+        return false;
+    }
+    // Where each edit of `last` ends up after it: the edits before it shift it.
+    QList<qsizetype> after(count);
+    qsizetype shift{0};
+    for (qsizetype index{0}; index < count; ++index) {
+        const Edit &edit{last.edits.at(index)};
+        after[index] = edit.position + shift;
+        shift += edit.inserted.size() - edit.removed.size();
+    }
+    // With one caret, typing over a selection starts a step of its own.
+    const auto typing{[&](qsizetype index) {
+        const Edit &edit{last.edits.at(index)};
+        const Edit &more{next.edits.at(index)};
+        return more.removed.isEmpty() && !more.inserted.isEmpty() && (count > 1 || edit.removed.isEmpty()) &&
+               after.at(index) + edit.inserted.size() == more.position;
+    }};
+    const auto backspace{[&](qsizetype index) {
+        const Edit &more{next.edits.at(index)};
+        return more.inserted.isEmpty() && last.edits.at(index).inserted.isEmpty() &&
+               more.position + more.removed.size() == after.at(index);
+    }};
+    const auto forwardDelete{[&](qsizetype index) {
+        const Edit &more{next.edits.at(index)};
+        return more.inserted.isEmpty() && last.edits.at(index).inserted.isEmpty() && more.position == after.at(index);
+    }};
+    const auto all{[count](const auto &test) {
+        return std::ranges::all_of(std::views::iota(qsizetype{0}, count), test);
+    }};
+    if (all(typing)) {
+        for (qsizetype index{0}; index < count; ++index) {
+            last.edits[index].inserted.append(next.edits.at(index).inserted);
+        }
+    } else if (all(backspace)) {
+        for (qsizetype index{0}; index < count; ++index) {
+            Edit &edit{last.edits[index]};
+            edit.removed.prepend(next.edits.at(index).removed);
+            edit.position -= next.edits.at(index).removed.size();
+        }
+    } else if (all(forwardDelete)) {
+        for (qsizetype index{0}; index < count; ++index) {
+            last.edits[index].removed.append(next.edits.at(index).removed);
+        }
+    } else {
+        return false;
+    }
+    last.cursorAfter = next.cursorAfter;
+    return true;
 }
 
 void TextDocument::replace(qsizetype position, qsizetype count, const QString &text, bool mergeable, Caret before)
 {
+    replaceEach({Range{.position = position, .count = count}}, text, mergeable, before);
+}
+
+void TextDocument::replaceEach(const QList<Range> &ranges, const QString &text, bool mergeable, Caret before)
+{
+    if (ranges.isEmpty()) {
+        return;
+    }
     const bool wasModified{modified()};
     const bool couldUndo{canUndo()};
     const bool couldRedo{canRedo()};
-    const Edit edit{
-        .position = position,
-        .removed = m_buffer.text(position, count),
-        .inserted = text,
-        .before = before,
-        .cursorAfter = position + text.size()
-    };
+    Step step{.before = before, .cursorAfter = ranges.constLast().position + text.size()};
+    step.edits.reserve(ranges.size());
+    qsizetype shift{0};
+    for (const Range &range : ranges) {
+        step.edits.append(
+            {.position = range.position, .removed = m_buffer.text(range.position, range.count), .inserted = text}
+        );
+        shift += text.size() - range.count;
+    }
+    step.cursorAfter += shift - (text.size() - ranges.constLast().count);
     mergeable = mergeable && !text.contains(QLatin1Char('\n'));
-    record(edit, mergeable, count);
+    // From the last: each position is still the one before the step.
+    for (const Edit &edit : step.edits | std::views::reverse) {
+        apply(edit.position, edit.removed, edit.inserted);
+    }
+    record(std::move(step), mergeable);
     m_flags = mergeable ? (m_flags | MergeOpen) : (m_flags & ~MergeOpen);
-    apply(position, edit.removed, text);
     if (couldUndo != canUndo() || couldRedo != canRedo()) {
         emit undoStateChanged();
     }
@@ -218,13 +275,24 @@ std::optional<TextDocument::Caret> TextDocument::undo()
     const bool wasModified{modified()};
     --m_undoIndex;
     m_flags &= ~MergeOpen;
-    const Edit edit{m_undo.at(m_undoIndex)};
-    apply(edit.position, edit.inserted, edit.removed);
+    const Step step{m_undo.at(m_undoIndex)};
+    // Each edit where it ended up (the ones before it shifted it), from the last.
+    qsizetype shift{0};
+    QList<qsizetype> after;
+    after.reserve(step.edits.size());
+    for (const Edit &edit : step.edits) {
+        after.append(edit.position + shift);
+        shift += edit.inserted.size() - edit.removed.size();
+    }
+    for (qsizetype index{step.edits.size() - 1}; index >= 0; --index) {
+        const Edit &edit{step.edits.at(index)};
+        apply(after.at(index), edit.inserted, edit.removed);
+    }
     emit undoStateChanged();
     if (wasModified != modified()) {
         emit modifiedChanged();
     }
-    return edit.before;
+    return step.before;
 }
 
 std::optional<TextDocument::Caret> TextDocument::redo()
@@ -233,15 +301,17 @@ std::optional<TextDocument::Caret> TextDocument::redo()
         return std::nullopt;
     }
     const bool wasModified{modified()};
-    const Edit edit{m_undo.at(m_undoIndex)};
+    const Step step{m_undo.at(m_undoIndex)};
     ++m_undoIndex;
     m_flags &= ~MergeOpen;
-    apply(edit.position, edit.removed, edit.inserted);
+    for (const Edit &edit : step.edits | std::views::reverse) {
+        apply(edit.position, edit.removed, edit.inserted);
+    }
     emit undoStateChanged();
     if (wasModified != modified()) {
         emit modifiedChanged();
     }
-    return Caret{.cursor = edit.cursorAfter, .anchor = edit.cursorAfter};
+    return Caret{.cursor = step.cursorAfter, .anchor = step.cursorAfter};
 }
 
 void TextDocument::markSaved()

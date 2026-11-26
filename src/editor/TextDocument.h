@@ -48,6 +48,11 @@ public:
         qsizetype cursor{0};
         qsizetype anchor{0};
     };
+    // Characters [position, position + count).
+    struct Range {
+        qsizetype position{0};
+        qsizetype count{0};
+    };
     // Where a view left the document, for the next view that shows it.
     struct Place {
         qreal contentX{0.0};
@@ -86,6 +91,9 @@ public:
     // undo with the caret before it; typing merges into the previous edit
     // while `mergeable`.
     void replace(qsizetype position, qsizetype count, const QString &text, bool mergeable, Caret before);
+    // Replaces each of `ranges` (by position, apart) with `text`: several
+    // carets typing. One undo step; typing extends it as with one caret.
+    void replaceEach(const QList<Range> &ranges, const QString &text, bool mergeable, Caret before);
     // Each returns the caret to show, or nothing when there is nothing to do.
     std::optional<Caret> undo();
     std::optional<Caret> redo();
@@ -114,12 +122,16 @@ signals:
     void defaultIndentationChanged();
 
 private:
-    // One undoable change: at `position`, `removed` was replaced by
-    // `inserted`; the caret before and after.
+    // At `position`, `removed` was replaced by `inserted`.
     struct Edit {
         qsizetype position{0};
         QString removed;
         QString inserted;
+    };
+    // One undoable change: its edits by position, each at its position before
+    // the step (applied from the last), and the caret before and after.
+    struct Step {
+        QList<Edit> edits;
         Caret before;
         qsizetype cursorAfter{0};
     };
@@ -128,14 +140,15 @@ private:
     static constexpr quint64 IndentWithTabs{1U << 1U};
     static constexpr quint64 DefaultIndentWithTabs{1U << 2U};
 
-    // Records `edit`, merging typing into the last one.
-    void record(const Edit &edit, bool mergeable, qsizetype count);
+    // Records `step`, merging typing into the last one.
+    void record(Step step, bool mergeable);
+    static bool merge(Step &last, const Step &next);
     void apply(qsizetype position, const QString &from, const QString &to);
     void applyDefinition(const KSyntaxHighlighting::Definition &definition);
 
     TextBuffer m_buffer;
     std::unique_ptr<SyntaxHighlighter> m_highlighter;
-    QList<Edit> m_undo;
+    QList<Step> m_undo;
     QString m_theme;
     Place m_place;
     qsizetype m_undoIndex{0};

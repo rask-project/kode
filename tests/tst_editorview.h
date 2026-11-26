@@ -36,4 +36,10 @@ private slots:
     void viewsShareADocument();
     void undoInOneViewReachesTheOther();
     void switchingDocumentsKeepsEachPlace();
+    void nextOccurrenceSelectsTheWordThenTheNextOne();
+    void typingAtEveryOccurrenceIsOneUndo();
+    void deletingAndMovingAtEveryCaret();
+    void fromACaretOnlyWholeWords();
+    void escapeOrAClickLeavesOneCaret();
+    void nextOccurrenceWrapsAndSkipsSelected();
 };

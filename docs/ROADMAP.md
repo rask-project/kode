@@ -385,7 +385,9 @@ title bar. Each bar has Back and Forward (⌃⌘← / ⌃⌘→) through the
 documents that split showed (`DocumentHistory`) and a wider documents
 pop-up; Ctrl+Tab switches among the open documents, that split's most recent first, as
 in Qt Creator (`DocumentSwitcher`). Closing the last document leaves the
-window on a start page with how to open one (`StartPage`), not closed. Every icon is an SF Symbol
+window on a start page with how to open one (`StartPage`), not closed.
+⌃D selects the next occurrence of the selection with a caret of its own,
+as in VS Code and Qt Creator: typing then changes them all at once. Every icon is an SF Symbol
 (`icon.name`). `Rask.Controls` got `ToolbarGroup`/`ToolbarButton` (a glass
 toolbar capsule) along the way, unused here for now.
 

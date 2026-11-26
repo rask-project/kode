@@ -34,6 +34,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         text: {
             const position = qsTr("Line %1, Column %2").arg(root.editor.cursorLine + 1).arg(root.editor.cursorColumn + 1);
+            if (root.editor.caretCount > 1)
+                return qsTr("%1 (%2 cursors)").arg(position).arg(root.editor.caretCount);
             const selected = root.editor.selectionEnd - root.editor.selectionStart;
             return selected > 0 ? qsTr("%1 (%2 selected)").arg(position).arg(selected) : position;
         }

@@ -122,12 +122,17 @@ Guidance for AI agents working in this repository.
     typing grows one piece. Lines use '\n' only.
   - `TextDocument` — what views share: the buffer, undo history,
     highlighter and indentation style. Every change goes through
-    `replace()`/`undo()`/`redo()`/`setText()` and reaches each view with
+    `replace()`/`replaceEach()` (several carets: one undo step, typing
+    extends it)/`undo()`/`redo()`/`setText()` and reaches each view with
     `replaced()`/`reset()`; a view moves its caret over another view's
     edit. It keeps the place (caret, scroll) the last view left, for the
     next one.
   - `EditorView` (`QQuickItem`) — a view of a `TextDocument` (`document`;
-    its own when none): caret, selection, scroll, wrapping and layout. It
+    its own when none): caret, selection, scroll, wrapping and layout.
+    `selectNextOccurrence()` (⌃D, as in VS Code) adds carets
+    (`m_others`) at the next occurrences of the selection (whole words when
+    it started from a caret); typing, deleting, pasting and ←/→ act at each,
+    any other move or Escape leaves one. It
     sits in a `Flickable` (`contentX/Y`, `contentWidth/Height`); its edits
     go through `replace()`, which records undo in the document. `updatePolish()` (GUI thread) lays out the lines in view
     (`QTextLayout`), reusing rows by their *text* (an edit above a line moves

@@ -18,6 +18,7 @@
 #include <KSyntaxHighlighting/State>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace KSyntaxHighlighting
@@ -78,6 +79,8 @@ class EditorView : public QQuickItem
     Q_PROPERTY(qint64 selectionStart READ selectionStart NOTIFY selectionChanged)
     Q_PROPERTY(qint64 selectionEnd READ selectionEnd NOTIFY selectionChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
+    // The caret and the others added by selectNextOccurrence().
+    Q_PROPERTY(qint32 caretCount READ caretCount NOTIFY selectionChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY undoStateChanged)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY undoStateChanged)
     Q_PROPERTY(bool canPaste READ canPaste NOTIFY canPasteChanged)
@@ -176,6 +179,7 @@ public:
     [[nodiscard]] qint64 selectionStart() const noexcept { return std::min(m_anchor, m_cursor); }
     [[nodiscard]] qint64 selectionEnd() const noexcept { return std::max(m_anchor, m_cursor); }
     [[nodiscard]] bool hasSelection() const noexcept { return m_anchor != m_cursor; }
+    [[nodiscard]] qint32 caretCount() const noexcept { return static_cast<qint32>(m_others.size() + 1); }
     [[nodiscard]] bool canUndo() const noexcept { return m_document->canUndo(); }
     [[nodiscard]] bool canRedo() const noexcept { return m_document->canRedo(); }
     [[nodiscard]] static bool canPaste();
@@ -194,6 +198,10 @@ public:
     Q_INVOKABLE void insert(const QString &text);
     Q_INVOKABLE void select(qint64 start, qint64 end);
     Q_INVOKABLE void selectAll();
+    // As in VS Code and Qt Creator: selects the word at the caret, or adds the
+    // next occurrence of the selection (after it, around the end) with a
+    // caret of its own; typing, deleting and pasting then happen at each.
+    Q_INVOKABLE void selectNextOccurrence();
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
     Q_INVOKABLE void cut();
@@ -326,6 +334,8 @@ private:
     static constexpr quint64 ShowInvisibles{1U << 5U};
     // m_invisibleRects changed since the scene last took them.
     static constexpr quint64 InvisiblesChanged{1U << 6U};
+    // selectNextOccurrence() started from a caret (a word): it adds whole words only.
+    static constexpr quint64 WholeWords{1U << 7U};
 
     [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
     [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
@@ -345,10 +355,25 @@ private:
     // at `position` with `text` in the document, recorded for undo; typing
     // merges into the previous edit while `mergeable`.
     void replace(qsizetype position, qsizetype count, const QString &text, bool mergeable);
+    // Several carets: replaces at each the range `rangeOf(caret)` gives with
+    // `text`, as one undo step; the carets end up after it.
+    template <typename RangeOf> void replaceEach(RangeOf rangeOf, const QString &text, bool mergeable);
+    // Several carets: each one character on (back), a selection collapsing.
+    void moveEach(bool forward);
+    // Drops the other carets; false when there were none.
+    bool clearOthers();
+    // The next occurrence of `needle` (one line) at or after `from`, around
+    // the end, that no caret's selection covers (a whole word with WholeWords).
+    [[nodiscard]] std::optional<TextDocument::Range> nextOccurrence(const QString &needle, qsizetype from) const;
+    // A caret's selection overlaps [start, end).
+    [[nodiscard]] bool covered(qsizetype start, qsizetype end) const;
+    // Where Backspace (Delete) from `cursor` deletes to, with ⌘ or ⌥.
+    [[nodiscard]] qsizetype deletionTarget(qsizetype cursor, bool backspace, bool command, bool option) const;
     void deleteSelection();
     void moveCaret(qsizetype position, Select select);
     void moveVertically(qsizetype lines, Select select);
     [[nodiscard]] qsizetype wordBoundary(qsizetype position, bool forward) const;
+    [[nodiscard]] bool handleMoveEach(const QKeyEvent *event);
     [[nodiscard]] bool handleNavigation(const QKeyEvent *event);
     [[nodiscard]] bool handleDeletion(const QKeyEvent *event);
     [[nodiscard]] qsizetype firstVisibleLine() const;
@@ -378,7 +403,17 @@ private:
     // The rectangles of columns [start, end) of `row`, one per visual line
     // they cross (relative to m_baseLine), appended to `rects`.
     void appendRangeRects(QList<QRectF> &rects, const Row &row, qsizetype start, qsizetype end) const;
-    void appendSelectionRects(const Row &row, qsizetype lineStart, qsizetype lineEnd);
+    void appendSelectionRects(
+        const Row &row,
+        qsizetype lineStart,
+        qsizetype lineEnd,
+        qsizetype selectedFrom,
+        qsizetype selectedTo
+    );
+    // The caret's rectangle at `column` of `row` (relative to m_baseLine).
+    [[nodiscard]] QRectF caretRect(const Row &row, qsizetype column) const;
+    // The other carets and their selections on `row`.
+    void layoutOthers(const Row &row, qsizetype lineStart, qsizetype lineEnd);
     [[nodiscard]] std::unique_ptr<QTextLayout> layoutNumber(qsizetype line) const;
     [[nodiscard]] qsizetype positionAt(const QPointF &point) const;
     [[nodiscard]] qreal textLeft() const;
@@ -421,6 +456,9 @@ private:
     // top (so coordinates stay small in huge files): the selection, one
     // rectangle per line, and the caret.
     QList<QRectF> m_selectionRects;
+    QList<QRectF> m_otherCaretRects;
+    // The carets selectNextOccurrence() added besides m_cursor/m_anchor.
+    QList<TextDocument::Caret> m_others;
     QList<QRectF> m_bracketRects;
     QList<QRectF> m_wordRects;
     QList<QRectF> m_matchRects;
