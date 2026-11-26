@@ -339,7 +339,7 @@ Item {
             }
             BarButton {
                 visible: pane.removable
-                icon.name: "xmark.rectangle"
+                icon.name: "rectangle.split.2x1.slash"
                 Accessible.name: qsTr("Remove split")
                 toolTip: qsTr("Remove Split")
                 onClicked: pane.removeRequested()
