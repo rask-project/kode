@@ -49,6 +49,8 @@ private slots:
     void optionArrowsAddCaretsAboveAndBelow();
     void optionShiftArrowsAddBlockSelections();
     void foldsTheBlockAroundTheCaret();
+    void selectsGrowingBlocks();
+    void togglesCommentsByTheLanguage();
     void foldsTheBlockStartingOnTheCaretsLine();
     void movesPastFoldsAndOpensThemForEdits();
     void foldsByIndentation();

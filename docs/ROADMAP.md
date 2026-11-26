@@ -377,6 +377,11 @@ in Qt Creator (`DocumentSwitcher`). Closing the last document leaves the
 window on a start page with how to open one (`StartPage`), not closed.
 ⌃D selects the next occurrence of the selection with a caret of its own,
 as in VS Code and Qt Creator: typing then changes them all at once.
+Comments by the language's markers (KSyntaxHighlighting's): ⌘/ toggles
+line comments on the selected lines, ⌥⌘/ a block comment around the
+selection (line ones for languages without, HTML's lines wrapped).
+⌘U selects the block around the selection, a larger one each time, by
+the folding blocks (⇧⌘U steps back), as Qt Creator's Select Block Up/Down.
 ⌥↑/↓ add a caret on the line above/below (⌥⇧↑/↓ keep the selection's
 columns, a block selection), and ⇧←/→ extend every caret's selection.
 Code folding: by KSyntaxHighlighting's regions or by indentation, from

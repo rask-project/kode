@@ -17,6 +17,8 @@ qt_add_qml_module(kode_editor_bench
         ../../src/editor/EditorView.cpp
         ../../src/editor/Folding.h
         ../../src/editor/Folding.cpp
+        ../../src/editor/Commenting.h
+        ../../src/editor/Commenting.cpp
         ../../src/editor/Indentation.h
         ../../src/editor/Indentation.cpp
         ../../src/editor/Matching.h

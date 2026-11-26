@@ -124,6 +124,8 @@ qt_add_qml_module(kode
         src/TextCodec.cpp
         src/editor/EditorAccessible.h
         src/editor/EditorAccessible.cpp
+        src/editor/Commenting.h
+        src/editor/Commenting.cpp
         src/editor/EditorView.h
         src/editor/EditorView.cpp
         src/editor/Folding.h
@@ -163,7 +165,7 @@ target_include_directories(kode PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
-set_property(SOURCE main.cpp src/Document.cpp src/DocumentHistory.cpp src/FileIcons.cpp src/FileKinds.cpp src/FileOperations.cpp src/FileTree.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/Folding.cpp src/editor/EditorAccessible.cpp
+set_property(SOURCE main.cpp src/Document.cpp src/DocumentHistory.cpp src/FileIcons.cpp src/FileKinds.cpp src/FileOperations.cpp src/FileTree.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/Commenting.cpp src/editor/Folding.cpp src/editor/EditorAccessible.cpp
     src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/TextSearch.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 

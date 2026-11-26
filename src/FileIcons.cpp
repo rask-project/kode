@@ -19,6 +19,14 @@ namespace
 
 constexpr qint32 defaultSide{32};
 
+// The id without the "?v=<n>" the sidebar adds to load the icons again
+// (the folders' color follows the accent color); a '?' in a path is percent-encoded.
+QStringView withoutVersion(const QString &id)
+{
+    const qsizetype query{id.lastIndexOf(QLatin1Char('?'))};
+    return query < 0 ? QStringView{id} : QStringView{id}.first(query);
+}
+
 QSize sideFor(const QSize &requestedSize)
 {
     return requestedSize.isValid() && !requestedSize.isEmpty() ? requestedSize : QSize{defaultSide, defaultSide};
@@ -55,7 +63,8 @@ QImage FileIcons::requestImage(const QString &id, QSize *size, const QSize &requ
 {
     // Called from the image loading threads: a provider of its own each time.
     const QAbstractFileIconProvider provider;
-    const QIcon icon{provider.icon(QFileInfo{QLatin1Char('/') + QUrl::fromPercentEncoding(id.toUtf8())})};
+    const QIcon icon{provider.icon(QFileInfo{QLatin1Char('/') + QUrl::fromPercentEncoding(withoutVersion(id).toUtf8())})
+    };
     const QImage image{icon.pixmap(sideFor(requestedSize), 1.0).toImage()};
     if (size != nullptr) {
         *size = image.size();
@@ -70,7 +79,7 @@ QImage CodeIcons::requestImage(const QString &id, QSize *size, const QSize &requ
     const QAbstractFileIconProvider provider;
     QImage image{provider.icon(QAbstractFileIconProvider::File).pixmap(sideFor(requestedSize), 1.0).toImage()};
     image.convertTo(QImage::Format_ARGB32_Premultiplied);
-    if (const std::optional<FileKind> kind{fileKindByKey(id)}) {
+    if (const std::optional<FileKind> kind{fileKindByKey(withoutVersion(id))}) {
         drawBadge(image, *kind);
     }
     if (size != nullptr) {

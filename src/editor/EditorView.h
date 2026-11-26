@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Commenting.h"
 #include "Folding.h"
 #include "TextBuffer.h"
 #include "TextDocument.h"
@@ -216,6 +217,12 @@ public:
     // next occurrence of the selection (after it, around the end) with a
     // caret of its own; typing, deleting and pasting then happen at each.
     Q_INVOKABLE void selectNextOccurrence();
+    // As Qt Creator's Select Block Up: the selection grows to the next
+    // enclosing block (its lines inside, then with its first and last),
+    // by the folding blocks, and at last to all the text.
+    Q_INVOKABLE void selectBlock();
+    // As Select Block Down: back to the selection before the last selectBlock() (while still selected).
+    Q_INVOKABLE void unselectBlock();
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
     Q_INVOKABLE void cut();
@@ -232,6 +239,13 @@ public:
     // without knowing the language: a level inside each one left open.
     // Nothing for languages indentation means something in (Python).
     Q_INVOKABLE void reindent();
+    // Comments the selected lines (or the caret's) out with the language's
+    // marker, or back in when all are (commenting::toggledLines()).
+    Q_INVOKABLE void toggleLineComment();
+    // Puts the selection between the language's block markers, or takes it
+    // out of them; the caret's line without a selection. Line comments for a
+    // language without block ones (Python).
+    Q_INVOKABLE void toggleBlockComment();
     // The same for the whole text, changing only what moves (as before saving).
     Q_INVOKABLE void reindentAll();
     // Takes the indentation style from the text (see indentation::detect()).
@@ -479,7 +493,8 @@ private:
     void selectMatch(qsizetype index);
     // Replaces the lines the selection (or caret) touches with
     // `change(their text)` and selects them.
-    void changeSelectedLines(bool outdenting);
+    // Replaces the selected lines (or the caret's) by `change` of their text, as one edit.
+    template <typename Change> void changeSelectedLines(Change change);
     // Return: a newline indented as the line before, a level more after a
     // bracket left open (between brackets, the closing one on a line of its own).
     void insertNewline();
@@ -495,6 +510,8 @@ private:
     [[nodiscard]] bool colonBlocks() const;
     void insertTab();
     [[nodiscard]] indentation::Style indentStyle() const;
+    // The language's comment markers; none without highlighting.
+    [[nodiscard]] commenting::Markers commentMarkers() const;
     // The rectangles of columns [start, end) of `row`, one per visual line
     // they cross (relative to m_baseLine), appended to `rects`.
     void appendRangeRects(QList<QRectF> &rects, const Row &row, qsizetype start, qsizetype end) const;
@@ -537,6 +554,8 @@ private:
     void notifyCursorChanged();
     // Highlights ahead of the view, a slice per event loop pass.
     void highlightAhead();
+    // selectBlock()'s step to `span`, remembering the selection before it.
+    void growSelection(const std::pair<qint64, qint64> &span);
     // Shows the caret and starts its blinking over (it blinks only with focus).
     void restartBlink();
     [[nodiscard]] qsizetype lastVisibleLine() const;
@@ -564,6 +583,9 @@ private:
     QList<QRectF> m_otherCaretRects;
     // The carets selectNextOccurrence() and ⌥↑/↓ added besides m_cursor/m_anchor.
     QList<TextDocument::Caret> m_others;
+    // The selections selectBlock() grew from, for unselectBlock(), and the one it made.
+    QList<std::pair<qint64, qint64>> m_blockSteps;
+    std::pair<qint64, qint64> m_blockSelection{-1, -1};
     QList<QRectF> m_bracketRects;
     QList<QRectF> m_wordRects;
     QList<QRectF> m_matchRects;

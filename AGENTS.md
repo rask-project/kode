@@ -180,6 +180,10 @@ Guidance for AI agents working in this repository.
     next one.
   - `EditorView` (`QQuickItem`) — a view of a `TextDocument` (`document`;
     its own when none): caret, selection, scroll, wrapping and layout.
+    `selectBlock()` (⌘U, as Qt Creator's Select Block Up) grows the
+    selection by the folding blocks (the lines inside, then the whole
+    block, then the one around it, at last all the text);
+    `unselectBlock()` (⇧⌘U) steps back while that selection stands.
     `selectNextOccurrence()` (⌃D, as in VS Code) adds carets
     (`m_others`) at the next occurrences of the selection (whole words when
     it started from a caret); ⌥↑/↓ (`addCaretVertically()`) add one on the
@@ -265,6 +269,14 @@ Guidance for AI agents working in this repository.
     stays on its text) indent lines again, comment and string lines moving
     with the line before; not for indentation-based languages, nor when
     highlighting cannot be ready in 2 s.
+  - `Commenting` — free functions: the selected lines commented out (or
+    back in when all are) with the language's line marker at their least
+    indentation (column 0 where the definition asks), each line between
+    the block markers without one (HTML); a selection between the block
+    markers or out of them. The markers come from the KSyntaxHighlighting
+    definition; `EditorView::toggleLineComment()` (⌘/) and
+    `toggleBlockComment()` (⌥⌘/, line comments without block ones) apply
+    them as one edit (`changeSelectedLines()`, as indenting).
   - `Matching` — free functions for the marks drawn behind the text: the
     bracket pairing with the one at the caret (bounded line scan), the
     word at the caret and its whole-word occurrences in the rows in view.
@@ -276,7 +288,7 @@ Guidance for AI agents working in this repository.
   `docs/editor-bench.md`). Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
-  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_wrapindex`, `tst_folding`,
+  randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_commenting`, `tst_wrapindex`, `tst_folding`,
   `tst_preferences`, `tst_filetree`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in` (with the document types the Finder offers

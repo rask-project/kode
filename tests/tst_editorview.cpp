@@ -661,6 +661,62 @@ void TestEditorView::foldsTheBlockAroundTheCaret()
     QCOMPARE(editor.contentHeight(), height);
 }
 
+void TestEditorView::selectsGrowingBlocks()
+{
+    kode::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(cppSource);
+    editor.setCursorPosition(editor.text().indexOf(QStringLiteral("b();")));
+    editor.selectBlock();
+    QCOMPARE(editor.selectedText(), QStringLiteral("        a();\n        b();"));
+    editor.selectBlock();
+    QCOMPARE(editor.selectedText(), QStringLiteral("    if (x) {\n        a();\n        b();\n    }"));
+    editor.selectBlock();
+    QVERIFY(editor.selectedText().startsWith(QStringLiteral("    if (x) {")));
+    QVERIFY(editor.selectedText().endsWith(QStringLiteral("return 0;")));
+    editor.selectBlock();
+    QCOMPARE(editor.selectedText(), cppSource.chopped(1));
+    // Back down the same steps, to the caret.
+    editor.unselectBlock();
+    QVERIFY(editor.selectedText().endsWith(QStringLiteral("return 0;")));
+    editor.unselectBlock();
+    editor.unselectBlock();
+    QCOMPARE(editor.selectedText(), QStringLiteral("        a();\n        b();"));
+    editor.unselectBlock();
+    QVERIFY(!editor.hasSelection());
+    QCOMPARE(editor.cursorPosition(), editor.text().indexOf(QStringLiteral("b();")));
+}
+
+void TestEditorView::togglesCommentsByTheLanguage()
+{
+    kode::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(cppSource);
+    const qsizetype a{editor.text().indexOf(QStringLiteral("a();"))};
+    editor.select(a, editor.text().indexOf(QStringLiteral("b();")) + 4);
+    editor.toggleLineComment();
+    QVERIFY(editor.text().contains(QStringLiteral("        // a();\n        // b();\n")));
+    editor.undo();
+    QCOMPARE(editor.text(), cppSource);
+    editor.redo();
+    editor.select(editor.text().indexOf(QStringLiteral("// a();")), editor.text().indexOf(QStringLiteral("b();")) + 4);
+    editor.toggleLineComment();
+    QCOMPARE(editor.text(), cppSource);
+    // A block around the selection.
+    editor.select(a, a + 3);
+    editor.toggleBlockComment();
+    QVERIFY(editor.text().contains(QStringLiteral("/* a() */;")));
+    editor.toggleBlockComment();
+    QCOMPARE(editor.text(), cppSource);
+
+    // Python has no block comments: the line's.
+    editor.setSyntax(QStringLiteral("Python"));
+    editor.setText(QStringLiteral("if x:\n    y = 1\n"));
+    editor.setCursorPosition(8);
+    editor.toggleBlockComment();
+    QCOMPARE(editor.text(), QStringLiteral("if x:\n    # y = 1\n"));
+}
+
 void TestEditorView::foldsTheBlockStartingOnTheCaretsLine()
 {
     kode::EditorView editor;

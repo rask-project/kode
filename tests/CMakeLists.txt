@@ -3,6 +3,8 @@ find_package(Qt6 REQUIRED COMPONENTS Test)
 # The sources under test are compiled into each test: the app is an
 # executable, not a library.
 set(editor_sources
+    ../src/editor/Commenting.h
+    ../src/editor/Commenting.cpp
     ../src/editor/EditorAccessible.h
     ../src/editor/EditorAccessible.cpp
     ../src/editor/EditorView.h
@@ -184,3 +186,17 @@ target_include_directories(tst_filetree PRIVATE ../src)
 target_link_libraries(tst_filetree PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)
 add_test(NAME tst_filetree COMMAND tst_filetree)
 set_tests_properties(tst_filetree PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_commenting
+    tst_commenting.h
+    tst_commenting.cpp
+    ../src/editor/Commenting.h
+    ../src/editor/Commenting.cpp
+    ../src/editor/Indentation.h
+    ../src/editor/Indentation.cpp
+    ../src/editor/TextBuffer.h
+    ../src/editor/TextBuffer.cpp
+)
+target_include_directories(tst_commenting PRIVATE ../src/editor)
+target_link_libraries(tst_commenting PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME tst_commenting COMMAND tst_commenting)

@@ -41,6 +41,8 @@ Item {
     readonly property int iconSize: [14, 16, 20][Preferences.sidebarSize]
     readonly property int rowHeight: [22, 24, 30][Preferences.sidebarSize]
     readonly property int indentation: [12, 14, 17][Preferences.sidebarSize]
+    // Bumped when the system's colors change: the icons load again (folders take the accent color).
+    property int iconVersion: 0
 
     signal fileChosen(url file)
     signal openFolderRequested
@@ -154,6 +156,14 @@ Item {
     onFolderChanged: Qt.callLater(sidebar.reveal)
     onVisibleChanged: Qt.callLater(sidebar.reveal)
     Component.onCompleted: Qt.callLater(sidebar.reveal)
+
+    Connections {
+        target: SystemColors
+
+        function onChanged() {
+            sidebar.iconVersion += 1;
+        }
+    }
 
     FileTree {
         id: fileTree
@@ -490,8 +500,10 @@ Item {
                 height: sidebar.iconSize
                 sourceSize.width: sidebar.iconSize * 2
                 sourceSize.height: sidebar.iconSize * 2
-                asynchronous: true
-                source: entry.iconSource
+                // The system's icons on the GUI thread: AppKit tints folders with the accent color,
+                // and the loading thread draws with the old one after it changes. Code icons stay off it.
+                asynchronous: !entry.iconSource.startsWith("image://fileicon")
+                source: entry.iconSource + "?v=" + sidebar.iconVersion
             }
 
             Label {

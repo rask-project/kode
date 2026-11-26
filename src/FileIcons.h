@@ -6,7 +6,8 @@ namespace kode
 {
 
 // "image://fileicon/<path>": the icon the system shows for that file or
-// folder (the Finder's), at the size asked for.
+// folder (the Finder's), at the size asked for. A "?v=<n>" after it is
+// ignored: changing it loads the icon again.
 class FileIcons : public QQuickImageProvider
 {
 public:

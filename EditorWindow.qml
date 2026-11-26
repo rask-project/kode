@@ -444,6 +444,23 @@ ApplicationWindow {
                     onTriggered: root.editor.selectNextOccurrence()
                 }
             }
+            MenuItem {
+                // As Qt Creator's Select Block Up; again for the block around it.
+                action: Action {
+                    text: qsTr("Select Block")
+                    enabled: root.editor !== null
+                    shortcut: "Ctrl+U"
+                    onTriggered: root.editor.selectBlock()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Unselect Block")
+                    enabled: root.editor !== null
+                    shortcut: "Ctrl+Shift+U"
+                    onTriggered: root.editor.unselectBlock()
+                }
+            }
             MenuSeparator {}
             MenuItem {
                 action: Action {
@@ -459,6 +476,23 @@ ApplicationWindow {
                     enabled: root.editor !== null
                     shortcut: "Ctrl+["
                     onTriggered: root.editor.outdent()
+                }
+            }
+            MenuItem {
+                // ⌘/ as in Xcode, VS Code and Qt Creator.
+                action: Action {
+                    text: qsTr("Toggle Line Comment")
+                    enabled: root.editor !== null
+                    shortcut: "Ctrl+/"
+                    onTriggered: root.editor.toggleLineComment()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Toggle Block Comment")
+                    enabled: root.editor !== null
+                    shortcut: "Ctrl+Alt+/"
+                    onTriggered: root.editor.toggleBlockComment()
                 }
             }
             MenuItem {

@@ -1,5 +1,6 @@
 #include "EditorView.h"
 
+#include "Commenting.h"
 #include "EditorAccessible.h"
 #include "Indentation.h"
 #include "Matching.h"
@@ -915,6 +916,64 @@ void EditorView::selectAll()
     select(0, buffer().length());
 }
 
+void EditorView::selectBlock()
+{
+    const TextBuffer &text{buffer()};
+    const qint64 start{selectionStart()};
+    const qint64 end{selectionEnd()};
+    const auto lines{[&text](qsizetype first, qsizetype last) {
+        return std::pair<qint64, qint64>{text.lineStart(first), text.lineStart(last) + text.lineLength(last)};
+    }};
+    const auto larger{[start, end](const std::pair<qint64, qint64> &span) {
+        return span.first <= start && span.second >= end && (span.first < start || span.second > end);
+    }};
+    const qsizetype line{text.lineAt(start)};
+    std::optional<folding::Fold> block{foldUnder(line)};
+    if (!block || block->last + 1 < text.lineAt(end)) {
+        block = foldAround(line);
+    }
+    constexpr qsizetype deepest{64};
+    for (qsizetype depth{0}; block && depth < deepest; ++depth) {
+        const qsizetype header{block->first - 1};
+        // A "{" alone on its line belongs with the line above (a function's signature).
+        const bool braceOnly{header > 0 && text.line(header).trimmed() == QLatin1String("{")};
+        for (const auto &span :
+             {lines(block->first, block->last), lines(braceOnly ? header - 1 : header, block->last + 1)}) {
+            if (larger(span)) {
+                growSelection(span);
+                return;
+            }
+        }
+        const std::optional<folding::Fold> outer{foldAround(braceOnly ? header - 1 : header)};
+        block = outer && outer->first < block->first ? outer : std::nullopt;
+    }
+    if (larger({0, text.length()})) {
+        growSelection({0, text.length()});
+    }
+}
+
+void EditorView::growSelection(const std::pair<qint64, qint64> &span)
+{
+    // Steps from another selection than the one made here are stale.
+    const std::pair<qint64, qint64> current{m_anchor, m_cursor};
+    if (current != m_blockSelection) {
+        m_blockSteps.clear();
+    }
+    m_blockSteps.emplace_back(current);
+    select(span.first, span.second);
+    m_blockSelection = {m_anchor, m_cursor};
+}
+
+void EditorView::unselectBlock()
+{
+    if (m_blockSteps.isEmpty() || std::pair<qint64, qint64>{m_anchor, m_cursor} != m_blockSelection) {
+        return;
+    }
+    const std::pair<qint64, qint64> previous{m_blockSteps.takeLast()};
+    select(previous.first, previous.second);
+    m_blockSelection = {m_anchor, m_cursor};
+}
+
 void EditorView::selectNextOccurrence()
 {
     if (!hasSelection()) {
@@ -1346,17 +1405,7 @@ void EditorView::insertTab()
     insert(indentation::tabAt(indentStyle(), column));
 }
 
-void EditorView::indent()
-{
-    changeSelectedLines(false);
-}
-
-void EditorView::outdent()
-{
-    changeSelectedLines(true);
-}
-
-void EditorView::changeSelectedLines(bool outdenting)
+template <typename Change> void EditorView::changeSelectedLines(Change change)
 {
     const qsizetype firstLine{buffer().lineAt(selectionStart())};
     qsizetype lastLine{buffer().lineAt(selectionEnd())};
@@ -1367,11 +1416,7 @@ void EditorView::changeSelectedLines(bool outdenting)
     const qsizetype start{buffer().lineStart(firstLine)};
     const qsizetype end{buffer().lineStart(lastLine) + buffer().lineLength(lastLine)};
     const QString before{buffer().text(start, end - start)};
-    const indentation::Style style{
-        .width = static_cast<quint8>(indentWidth()),
-        .kind = indentWithTabs() ? indentation::Kind::Tabs : indentation::Kind::Spaces
-    };
-    const QString after{outdenting ? indentation::outdented(before, style) : indentation::indented(before, style)};
+    const QString after{change(QStringView{before})};
     if (after == before) {
         return;
     }
@@ -1385,6 +1430,60 @@ void EditorView::changeSelectedLines(bool outdenting)
     // One line, no selection: the caret keeps its place in the text.
     const qsizetype delta{after.size() - before.size()};
     moveCaret(start + std::max(caretColumn + delta, qsizetype{0}), Select::Collapse);
+}
+
+void EditorView::indent()
+{
+    const indentation::Style style{indentStyle()};
+    changeSelectedLines([style](QStringView lines) { return indentation::indented(lines, style); });
+}
+
+void EditorView::outdent()
+{
+    const indentation::Style style{indentStyle()};
+    changeSelectedLines([style](QStringView lines) { return indentation::outdented(lines, style); });
+}
+
+commenting::Markers EditorView::commentMarkers() const
+{
+    if (!highlighter().isActive()) {
+        return {};
+    }
+    const KSyntaxHighlighting::Definition definition{highlighter().definition()};
+    const QPair<QString, QString> block{definition.multiLineCommentMarker()};
+    return {.line = definition.singleLineCommentMarker(), .open = block.first, .close = block.second};
+}
+
+void EditorView::toggleLineComment()
+{
+    const commenting::Markers markers{commentMarkers()};
+    const bool atColumnZero{
+        highlighter().isActive() &&
+        highlighter().definition().singleLineCommentPosition() == KSyntaxHighlighting::CommentPosition::StartOfLine
+    };
+    changeSelectedLines([&markers, &atColumnZero](QStringView lines) {
+        return commenting::toggledLines(lines, markers, atColumnZero);
+    });
+}
+
+void EditorView::toggleBlockComment()
+{
+    const commenting::Markers markers{commentMarkers()};
+    if (markers.open.isEmpty() || markers.close.isEmpty()) {
+        toggleLineComment();
+        return;
+    }
+    if (!hasSelection()) {
+        changeSelectedLines([&markers](QStringView line) {
+            const QStringView indent{indentation::leadingWhitespace(line)};
+            return indent.toString() + commenting::toggledBlock(line.sliced(indent.size()), markers);
+        });
+        return;
+    }
+    const qsizetype start{selectionStart()};
+    const QString after{commenting::toggledBlock(selectedText(), markers)};
+    replace(start, selectionEnd() - start, after, false);
+    select(start, start + after.size());
 }
 
 bool EditorView::goToLine(const QString &target)
