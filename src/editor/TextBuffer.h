@@ -4,7 +4,7 @@
 #include <QString>
 #include <QStringView>
 
-namespace tekst
+namespace kode
 {
 
 // The editor's text as a piece table: the text loaded from the file (the
@@ -78,4 +78,4 @@ private:
     qsizetype m_newlines{0};
 };
 
-} // namespace tekst
+} // namespace kode

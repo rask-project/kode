@@ -119,9 +119,9 @@ there:
 ```sh
 cmake -B build/Qt_6_12_0_for_macOS_Release -G Ninja \
   -DCMAKE_PREFIX_PATH=/opt/Qt/6.12.0/macos -DCMAKE_BUILD_TYPE=Release
-cmake --build build/Qt_6_12_0_for_macOS_Release --target tekst_editor_bench
+cmake --build build/Qt_6_12_0_for_macOS_Release --target kode_editor_bench
 tools/editor-bench/run.sh build/Qt_6_12_0_for_macOS_Release
-# By hand: build/…/tools/editor-bench/tekst-editor-bench try FILE
+# By hand: build/…/tools/editor-bench/kode-editor-bench try FILE
 ```
 
 Each case runs in its own process and opens a window: leave the machine alone

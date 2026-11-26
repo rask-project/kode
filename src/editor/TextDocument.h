@@ -15,7 +15,7 @@ namespace KSyntaxHighlighting
 class Definition;
 } // namespace KSyntaxHighlighting
 
-namespace tekst
+namespace kode
 {
 
 class SyntaxHighlighter;
@@ -159,4 +159,4 @@ private:
     quint64 m_flags{0U};
 };
 
-} // namespace tekst
+} // namespace kode

@@ -27,7 +27,7 @@ namespace KSyntaxHighlighting
 class Definition;
 } // namespace KSyntaxHighlighting
 
-namespace tekst
+namespace kode
 {
 
 class EditorAccessible;
@@ -53,7 +53,7 @@ class EditorView : public QQuickItem
     Q_OBJECT
     QML_ELEMENT
     // The text shown; null: the view's own.
-    Q_PROPERTY(tekst::TextDocument *document READ document WRITE setDocument NOTIFY documentChanged)
+    Q_PROPERTY(kode::TextDocument *document READ document WRITE setDocument NOTIFY documentChanged)
     Q_PROPERTY(QFont font READ font WRITE setFont NOTIFY fontChanged)
     Q_PROPERTY(QColor textColor READ textColor WRITE setTextColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor selectionColor READ selectionColor WRITE setSelectionColor NOTIFY colorsChanged)
@@ -600,4 +600,4 @@ private:
     quint64 m_flags{0U};
 };
 
-} // namespace tekst
+} // namespace kode

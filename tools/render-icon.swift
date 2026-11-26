@@ -1,8 +1,8 @@
-// Renders assets/tekst.svg (the icon on the macOS grid: an 824 px body in
-// the 1024 px canvas, drawn by tools/make-app-icons.py) to assets/tekst.png
+// Renders assets/kode.svg (the icon on the macOS grid: an 824 px body in
+// the 1024 px canvas, drawn by tools/make-app-icons.py) to assets/kode.png
 // and to an .iconset for iconutil, with the system's drop shadow under the
 // body. These are the legacy icon files: with Xcode the bundle's icon is
-// compiled from assets/tekst.icon.
+// compiled from assets/kode.icon.
 //
 //   swift tools/render-icon.swift SVG PNG ICONSET
 import AppKit

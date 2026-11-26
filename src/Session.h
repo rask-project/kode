@@ -4,7 +4,7 @@
 #include <QVariantMap>
 #include <QtQmlIntegration/qqmlintegration.h>
 
-namespace tekst
+namespace kode
 {
 
 // What was open when the app last quit (the documents, and each window's
@@ -22,4 +22,4 @@ public:
     Q_INVOKABLE static void save(const QVariantMap &state);
 };
 
-} // namespace tekst
+} // namespace kode

@@ -23,16 +23,16 @@ const QString sample{QStringLiteral("#include <QString>\n"
                                     "    return 0;\n"
                                     "}\n")};
 
-void highlightAll(tekst::SyntaxHighlighter &highlighter, const tekst::TextBuffer &buffer)
+void highlightAll(kode::SyntaxHighlighter &highlighter, const kode::TextBuffer &buffer)
 {
     QVERIFY(highlighter.advance(buffer.lineCount(), QDeadlineTimer{QDeadlineTimer::Forever}));
 }
 
-std::unique_ptr<tekst::SyntaxHighlighter> cppHighlighter(const tekst::TextBuffer &buffer)
+std::unique_ptr<kode::SyntaxHighlighter> cppHighlighter(const kode::TextBuffer &buffer)
 {
-    auto highlighter{std::make_unique<tekst::SyntaxHighlighter>(&buffer)};
-    highlighter->setTheme(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Light")));
-    highlighter->setDefinition(tekst::SyntaxHighlighter::definitionForName(QStringLiteral("C++")));
+    auto highlighter{std::make_unique<kode::SyntaxHighlighter>(&buffer)};
+    highlighter->setTheme(kode::SyntaxHighlighter::themeNamed(QStringLiteral("Kode Light")));
+    highlighter->setDefinition(kode::SyntaxHighlighter::definitionForName(QStringLiteral("C++")));
     return highlighter;
 }
 
@@ -40,27 +40,27 @@ std::unique_ptr<tekst::SyntaxHighlighter> cppHighlighter(const tekst::TextBuffer
 
 void TestSyntaxHighlighter::detectsByFileName()
 {
-    QCOMPARE(tekst::SyntaxHighlighter::detect(QStringLiteral("main.cpp"), {}).name(), QStringLiteral("C++"));
-    QCOMPARE(tekst::SyntaxHighlighter::detect(QStringLiteral("CMakeLists.txt"), {}).name(), QStringLiteral("CMake"));
-    QVERIFY(!tekst::SyntaxHighlighter::detect(QStringLiteral("notes"), QStringLiteral("plain words")).isValid());
+    QCOMPARE(kode::SyntaxHighlighter::detect(QStringLiteral("main.cpp"), {}).name(), QStringLiteral("C++"));
+    QCOMPARE(kode::SyntaxHighlighter::detect(QStringLiteral("CMakeLists.txt"), {}).name(), QStringLiteral("CMake"));
+    QVERIFY(!kode::SyntaxHighlighter::detect(QStringLiteral("notes"), QStringLiteral("plain words")).isValid());
 }
 
 void TestSyntaxHighlighter::detectsByShebang()
 {
     QCOMPARE(
-        tekst::SyntaxHighlighter::detect(QStringLiteral("tool"), QStringLiteral("#!/usr/bin/env python3")).name(),
+        kode::SyntaxHighlighter::detect(QStringLiteral("tool"), QStringLiteral("#!/usr/bin/env python3")).name(),
         QStringLiteral("Python")
     );
     QCOMPARE(
-        tekst::SyntaxHighlighter::detect(QStringLiteral("run"), QStringLiteral("#!/bin/sh -e")).name(),
+        kode::SyntaxHighlighter::detect(QStringLiteral("run"), QStringLiteral("#!/bin/sh -e")).name(),
         QStringLiteral("Bash")
     );
 }
 
 void TestSyntaxHighlighter::formatsALine()
 {
-    const tekst::TextBuffer buffer{sample};
-    const std::unique_ptr<tekst::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    const kode::TextBuffer buffer{sample};
+    const std::unique_ptr<kode::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
     highlightAll(*highlighter, buffer);
     // Inside the block comment: the whole line is one comment format.
     const QList<QTextLayout::FormatRange> comment{highlighter->formats(2, buffer.line(2))};
@@ -74,8 +74,8 @@ void TestSyntaxHighlighter::incrementalMatchesFull()
 {
     static constexpr std::array snippets{"/*", "*/", "\n", "\"", "x", "// c\n", "\n\n", "}"};
     QRandomGenerator random{42};
-    tekst::TextBuffer buffer{sample.repeated(20)};
-    const std::unique_ptr<tekst::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    kode::TextBuffer buffer{sample.repeated(20)};
+    const std::unique_ptr<kode::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
     highlightAll(*highlighter, buffer);
 
     for (qint32 round{0}; round < 400; ++round) {
@@ -93,7 +93,7 @@ void TestSyntaxHighlighter::incrementalMatchesFull()
     }
     highlightAll(*highlighter, buffer);
 
-    const std::unique_ptr<tekst::SyntaxHighlighter> fresh{cppHighlighter(buffer)};
+    const std::unique_ptr<kode::SyntaxHighlighter> fresh{cppHighlighter(buffer)};
     highlightAll(*fresh, buffer);
     for (qsizetype line{0}; line <= buffer.lineCount(); ++line) {
         if (highlighter->startState(line) != fresh->startState(line)) {
@@ -104,37 +104,37 @@ void TestSyntaxHighlighter::incrementalMatchesFull()
 
 void TestSyntaxHighlighter::stopsAtTheDeadline()
 {
-    const tekst::TextBuffer buffer{sample.repeated(20000)};
-    const std::unique_ptr<tekst::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    const kode::TextBuffer buffer{sample.repeated(20000)};
+    const std::unique_ptr<kode::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
     QVERIFY(!highlighter->advance(buffer.lineCount(), QDeadlineTimer{1}));
     QVERIFY(!highlighter->isReady(buffer.lineCount()));
     QVERIFY(highlighter->isReady(0));
 }
 
-void TestSyntaxHighlighter::loadsTekstThemes()
+void TestSyntaxHighlighter::loadsKodeThemes()
 {
-    QCOMPARE(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Dark")).name(), QStringLiteral("Tekst Dark"));
+    QCOMPARE(kode::SyntaxHighlighter::themeNamed(QStringLiteral("Kode Dark")).name(), QStringLiteral("Kode Dark"));
 }
 
 void TestSyntaxHighlighter::offersOnlyLightAndDarkPairs()
 {
-    const QStringList families{tekst::SyntaxHighlighter::themeFamilies()};
-    QVERIFY(families.contains(QStringLiteral("Tekst")));
+    const QStringList families{kode::SyntaxHighlighter::themeFamilies()};
+    QVERIFY(families.contains(QStringLiteral("Kode")));
     QVERIFY(families.contains(QStringLiteral("Solarized")));
     QVERIFY(!families.contains(QStringLiteral("Dracula")));
     QVERIFY(!families.contains(QStringLiteral("Vim")));
-    QCOMPARE(tekst::SyntaxHighlighter::themeName(QStringLiteral("Solarized"), true), QStringLiteral("Solarized Dark"));
-    QCOMPARE(tekst::SyntaxHighlighter::themeFamily(QStringLiteral("GitHub Light")), QStringLiteral("GitHub"));
-    QCOMPARE(tekst::SyntaxHighlighter::themeName(QStringLiteral("Dracula"), false), QStringLiteral("Tekst Light"));
-    QCOMPARE(tekst::SyntaxHighlighter::themeName({}, true), QStringLiteral("Tekst Dark"));
+    QCOMPARE(kode::SyntaxHighlighter::themeName(QStringLiteral("Solarized"), true), QStringLiteral("Solarized Dark"));
+    QCOMPARE(kode::SyntaxHighlighter::themeFamily(QStringLiteral("GitHub Light")), QStringLiteral("GitHub"));
+    QCOMPARE(kode::SyntaxHighlighter::themeName(QStringLiteral("Dracula"), false), QStringLiteral("Kode Light"));
+    QCOMPARE(kode::SyntaxHighlighter::themeName({}, true), QStringLiteral("Kode Dark"));
 }
 
-void TestSyntaxHighlighter::tekstDarkColorsKeywords()
+void TestSyntaxHighlighter::kodeDarkColorsKeywords()
 {
     // Qt Creator's Dark (2024) keyword: cyan, italic.
-    const tekst::TextBuffer buffer{QStringLiteral("return 0;")};
-    const std::unique_ptr<tekst::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
-    highlighter->setTheme(tekst::SyntaxHighlighter::themeNamed(QStringLiteral("Tekst Dark")));
+    const kode::TextBuffer buffer{QStringLiteral("return 0;")};
+    const std::unique_ptr<kode::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    highlighter->setTheme(kode::SyntaxHighlighter::themeNamed(QStringLiteral("Kode Dark")));
     highlightAll(*highlighter, buffer);
     const QList<QTextLayout::FormatRange> formats{highlighter->formats(0, buffer.line(0))};
     QVERIFY(!formats.isEmpty());

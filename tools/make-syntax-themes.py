@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generates Tekst's syntax highlighting themes from Qt Creator's color schemes.
+"""Generates Kode's syntax highlighting themes from Qt Creator's color schemes.
 
     tools/make-syntax-themes.py [QT_CREATOR_STYLES_DIR]
 
-Writes assets/themes/tekst-light.theme and tekst-dark.theme (KSyntaxHighlighting
+Writes assets/themes/kode-light.theme and kode-dark.theme (KSyntaxHighlighting
 themes) from Qt Creator's "Light (2024)" and "Dark (2024)" schemes
 (light-2024.xml, dark-2024.xml), by default from
 /opt/Qt/Qt Creator.app/Contents/Resources/styles. Never edit the themes by
@@ -17,7 +17,7 @@ below). This does the same. One departure: a scheme without "Enumeration" (the
 dark one) would give constants the default dark magenta, unreadable on a dark
 background; they take the scheme's number color instead.
 
-Tekst draws plain text in the system's text color: "Normal" carries the
+Kode draws plain text in the system's text color: "Normal" carries the
 scheme's color only so the theme is complete; the editor does not use it.
 """
 
@@ -91,7 +91,7 @@ STYLES = {
     "Others": "Text",
 }
 
-# The editor colors Tekst does not take from a scheme (it draws with the
+# The editor colors Kode does not take from a scheme (it draws with the
 # system's), kept only so the themes are complete: Breeze's.
 BREEZE = {
     "light": "breeze-light.theme",
@@ -177,8 +177,8 @@ def main():
     out = ROOT / "assets/themes"
     out.mkdir(parents=True, exist_ok=True)
     for source, name, kind, file_name in (
-        ("light-2024.xml", "Tekst Light", "light", "tekst-light.theme"),
-        ("dark-2024.xml", "Tekst Dark", "dark", "tekst-dark.theme"),
+        ("light-2024.xml", "Kode Light", "light", "kode-light.theme"),
+        ("dark-2024.xml", "Kode Dark", "dark", "kode-dark.theme"),
     ):
         theme = make_theme(styles_dir / source, name, kind)
         (out / file_name).write_text(json.dumps(theme, indent=4) + "\n")

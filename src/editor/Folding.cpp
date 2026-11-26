@@ -4,7 +4,7 @@
 
 #include <limits>
 
-namespace tekst::folding
+namespace kode::folding
 {
 
 namespace
@@ -150,4 +150,4 @@ lineAbove(const TextBuffer &buffer, qsizetype line, qsizetype tabWidth, const QD
     return std::nullopt;
 }
 
-} // namespace tekst::folding
+} // namespace kode::folding

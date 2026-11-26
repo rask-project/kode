@@ -8,7 +8,7 @@ import Rask.Controls
 import Rask.Platform
 import Rask.Window
 
-import Tekst
+import Kode
 
 // The Settings window (⌘,), like macOS System Settings: a blurred sidebar of
 // sections and forms bound to Preferences, applied as they change.

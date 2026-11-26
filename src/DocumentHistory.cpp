@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -144,4 +144,4 @@ bool DocumentHistory::touch(Document *document)
     return true;
 }
 
-} // namespace tekst
+} // namespace kode

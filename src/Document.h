@@ -13,7 +13,7 @@
 
 #include <expected>
 
-namespace tekst
+namespace kode
 {
 
 // An open file: its text (a TextDocument, shown by any number of
@@ -26,7 +26,7 @@ class Document : public QObject
     Q_OBJECT
     QML_ELEMENT
     // The text, for EditorView.document.
-    Q_PROPERTY(tekst::TextDocument *textDocument READ textDocument CONSTANT)
+    Q_PROPERTY(kode::TextDocument *textDocument READ textDocument CONSTANT)
     // Empty for a new, never saved document.
     Q_PROPERTY(QUrl fileUrl READ fileUrl NOTIFY fileUrlChanged)
     // The file's name, or "Untitled" (numbered from the second one).
@@ -101,4 +101,4 @@ private:
     qint64 m_untitledNumber{1};
 };
 
-} // namespace tekst
+} // namespace kode

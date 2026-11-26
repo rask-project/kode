@@ -9,7 +9,7 @@
 #include <memory>
 #include <mutex>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -289,4 +289,4 @@ void EditorAccessible::replaceText(int startOffset, int endOffset, const QString
     view()->replace(startOffset, endOffset - startOffset, text, false);
 }
 
-} // namespace tekst
+} // namespace kode

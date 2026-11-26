@@ -5,7 +5,7 @@ import QtQuick.Controls
 
 import Rask.Platform
 
-import Tekst
+import Kode
 
 // The Ctrl+Tab switcher, as in Qt Creator: the open documents, the split's
 // most recently shown first. Ctrl+Tab (Ctrl+Shift+Tab) opens it on the next (last) one and moves

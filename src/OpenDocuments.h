@@ -10,7 +10,7 @@
 #include <memory>
 #include <vector>
 
-namespace tekst
+namespace kode
 {
 
 // Every document open in the app, as in Qt Creator: any split of any window
@@ -36,28 +36,28 @@ public:
 
     // The document of `file`, read now if it is not open yet; null (and
     // errorOccurred()) when it cannot be read.
-    Q_INVOKABLE tekst::Document *open(const QUrl &file);
+    Q_INVOKABLE kode::Document *open(const QUrl &file);
     // Opens each of `files` still there, silently (a restored session).
     Q_INVOKABLE void restore(const QStringList &files);
     // The open document of `file`, or null.
-    Q_INVOKABLE [[nodiscard]] tekst::Document *find(const QUrl &file) const;
+    Q_INVOKABLE [[nodiscard]] kode::Document *find(const QUrl &file) const;
     // A new, untitled document.
-    Q_INVOKABLE tekst::Document *create();
+    Q_INVOKABLE kode::Document *create();
     // Removes `document` (deleted on the next event loop turn).
-    Q_INVOKABLE void close(tekst::Document *document);
+    Q_INVOKABLE void close(kode::Document *document);
     // `document` was shown: it moves to the front.
-    Q_INVOKABLE void touch(tekst::Document *document);
+    Q_INVOKABLE void touch(kode::Document *document);
     // The most recent document other than `document`, or null.
-    Q_INVOKABLE [[nodiscard]] tekst::Document *other(const tekst::Document *document) const;
+    Q_INVOKABLE [[nodiscard]] kode::Document *other(const kode::Document *document) const;
     Q_INVOKABLE [[nodiscard]] QVariantList modifiedDocuments() const;
 
 signals:
     void documentsChanged();
     // Views showing `document` must show another one.
-    void documentClosing(tekst::Document *document);
+    void documentClosing(kode::Document *document);
     void errorOccurred(const QString &message);
     // Another program changed `document`'s file while it has unsaved changes.
-    void changedOnDisk(tekst::Document *document);
+    void changedOnDisk(kode::Document *document);
 
 private:
     struct DeleteLater {
@@ -72,4 +72,4 @@ private:
     std::vector<Pointer> m_documents;
 };
 
-} // namespace tekst
+} // namespace kode

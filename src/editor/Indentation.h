@@ -4,7 +4,7 @@
 #include <QString>
 #include <QStringView>
 
-namespace tekst
+namespace kode
 {
 
 class TextBuffer;
@@ -82,4 +82,4 @@ indentAfter(qsizetype previous, const Brackets &before, qint32 leading, Style st
 
 } // namespace indentation
 
-} // namespace tekst
+} // namespace kode

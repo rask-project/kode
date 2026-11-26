@@ -34,7 +34,7 @@
 #include <cmath>
 #include <ranges>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -2774,4 +2774,4 @@ void EditorView::focusOutEvent(QFocusEvent *event)
     update();
 }
 
-} // namespace tekst
+} // namespace kode

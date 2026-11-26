@@ -8,7 +8,7 @@
 #include <QVariantList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
-namespace tekst
+namespace kode
 {
 
 // The documents a split showed, in order, to go back and forward through
@@ -33,14 +33,14 @@ public:
     // showed, most recent first, then the others in their order.
     Q_INVOKABLE [[nodiscard]] QVariantList recentAmong(const QVariantList &documents) const;
     // The document shown now, or null.
-    Q_INVOKABLE [[nodiscard]] tekst::Document *current() const;
+    Q_INVOKABLE [[nodiscard]] kode::Document *current() const;
     // `document` is shown now (nothing changes when it already is).
-    Q_INVOKABLE void visit(tekst::Document *document);
+    Q_INVOKABLE void visit(kode::Document *document);
     // The document before (after) the current one, which it becomes; null at the start (end).
-    Q_INVOKABLE tekst::Document *back();
-    Q_INVOKABLE tekst::Document *forward();
+    Q_INVOKABLE kode::Document *back();
+    Q_INVOKABLE kode::Document *forward();
     // Drops `document` (it is closing).
-    Q_INVOKABLE void forget(const tekst::Document *document);
+    Q_INVOKABLE void forget(const kode::Document *document);
 
 signals:
     void changed();
@@ -56,4 +56,4 @@ private:
     qsizetype m_current{-1};
 };
 
-} // namespace tekst
+} // namespace kode

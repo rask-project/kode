@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -126,4 +126,4 @@ QString TextSearch::replacementFor(const Match &match, const QString &replacemen
     return result;
 }
 
-} // namespace tekst
+} // namespace kode

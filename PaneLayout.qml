@@ -5,7 +5,7 @@ import QtQuick.Controls
 
 import Rask.Window
 
-import Tekst
+import Kode
 
 // A window's splits, from its tree of SplitNodes: a SplitView per split, and
 // per leaf a slot its EditorPane is placed in. The views are not made here

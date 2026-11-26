@@ -13,7 +13,7 @@ private slots:
     void formatsALine();
     void incrementalMatchesFull();
     void stopsAtTheDeadline();
-    void loadsTekstThemes();
+    void loadsKodeThemes();
     void offersOnlyLightAndDarkPairs();
-    void tekstDarkColorsKeywords();
+    void kodeDarkColorsKeywords();
 };

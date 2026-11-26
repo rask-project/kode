@@ -5,7 +5,7 @@
 #include <QRegularExpression>
 #include <QString>
 
-namespace tekst
+namespace kode
 {
 
 class TextBuffer;
@@ -63,4 +63,4 @@ private:
     quint64 m_flags{0U};
 };
 
-} // namespace tekst
+} // namespace kode

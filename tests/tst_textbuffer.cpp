@@ -13,7 +13,7 @@ namespace
 {
 
 // Line `line` of `buffer`, starting at `start`, is `expected`.
-void compareLine(const tekst::TextBuffer &buffer, qsizetype line, qsizetype start, const QString &expected)
+void compareLine(const kode::TextBuffer &buffer, qsizetype line, qsizetype start, const QString &expected)
 {
     QCOMPARE(buffer.lineStart(line), start);
     QCOMPARE(buffer.line(line), expected);
@@ -23,7 +23,7 @@ void compareLine(const tekst::TextBuffer &buffer, qsizetype line, qsizetype star
 
 // Every line, line start, line length and line-of-position of `buffer`
 // matches `reference`.
-void compareWithReference(const tekst::TextBuffer &buffer, const QString &reference)
+void compareWithReference(const kode::TextBuffer &buffer, const QString &reference)
 {
     QCOMPARE(buffer.toString(), reference);
     QCOMPARE(buffer.length(), reference.size());
@@ -44,7 +44,7 @@ void compareWithReference(const tekst::TextBuffer &buffer, const QString &refere
 
 void TestTextBuffer::empty()
 {
-    const tekst::TextBuffer buffer;
+    const kode::TextBuffer buffer;
     QCOMPARE(buffer.length(), 0);
     QCOMPARE(buffer.lineCount(), 1);
     QCOMPARE(buffer.line(0), QString{});
@@ -54,7 +54,7 @@ void TestTextBuffer::empty()
 void TestTextBuffer::lines()
 {
     const QString text{QStringLiteral("one\ntwo\n\nthree\n")};
-    const tekst::TextBuffer buffer{text};
+    const kode::TextBuffer buffer{text};
     compareWithReference(buffer, text);
     QCOMPARE(buffer.lineCount(), 5);
     QCOMPARE(buffer.line(3), QStringLiteral("three"));
@@ -64,7 +64,7 @@ void TestTextBuffer::lines()
 void TestTextBuffer::insertsAndRemoves()
 {
     QString reference{QStringLiteral("hello world\nsecond line")};
-    tekst::TextBuffer buffer{reference};
+    kode::TextBuffer buffer{reference};
 
     buffer.insert(5, u",");
     reference.insert(5, QLatin1Char(','));
@@ -90,7 +90,7 @@ void TestTextBuffer::insertsAndRemoves()
 
 void TestTextBuffer::coalescesTyping()
 {
-    tekst::TextBuffer buffer{QStringLiteral("ab")};
+    kode::TextBuffer buffer{QStringLiteral("ab")};
     const QString typed{QStringLiteral("typing one key at a time\n")};
     qsizetype position{1};
     for (const QChar character : typed) {
@@ -107,7 +107,7 @@ void TestTextBuffer::randomEditsMatchReference()
     QRandomGenerator random{20261125U};
     const QString alphabet{QStringLiteral("abc \n\t日é")};
     QString reference{QStringLiteral("start\nof the\ntext\n")};
-    tekst::TextBuffer buffer{reference};
+    kode::TextBuffer buffer{reference};
     for (qint32 step{0}; step < 2000; ++step) {
         const bool insert{reference.isEmpty() || random.bounded(3) != 0};
         if (insert) {

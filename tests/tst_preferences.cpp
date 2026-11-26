@@ -20,8 +20,8 @@ void TestPreferences::init()
 
 void TestPreferences::hasDefaults()
 {
-    const tekst::Preferences preferences;
-    QCOMPARE(preferences.fontSize(), tekst::Preferences::defaultFontSize());
+    const kode::Preferences preferences;
+    QCOMPARE(preferences.fontSize(), kode::Preferences::defaultFontSize());
     QVERIFY(!preferences.fontFamily().isEmpty());
     QVERIFY(preferences.theme().isEmpty());
     QVERIFY(!preferences.wrap());
@@ -32,10 +32,10 @@ void TestPreferences::hasDefaults()
 
 void TestPreferences::clampsAndNotifiesOnlyOnChange()
 {
-    tekst::Preferences preferences;
-    const QSignalSpy changes{&preferences, &tekst::Preferences::changed};
+    kode::Preferences preferences;
+    const QSignalSpy changes{&preferences, &kode::Preferences::changed};
     preferences.setFontSize(200);
-    QCOMPARE(preferences.fontSize(), tekst::Preferences::largestFontSize());
+    QCOMPARE(preferences.fontSize(), kode::Preferences::largestFontSize());
     preferences.setFontSize(200);
     preferences.setWindowOpacity(0.1);
     QCOMPARE(preferences.windowOpacity(), 0.5);
@@ -44,10 +44,10 @@ void TestPreferences::clampsAndNotifiesOnlyOnChange()
 
 void TestPreferences::instancesShareTheSettings()
 {
-    tekst::Preferences first;
+    kode::Preferences first;
     first.setTheme(QStringLiteral("Dracula"));
     first.setIndentWithTabs(true);
-    const tekst::Preferences second;
+    const kode::Preferences second;
     QCOMPARE(second.theme(), QStringLiteral("Dracula"));
     QVERIFY(second.indentWithTabs());
 }

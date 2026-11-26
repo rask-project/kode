@@ -31,7 +31,7 @@
 
 	<key>CFBundleIconFile</key>
 	<string>${MACOSX_BUNDLE_ICON_FILE}</string>
-	${TEKST_ICON_NAME_KEY}
+	${KODE_ICON_NAME_KEY}
 
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>

@@ -5,7 +5,7 @@ import QtQuick.Controls
 
 import Rask.Platform
 
-import Tekst
+import Kode
 
 // Below the editor: where the caret is and the syntax, with a menu to pick it.
 Item {

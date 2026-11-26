@@ -13,7 +13,7 @@ namespace
 {
 
 void press(
-    tekst::EditorView &editor,
+    kode::EditorView &editor,
     Qt::Key key,
     Qt::KeyboardModifiers modifiers = Qt::NoModifier,
     const QString &text = {}
@@ -23,7 +23,7 @@ void press(
     QCoreApplication::sendEvent(&editor, &event);
 }
 
-void type(tekst::EditorView &editor, const QString &text)
+void type(kode::EditorView &editor, const QString &text)
 {
     for (const QChar character : text) {
         press(editor, Qt::Key_unknown, Qt::NoModifier, QString{character});
@@ -34,7 +34,7 @@ void type(tekst::EditorView &editor, const QString &text)
 
 void TestEditorView::typingMergesIntoOneUndo()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("ab"));
     editor.setCursorPosition(1);
     type(editor, QStringLiteral("hello"));
@@ -48,7 +48,7 @@ void TestEditorView::typingMergesIntoOneUndo()
 
 void TestEditorView::newlineStartsANewUndo()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     type(editor, QStringLiteral("one"));
     press(editor, Qt::Key_Return);
     type(editor, QStringLiteral("two"));
@@ -63,7 +63,7 @@ void TestEditorView::newlineStartsANewUndo()
 
 void TestEditorView::backspaceMergesAndUndoRestoresCaret()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("hello world"));
     editor.setCursorPosition(11);
     for (qint32 i{0}; i < 5; ++i) {
@@ -78,7 +78,7 @@ void TestEditorView::backspaceMergesAndUndoRestoresCaret()
 
 void TestEditorView::redoAfterUndo()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     type(editor, QStringLiteral("abc"));
     editor.undo();
     QVERIFY(editor.canRedo());
@@ -90,7 +90,7 @@ void TestEditorView::redoAfterUndo()
 
 void TestEditorView::editAfterUndoDropsRedo()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     type(editor, QStringLiteral("abc"));
     editor.undo();
     type(editor, QStringLiteral("x"));
@@ -100,9 +100,9 @@ void TestEditorView::editAfterUndoDropsRedo()
 
 void TestEditorView::modifiedFollowsSavedState()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("saved"));
-    const QSignalSpy spy{&editor, &tekst::EditorView::modifiedChanged};
+    const QSignalSpy spy{&editor, &kode::EditorView::modifiedChanged};
     QVERIFY(!editor.modified());
     type(editor, QStringLiteral("!"));
     QVERIFY(editor.modified());
@@ -121,7 +121,7 @@ void TestEditorView::modifiedFollowsSavedState()
 
 void TestEditorView::selectionReplacesAndDeletes()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("one two three"));
     editor.select(4, 7);
     QVERIFY(editor.hasSelection());
@@ -139,7 +139,7 @@ void TestEditorView::selectionReplacesAndDeletes()
 
 void TestEditorView::shiftArrowsSelect()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("abcdef"));
     editor.setCursorPosition(1);
     press(editor, Qt::Key_Right, Qt::ShiftModifier);
@@ -158,7 +158,7 @@ void TestEditorView::shiftArrowsSelect()
 
 void TestEditorView::wordNavigationAndDeletion()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("auto value = some_name(42);"));
     press(editor, Qt::Key_Right, Qt::AltModifier);
     QCOMPARE(editor.cursorPosition(), 4);
@@ -187,7 +187,7 @@ void TestEditorView::wordNavigationAndDeletion()
 
 void TestEditorView::verticalMovesKeepColumn()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("a long line\nab\nanother long line"));
     editor.setCursorPosition(8);
     press(editor, Qt::Key_Down);
@@ -200,7 +200,7 @@ void TestEditorView::verticalMovesKeepColumn()
 
 void TestEditorView::inputMethodCommitAndReplacement()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("cafe"));
     editor.setCursorPosition(4);
     // A composition in progress changes nothing in the text.
@@ -221,7 +221,7 @@ void TestEditorView::inputMethodCommitAndReplacement()
 
 void TestEditorView::accessibleText()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("first line\nsecond words here"));
     QAccessibleInterface *const accessible{QAccessible::queryAccessibleInterface(&editor)};
     QVERIFY(accessible != nullptr);
@@ -235,7 +235,7 @@ void TestEditorView::accessibleText()
 
 void TestEditorView::accessibleSelection()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("first line\nsecond words here"));
     QAccessibleTextInterface *const text{QAccessible::queryAccessibleInterface(&editor)->textInterface()};
     text->setSelection(0, 0, 5);
@@ -248,7 +248,7 @@ void TestEditorView::accessibleSelection()
 
 void TestEditorView::accessibleBoundaries()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("first line\nsecond words here"));
     QAccessibleTextInterface *const text{QAccessible::queryAccessibleInterface(&editor)->textInterface()};
     int start{-1};
@@ -263,7 +263,7 @@ void TestEditorView::accessibleBoundaries()
 
 void TestEditorView::accessibleEditingIsUndoable()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("hello"));
     QAccessibleEditableTextInterface *const editable{
         QAccessible::queryAccessibleInterface(&editor)->editableTextInterface()
@@ -279,7 +279,7 @@ void TestEditorView::accessibleEditingIsUndoable()
 
 void TestEditorView::findNextSelectsMatches()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("one two one\none"));
     editor.setSearchPattern(QStringLiteral("one"));
     QCOMPARE(editor.searchMatchCount(), 3);
@@ -293,7 +293,7 @@ void TestEditorView::findNextSelectsMatches()
 
 void TestEditorView::findWraps()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("one two one\none"));
     editor.setSearchPattern(QStringLiteral("one"));
     editor.select(12, 15);
@@ -306,7 +306,7 @@ void TestEditorView::findWraps()
 
 void TestEditorView::replaceAllIsOneUndo()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("a1 b2\nc3"));
     editor.setSearchRegularExpression(true);
     editor.setSearchPattern(QStringLiteral("([a-z])(\\d)"));
@@ -320,7 +320,7 @@ void TestEditorView::replaceAllIsOneUndo()
 
 void TestEditorView::goesToLineAndColumn()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("first\nsecond\nthird"));
     QVERIFY(editor.goToLine(QStringLiteral("2")));
     QCOMPARE(editor.cursorPosition(), 6);
@@ -335,7 +335,7 @@ void TestEditorView::goesToLineAndColumn()
 
 void TestEditorView::returnKeepsIndentation()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("    foo();"));
     editor.setCursorPosition(editor.length());
     press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
@@ -356,7 +356,7 @@ void TestEditorView::returnKeepsIndentation()
 
 void TestEditorView::closingBracketGoesUnderItsOpening()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("    if (x) {\n        a();\n        "));
     editor.setCursorPosition(editor.length());
     type(editor, QStringLiteral("}"));
@@ -369,7 +369,7 @@ void TestEditorView::closingBracketGoesUnderItsOpening()
 
 void TestEditorView::reindentsByBrackets()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setSyntax(QStringLiteral("C++"));
     editor.setText(QStringLiteral("void f() {\nif (a) {\nx = \"{\";   // {\n}\n\n  /* a\n   * b */\nfoo(1,\n2);\n}"));
     editor.selectAll();
@@ -392,7 +392,7 @@ void TestEditorView::reindentsByBrackets()
 
 void TestEditorView::reindentsEverythingKeepingTheCaret()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("a {\nb {\nc;\n}\n}"));
     editor.setCursorPosition(editor.text().indexOf(QLatin1Char('c')) + 1);
     editor.reindentAll();
@@ -406,7 +406,7 @@ void TestEditorView::reindentsEverythingKeepingTheCaret()
 
 void TestEditorView::colonOpensABlockInPython()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("def f():"));
     editor.setCursorPosition(editor.length());
     press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
@@ -425,7 +425,7 @@ void TestEditorView::colonOpensABlockInPython()
 
 void TestEditorView::tabIndentsSelectedLines()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("a\nb\nc"));
     editor.setIndentWidth(2);
     editor.select(0, 3);
@@ -442,7 +442,7 @@ void TestEditorView::tabIndentsSelectedLines()
 
 void TestEditorView::wrappedLinesAddRowsAndMoveByRow()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     // Narrow: lines wrap at the fewest columns (20).
     editor.setWidth(10.0);
     editor.setText(QString(45, QLatin1Char('a')) + QStringLiteral("\nb"));
@@ -465,7 +465,7 @@ void TestEditorView::wrappedLinesAddRowsAndMoveByRow()
 
 void TestEditorView::wrappingFollowsEditsAndNewText()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setWidth(10.0);
     editor.setText(QStringLiteral("b"));
     const qreal oneRow{editor.contentHeight()};
@@ -486,15 +486,15 @@ void TestEditorView::wrappingFollowsEditsAndNewText()
 
 void TestEditorView::relayoutKeepsTheTopLine()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setWidth(10.0);
     editor.setText(QString(45, QLatin1Char('a')).append(QLatin1Char('\n')).repeated(100));
     const qreal top{editor.cursorRectangle().y()};
     const qreal rowHeight{editor.cursorRectangle().height()};
     // Line 50 at the top, the caret far above it.
     editor.setContentY(top + (50 * rowHeight));
-    const QSignalSpy scrolls{&editor, &tekst::EditorView::scrollRequested};
-    const QSignalSpy caretMoves{&editor, &tekst::EditorView::caretMoved};
+    const QSignalSpy scrolls{&editor, &kode::EditorView::scrollRequested};
+    const QSignalSpy caretMoves{&editor, &kode::EditorView::caretMoved};
     editor.setWrap(true);
     // Each line now takes three rows; the view follows line 50, not the caret.
     QCOMPARE(scrolls.count(), 1);
@@ -504,7 +504,7 @@ void TestEditorView::relayoutKeepsTheTopLine()
 
 void TestEditorView::newTextStartsWithTheDefaultIndentation()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setDefaultIndentWithTabs(true);
     editor.setDefaultIndentWidth(8);
     editor.setIndentWithTabs(false);
@@ -521,14 +521,14 @@ void TestEditorView::newTextStartsWithTheDefaultIndentation()
 
 void TestEditorView::viewsShareADocument()
 {
-    tekst::TextDocument document;
-    tekst::EditorView first;
-    tekst::EditorView second;
+    kode::TextDocument document;
+    kode::EditorView first;
+    kode::EditorView second;
     first.setDocument(&document);
     second.setDocument(&document);
     document.setText(QStringLiteral("hello world"));
     second.setCursorPosition(6);
-    const QSignalSpy secondModified{&second, &tekst::EditorView::modifiedChanged};
+    const QSignalSpy secondModified{&second, &kode::EditorView::modifiedChanged};
     first.setCursorPosition(0);
     type(first, QStringLiteral(">> "));
     QCOMPARE(second.text(), QStringLiteral(">> hello world"));
@@ -541,9 +541,9 @@ void TestEditorView::viewsShareADocument()
 
 void TestEditorView::undoInOneViewReachesTheOther()
 {
-    tekst::TextDocument document;
-    tekst::EditorView first;
-    tekst::EditorView second;
+    kode::TextDocument document;
+    kode::EditorView first;
+    kode::EditorView second;
     first.setDocument(&document);
     second.setDocument(&document);
     document.setText(QStringLiteral("text"));
@@ -558,11 +558,11 @@ void TestEditorView::undoInOneViewReachesTheOther()
 
 void TestEditorView::switchingDocumentsKeepsEachPlace()
 {
-    tekst::TextDocument one;
-    tekst::TextDocument two;
+    kode::TextDocument one;
+    kode::TextDocument two;
     one.setText(QStringLiteral("first document"));
     two.setText(QStringLiteral("second"));
-    tekst::EditorView view;
+    kode::EditorView view;
     view.setDocument(&one);
     view.setCursorPosition(6);
     view.setDocument(&two);
@@ -572,7 +572,7 @@ void TestEditorView::switchingDocumentsKeepsEachPlace()
     QCOMPARE(view.cursorPosition(), 6);
     // Deleting the document shown leaves the view with its own, empty one.
     {
-        tekst::TextDocument gone;
+        kode::TextDocument gone;
         gone.setText(QStringLiteral("gone"));
         view.setDocument(&gone);
     }
@@ -581,7 +581,7 @@ void TestEditorView::switchingDocumentsKeepsEachPlace()
 
 void TestEditorView::optionArrowsAddCaretsAboveAndBelow()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("abcd\nabcd\nab\nabcd"));
     editor.setCursorPosition(3);
     press(editor, Qt::Key_Down, Qt::AltModifier);
@@ -605,7 +605,7 @@ void TestEditorView::optionArrowsAddCaretsAboveAndBelow()
 
 void TestEditorView::optionShiftArrowsAddBlockSelections()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("abcdef\nabcdef\nabcdef"));
     editor.select(1, 3);
     press(editor, Qt::Key_Down, Qt::AltModifier | Qt::ShiftModifier);
@@ -642,7 +642,7 @@ const QString cppSource{
 
 void TestEditorView::foldsTheBlockAroundTheCaret()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setSyntax(QStringLiteral("C++"));
     editor.setText(cppSource);
     const qreal height{editor.contentHeight()};
@@ -663,7 +663,7 @@ void TestEditorView::foldsTheBlockAroundTheCaret()
 
 void TestEditorView::foldsTheBlockStartingOnTheCaretsLine()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setSyntax(QStringLiteral("C++"));
     editor.setText(cppSource);
     const qreal height{editor.contentHeight()};
@@ -681,7 +681,7 @@ void TestEditorView::foldsTheBlockStartingOnTheCaretsLine()
 
 void TestEditorView::movesPastFoldsAndOpensThemForEdits()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setSyntax(QStringLiteral("C++"));
     editor.setText(cppSource);
     const qreal height{editor.contentHeight()};
@@ -711,7 +711,7 @@ void TestEditorView::movesPastFoldsAndOpensThemForEdits()
 
 void TestEditorView::foldsByIndentation()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setSyntax(QStringLiteral("Python"));
     editor.setText(QStringLiteral("def f():\n    a = 1\n\n    return a\nx = f()\n"));
     const qreal height{editor.contentHeight()};
@@ -726,7 +726,7 @@ QTEST_MAIN(TestEditorView)
 
 void TestEditorView::nextOccurrenceSelectsTheWordThenTheNextOne()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("let foo = foo + bar(foo);"));
     editor.setCursorPosition(5);
     editor.selectNextOccurrence();
@@ -745,7 +745,7 @@ void TestEditorView::nextOccurrenceSelectsTheWordThenTheNextOne()
 
 void TestEditorView::typingAtEveryOccurrenceIsOneUndo()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("let foo = foo + bar(foo);"));
     editor.setCursorPosition(4);
     editor.selectNextOccurrence();
@@ -764,7 +764,7 @@ void TestEditorView::typingAtEveryOccurrenceIsOneUndo()
 
 void TestEditorView::deletingAndMovingAtEveryCaret()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("ab ab ab"));
     editor.setCursorPosition(0);
     editor.selectNextOccurrence();
@@ -785,7 +785,7 @@ void TestEditorView::deletingAndMovingAtEveryCaret()
 
 void TestEditorView::fromACaretOnlyWholeWords()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("item items item"));
     editor.setCursorPosition(1);
     editor.selectNextOccurrence();
@@ -800,7 +800,7 @@ void TestEditorView::fromACaretOnlyWholeWords()
 
 void TestEditorView::escapeOrAClickLeavesOneCaret()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("x x x"));
     editor.setCursorPosition(0);
     editor.selectNextOccurrence();
@@ -818,7 +818,7 @@ void TestEditorView::escapeOrAClickLeavesOneCaret()
 
 void TestEditorView::nextOccurrenceWrapsAndSkipsSelected()
 {
-    tekst::EditorView editor;
+    kode::EditorView editor;
     editor.setText(QStringLiteral("one\ntwo one\none"));
     editor.select(8, 11);
     editor.selectNextOccurrence();

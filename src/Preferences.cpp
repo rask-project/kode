@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -168,4 +168,4 @@ QStringList Preferences::monospacedFamilies()
     return families;
 }
 
-} // namespace tekst
+} // namespace kode

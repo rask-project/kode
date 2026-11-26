@@ -6,7 +6,7 @@
 
 #include <optional>
 
-namespace tekst
+namespace kode
 {
 
 class TextBuffer;
@@ -43,4 +43,4 @@ matchingBracket(const TextBuffer &buffer, qsizetype position, qsizetype maxLines
 
 } // namespace matching
 
-} // namespace tekst
+} // namespace kode

@@ -4,7 +4,7 @@
 #include <QJsonObject>
 #include <QSettings>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -26,4 +26,4 @@ void Session::save(const QVariantMap &state)
     QSettings{}.setValue(stateKey, QJsonDocument{QJsonObject::fromVariantMap(state)}.toJson(QJsonDocument::Compact));
 }
 
-} // namespace tekst
+} // namespace kode

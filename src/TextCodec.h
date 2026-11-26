@@ -6,7 +6,7 @@
 
 #include <optional>
 
-namespace tekst::codec
+namespace kode::codec
 {
 
 // How a file's bytes are text: an encoding (IANA name, as in encodings())
@@ -33,4 +33,4 @@ struct Format {
 // The byte order mark of `encoding`; empty for those without one.
 [[nodiscard]] QByteArray byteOrderMark(const QString &encoding);
 
-} // namespace tekst::codec
+} // namespace kode::codec

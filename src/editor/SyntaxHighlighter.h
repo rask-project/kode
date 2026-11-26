@@ -14,7 +14,7 @@
 
 #include <optional>
 
-namespace tekst
+namespace kode
 {
 
 class TextBuffer;
@@ -33,12 +33,12 @@ public:
     // `firstLine`); invalid when none fits.
     [[nodiscard]] static KSyntaxHighlighting::Definition detect(const QString &fileName, const QString &firstLine);
     [[nodiscard]] static KSyntaxHighlighting::Definition definitionForName(const QString &name);
-    // The theme named `name` (Tekst's own included), else the default one.
+    // The theme named `name` (Kode's own included), else the default one.
     [[nodiscard]] static KSyntaxHighlighting::Theme themeNamed(const QString &name);
     // The themes that come as a light and a dark pair ("X Light", "X Dark"), by their
     // family name ("X"), sorted.
     [[nodiscard]] static QStringList themeFamilies();
-    // `name` if it is a family, the family of one of its themes, else Tekst.
+    // `name` if it is a family, the family of one of its themes, else Kode.
     [[nodiscard]] static QString themeFamily(const QString &name);
     // The light or dark theme of `name`'s family.
     [[nodiscard]] static QString themeName(const QString &name, bool dark);
@@ -99,4 +99,4 @@ private:
     qsizetype m_opened{0};
 };
 
-} // namespace tekst
+} // namespace kode

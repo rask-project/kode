@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <array>
 
-namespace tekst::indentation
+namespace kode::indentation
 {
 
 namespace
@@ -180,4 +180,4 @@ Style detect(const TextBuffer &buffer, qsizetype maxLines, Style fallback)
     return {.width = steps.at(static_cast<std::size_t>(width)) > 0 ? width : fallback.width, .kind = Kind::Spaces};
 }
 
-} // namespace tekst::indentation
+} // namespace kode::indentation

@@ -8,7 +8,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace tekst::codec
+namespace kode::codec
 {
 
 namespace
@@ -169,4 +169,4 @@ std::optional<QByteArray> encode(const QString &text, const Format &format)
     return bytes;
 }
 
-} // namespace tekst::codec
+} // namespace kode::codec

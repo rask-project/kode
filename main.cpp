@@ -6,17 +6,17 @@
 
 int main(int argc, char *argv[])
 {
-    // In domain order: QSettings reverses it (com.github.rask-project.Tekst).
+    // In domain order: QSettings reverses it (com.github.rask-project.Kode).
     QCoreApplication::setOrganizationDomain(QStringLiteral("rask-project.github.com"));
     QCoreApplication::setOrganizationName(QStringLiteral("rask-project"));
-    QCoreApplication::setApplicationName(QStringLiteral("Tekst"));
+    QCoreApplication::setApplicationName(QStringLiteral("Kode"));
     QCoreApplication::setApplicationVersion(
-        QStringLiteral(TEKST_VERSION) + QStringLiteral(" (") + QStringLiteral(TEKST_GIT_COMMIT) + QStringLiteral(")")
+        QStringLiteral(KODE_VERSION) + QStringLiteral(" (") + QStringLiteral(KODE_GIT_COMMIT) + QStringLiteral(")")
     );
 
     const QGuiApplication app{argc, argv};
 
-    // tekst [FILE]. parse(), not process(): unknown options (macOS adds some
+    // kode [FILE]. parse(), not process(): unknown options (macOS adds some
     // when launching from the Finder) are ignored rather than fatal.
     QCommandLineParser parser;
     parser.addPositionalArgument(QStringLiteral("file"), QStringLiteral("The file to open."));
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
     engine.setInitialProperties({
         {QStringLiteral("initialFile"), initialFile},
     });
-    engine.loadFromModule("Tekst", "Main");
+    engine.loadFromModule("Kode", "Main");
 
     return QGuiApplication::exec();
 }

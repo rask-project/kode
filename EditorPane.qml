@@ -9,7 +9,7 @@ import Rask.Controls
 import Rask.Platform
 import Rask.Window
 
-import Tekst
+import Kode
 
 // One split of a window: a bar as in Qt Creator with Back and Forward, the
 // open documents (pick the one shown), close document and the split buttons, then the find

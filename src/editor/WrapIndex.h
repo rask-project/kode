@@ -2,7 +2,7 @@
 
 #include <QList>
 
-namespace tekst
+namespace kode
 {
 
 class TextBuffer;
@@ -48,4 +48,4 @@ private:
     qsizetype m_totalRows{0};
 };
 
-} // namespace tekst
+} // namespace kode

@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <optional>
 
-namespace tekst
+namespace kode
 {
 
 class TextBuffer;
@@ -105,4 +105,4 @@ lineAbove(const TextBuffer &buffer, qsizetype line, qsizetype tabWidth, const QD
 
 } // namespace folding
 
-} // namespace tekst
+} // namespace kode

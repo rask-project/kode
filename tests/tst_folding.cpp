@@ -5,8 +5,8 @@
 
 #include <QTest>
 
-using tekst::folding::Fold;
-using tekst::folding::FoldIndex;
+using kode::folding::Fold;
+using kode::folding::FoldIndex;
 
 namespace
 {
@@ -118,25 +118,25 @@ void TestFolding::editsOpenOrMoveFolds()
 
 void TestFolding::findsIndentedBlocks()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("def f():\n    a = 1\n\n\tif a:\n        b\n\nx = 2\n")};
+    const kode::TextBuffer buffer{QStringLiteral("def f():\n    a = 1\n\n\tif a:\n        b\n\nx = 2\n")};
     const QDeadlineTimer noDeadline{QDeadlineTimer::Forever};
     // The blank line at its end stays out.
-    QCOMPARE(tekst::folding::indentedBlock(buffer, 0, 4, noDeadline), (Fold{.first = 1, .last = 4}));
-    QCOMPARE(tekst::folding::indentedBlock(buffer, 3, 4, noDeadline), (Fold{.first = 4, .last = 4}));
-    QVERIFY(!tekst::folding::indentedBlock(buffer, 6, 4, noDeadline));
+    QCOMPARE(kode::folding::indentedBlock(buffer, 0, 4, noDeadline), (Fold{.first = 1, .last = 4}));
+    QCOMPARE(kode::folding::indentedBlock(buffer, 3, 4, noDeadline), (Fold{.first = 4, .last = 4}));
+    QVERIFY(!kode::folding::indentedBlock(buffer, 6, 4, noDeadline));
 }
 
 void TestFolding::findsTheLineABlockIsUnder()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("def f():\n    a = 1\n\n\tif a:\n        b\n\nx = 2\n")};
+    const kode::TextBuffer buffer{QStringLiteral("def f():\n    a = 1\n\n\tif a:\n        b\n\nx = 2\n")};
     const QDeadlineTimer noDeadline{QDeadlineTimer::Forever};
-    QCOMPARE(tekst::folding::indentOf(QStringLiteral("\t  x"), 4), 6);
-    QCOMPARE(tekst::folding::indentOf(QStringLiteral("   "), 4), -1);
-    QVERIFY(tekst::folding::opensIndentedBlock(buffer, 0, 4));
-    QVERIFY(!tekst::folding::opensIndentedBlock(buffer, 1, 4));
-    QCOMPARE(tekst::folding::lineAbove(buffer, 4, 4, noDeadline), 3);
-    QCOMPARE(tekst::folding::lineAbove(buffer, 2, 4, noDeadline), 1);
-    QVERIFY(!tekst::folding::lineAbove(buffer, 0, 4, noDeadline));
+    QCOMPARE(kode::folding::indentOf(QStringLiteral("\t  x"), 4), 6);
+    QCOMPARE(kode::folding::indentOf(QStringLiteral("   "), 4), -1);
+    QVERIFY(kode::folding::opensIndentedBlock(buffer, 0, 4));
+    QVERIFY(!kode::folding::opensIndentedBlock(buffer, 1, 4));
+    QCOMPARE(kode::folding::lineAbove(buffer, 4, 4, noDeadline), 3);
+    QCOMPARE(kode::folding::lineAbove(buffer, 2, 4, noDeadline), 1);
+    QVERIFY(!kode::folding::lineAbove(buffer, 0, 4, noDeadline));
 }
 
 QTEST_MAIN(TestFolding)

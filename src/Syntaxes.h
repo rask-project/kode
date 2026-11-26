@@ -6,7 +6,7 @@
 #include <QStringList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
-namespace tekst
+namespace kode
 {
 
 // The syntaxes the editor can highlight, by section, for the syntax menu.
@@ -23,7 +23,7 @@ public:
 
     [[nodiscard]] QStringList sections() const;
     [[nodiscard]] static QStringList themes() { return SyntaxHighlighter::themeFamilies(); }
-    // The family `theme` names (Tekst if none), and its light or dark theme.
+    // The family `theme` names (Kode if none), and its light or dark theme.
     Q_INVOKABLE [[nodiscard]] static QString themeFamily(const QString &theme)
     {
         return SyntaxHighlighter::themeFamily(theme);
@@ -36,4 +36,4 @@ public:
     Q_INVOKABLE [[nodiscard]] QStringList names(const QString &section) const;
 };
 
-} // namespace tekst
+} // namespace kode

@@ -19,7 +19,7 @@
 #include <ranges>
 #include <utility>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -65,9 +65,9 @@ QList<qint32> openRegions(const QList<qint32> &events)
     return open;
 }
 
-// Tekst's own themes, in the app's resources (assets/themes): the
+// Kode's own themes, in the app's resources (assets/themes): the
 // repository looks in <path>/themes.
-const QString themesPath{QStringLiteral(":/tekst/syntax")};
+const QString themesPath{QStringLiteral(":/kode/syntax")};
 const QString lightSuffix{QStringLiteral(" Light")};
 const QString darkSuffix{QStringLiteral(" Dark")};
 
@@ -178,7 +178,7 @@ QString SyntaxHighlighter::themeFamily(const QString &name)
     const auto family{std::ranges::find_if(families, [&name](const QString &family) {
         return name == family || name == family + lightSuffix || name == family + darkSuffix;
     })};
-    return family != families.end() ? *family : QStringLiteral("Tekst");
+    return family != families.end() ? *family : QStringLiteral("Kode");
 }
 
 QString SyntaxHighlighter::themeName(const QString &name, bool dark)
@@ -418,4 +418,4 @@ QTextCharFormat SyntaxHighlighter::charFormat(const KSyntaxHighlighting::Format 
     return result;
 }
 
-} // namespace tekst
+} // namespace kode

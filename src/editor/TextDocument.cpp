@@ -10,7 +10,7 @@
 #include <ranges>
 #include <utility>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -29,7 +29,7 @@ TextDocument::TextDocument(QObject *parent)
     : QObject(parent)
     , m_highlighter{std::make_unique<SyntaxHighlighter>(&m_buffer)}
 {
-    setTheme(QStringLiteral("Tekst Light"));
+    setTheme(QStringLiteral("Kode Light"));
 }
 
 TextDocument::~TextDocument() = default;
@@ -324,4 +324,4 @@ void TextDocument::markSaved()
     emit modifiedChanged();
 }
 
-} // namespace tekst
+} // namespace kode

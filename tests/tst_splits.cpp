@@ -12,7 +12,7 @@
 namespace
 {
 
-QList<QObject *> viewsOf(const tekst::Splits &splits)
+QList<QObject *> viewsOf(const kode::Splits &splits)
 {
     QList<QObject *> views;
     for (const QVariant &view : splits.views()) {
@@ -46,7 +46,7 @@ void TestSplits::initTestCase()
 
 void TestSplits::splitsViews()
 {
-    tekst::Splits splits;
+    kode::Splits splits;
     splits.setViewComponent(m_view.get());
     QObject *const first{splits.addView()};
     QVERIFY(first != nullptr);
@@ -55,7 +55,7 @@ void TestSplits::splitsViews()
     QObject *const below{splits.split(right, Qt::Vertical)};
     QCOMPARE(viewsOf(splits), (QList<QObject *>{first, right, below}));
     QCOMPARE(splits.activeView(), below);
-    const tekst::SplitNode *const root{splits.root()};
+    const kode::SplitNode *const root{splits.root()};
     QCOMPARE(root->orientation(), static_cast<qint32>(Qt::Horizontal));
     QCOMPARE(root->first()->view(), first);
     QCOMPARE(root->second()->orientation(), static_cast<qint32>(Qt::Vertical));
@@ -63,7 +63,7 @@ void TestSplits::splitsViews()
 
 void TestSplits::removesSplits()
 {
-    tekst::Splits splits;
+    kode::Splits splits;
     splits.setViewComponent(m_view.get());
     QObject *const first{splits.addView()};
     QObject *const right{splits.split(first, Qt::Horizontal)};
@@ -81,7 +81,7 @@ void TestSplits::removesSplits()
 
 void TestSplits::activatesViewsInTurn()
 {
-    tekst::Splits splits;
+    kode::Splits splits;
     splits.setViewComponent(m_view.get());
     QObject *const first{splits.addView()};
     QObject *const second{splits.split(first, Qt::Horizontal)};
@@ -95,12 +95,12 @@ void TestSplits::savesAndRestoresTheLayout()
 {
     const QUrl one{createFile(m_files, QStringLiteral("one.txt"))};
     const QUrl gone{QUrl::fromLocalFile(m_files.filePath(QStringLiteral("gone.txt")))};
-    tekst::Splits saved;
+    kode::Splits saved;
     saved.setViewComponent(m_view.get());
     QObject *const top{saved.addView({{QStringLiteral("initialFile"), one}})};
     saved.split(top, Qt::Vertical, {{QStringLiteral("initialFile"), gone}});
 
-    tekst::Splits restored;
+    kode::Splits restored;
     restored.setViewComponent(m_view.get());
     QVERIFY(restored.restore(saved.state()));
     QCOMPARE(restored.root()->orientation(), static_cast<qint32>(Qt::Vertical));
@@ -113,14 +113,14 @@ void TestSplits::savesAndRestoresTheLayout()
 void TestSplits::opensEachFileOnce()
 {
     const QUrl file{createFile(m_files, QStringLiteral("text.txt"), "text\n")};
-    tekst::OpenDocuments documents;
-    tekst::Document *const opened{documents.open(file)};
+    kode::OpenDocuments documents;
+    kode::Document *const opened{documents.open(file)};
     QVERIFY(opened != nullptr);
     QCOMPARE(documents.open(file), opened);
     QCOMPARE(documents.count(), 1);
     QCOMPARE(opened->textDocument()->text(), QStringLiteral("text\n"));
 
-    const QSignalSpy closing{&documents, &tekst::OpenDocuments::documentClosing};
+    const QSignalSpy closing{&documents, &kode::OpenDocuments::documentClosing};
     documents.close(opened);
     QCOMPARE(closing.count(), 1);
     QCOMPARE(documents.count(), 0);
@@ -128,8 +128,8 @@ void TestSplits::opensEachFileOnce()
 
 void TestSplits::reportsMissingFiles()
 {
-    tekst::OpenDocuments documents;
-    const QSignalSpy errors{&documents, &tekst::OpenDocuments::errorOccurred};
+    kode::OpenDocuments documents;
+    const QSignalSpy errors{&documents, &kode::OpenDocuments::errorOccurred};
     QCOMPARE(documents.open(QUrl::fromLocalFile(m_files.filePath(QStringLiteral("missing.txt")))), nullptr);
     QCOMPARE(errors.count(), 1);
     QCOMPARE(documents.count(), 0);
@@ -137,21 +137,21 @@ void TestSplits::reportsMissingFiles()
 
 void TestSplits::keepsTheMostRecentFirst()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const first{documents.create()};
-    tekst::Document *const second{documents.create()};
-    QCOMPARE(documents.documents().first().value<tekst::Document *>(), second);
+    kode::OpenDocuments documents;
+    kode::Document *const first{documents.create()};
+    kode::Document *const second{documents.create()};
+    QCOMPARE(documents.documents().first().value<kode::Document *>(), second);
     documents.touch(first);
-    QCOMPARE(documents.documents().first().value<tekst::Document *>(), first);
+    QCOMPARE(documents.documents().first().value<kode::Document *>(), first);
     QCOMPARE(documents.other(first), second);
     QCOMPARE(documents.other(nullptr), first);
 }
 
 void TestSplits::numbersUntitledDocuments()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const first{documents.create()};
-    tekst::Document *const second{documents.create()};
+    kode::OpenDocuments documents;
+    kode::Document *const first{documents.create()};
+    kode::Document *const second{documents.create()};
     QCOMPARE(first->fileName(), QStringLiteral("Untitled"));
     QCOMPARE(second->fileName(), QStringLiteral("Untitled 2"));
     documents.close(first);
@@ -160,11 +160,11 @@ void TestSplits::numbersUntitledDocuments()
 
 void TestSplits::goesBackAndForward()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const a{documents.create()};
-    tekst::Document *const b{documents.create()};
-    tekst::Document *const c{documents.create()};
-    tekst::DocumentHistory history;
+    kode::OpenDocuments documents;
+    kode::Document *const a{documents.create()};
+    kode::Document *const b{documents.create()};
+    kode::Document *const c{documents.create()};
+    kode::DocumentHistory history;
     history.visit(a);
     history.visit(b);
     history.visit(b);
@@ -181,11 +181,11 @@ void TestSplits::goesBackAndForward()
 
 void TestSplits::visitingDropsWhatWasAhead()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const a{documents.create()};
-    tekst::Document *const b{documents.create()};
-    tekst::Document *const c{documents.create()};
-    tekst::DocumentHistory history;
+    kode::OpenDocuments documents;
+    kode::Document *const a{documents.create()};
+    kode::Document *const b{documents.create()};
+    kode::Document *const c{documents.create()};
+    kode::DocumentHistory history;
     history.visit(a);
     history.visit(b);
     history.visit(c);
@@ -199,11 +199,11 @@ void TestSplits::visitingDropsWhatWasAhead()
 
 void TestSplits::forgetsClosedDocuments()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const a{documents.create()};
-    tekst::Document *const b{documents.create()};
-    tekst::Document *const c{documents.create()};
-    tekst::DocumentHistory history;
+    kode::OpenDocuments documents;
+    kode::Document *const a{documents.create()};
+    kode::Document *const b{documents.create()};
+    kode::Document *const c{documents.create()};
+    kode::DocumentHistory history;
     history.visit(a);
     history.visit(b);
     history.visit(a);
@@ -224,11 +224,11 @@ void TestSplits::forgetsClosedDocuments()
 
 void TestSplits::keepsTheSplitsRecentDocuments()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const a{documents.create()};
-    tekst::Document *const b{documents.create()};
-    tekst::Document *const c{documents.create()};
-    tekst::DocumentHistory history;
+    kode::OpenDocuments documents;
+    kode::Document *const a{documents.create()};
+    kode::Document *const b{documents.create()};
+    kode::Document *const c{documents.create()};
+    kode::DocumentHistory history;
     history.visit(a);
     history.visit(b);
     history.visit(c);
@@ -244,12 +244,12 @@ void TestSplits::keepsTheSplitsRecentDocuments()
 
 void TestSplits::ordersEveryOpenDocumentForTheSwitcher()
 {
-    tekst::OpenDocuments documents;
-    tekst::Document *const a{documents.create()};
-    tekst::Document *const b{documents.create()};
-    tekst::Document *const c{documents.create()};
-    tekst::Document *const d{documents.create()};
-    tekst::DocumentHistory history;
+    kode::OpenDocuments documents;
+    kode::Document *const a{documents.create()};
+    kode::Document *const b{documents.create()};
+    kode::Document *const c{documents.create()};
+    kode::Document *const d{documents.create()};
+    kode::DocumentHistory history;
     history.visit(c);
     history.visit(a);
     // The split's own first (a, c), then the rest as given (d, b).

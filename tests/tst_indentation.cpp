@@ -5,43 +5,43 @@
 
 #include <QTest>
 
-using tekst::indentation::Kind;
-using tekst::indentation::Style;
+using kode::indentation::Kind;
+using kode::indentation::Style;
 
 void TestIndentation::tabsAndUnits()
 {
     const Style spaces{.width = 4, .kind = Kind::Spaces};
-    QCOMPARE(tekst::indentation::unit(spaces), QStringLiteral("    "));
-    QCOMPARE(tekst::indentation::tabAt(spaces, 1), QStringLiteral("   "));
-    QCOMPARE(tekst::indentation::tabAt({.width = 4, .kind = Kind::Tabs}, 1), QStringLiteral("\t"));
-    QCOMPARE(tekst::indentation::leadingWhitespace(u" \t x"), QStringView{u" \t "});
+    QCOMPARE(kode::indentation::unit(spaces), QStringLiteral("    "));
+    QCOMPARE(kode::indentation::tabAt(spaces, 1), QStringLiteral("   "));
+    QCOMPARE(kode::indentation::tabAt({.width = 4, .kind = Kind::Tabs}, 1), QStringLiteral("\t"));
+    QCOMPARE(kode::indentation::leadingWhitespace(u" \t x"), QStringView{u" \t "});
 }
 
 void TestIndentation::indentsAndOutdentsBlocks()
 {
     const Style spaces{.width = 2, .kind = Kind::Spaces};
-    QCOMPARE(tekst::indentation::indented(u"a\n\n b", spaces), QStringLiteral("  a\n\n   b"));
-    QCOMPARE(tekst::indentation::outdented(u"   a\n\tb\nc", spaces), QStringLiteral(" a\nb\nc"));
+    QCOMPARE(kode::indentation::indented(u"a\n\n b", spaces), QStringLiteral("  a\n\n   b"));
+    QCOMPARE(kode::indentation::outdented(u"   a\n\tb\nc", spaces), QStringLiteral(" a\nb\nc"));
 }
 
 void TestIndentation::detectsTheStyle()
 {
     const Style fallback{.width = 4, .kind = Kind::Spaces};
-    const tekst::TextBuffer twoSpaces{QStringLiteral("a {\n  b {\n    c\n  }\n}\n")};
-    QCOMPARE(tekst::indentation::detect(twoSpaces, 100, fallback), (Style{.width = 2, .kind = Kind::Spaces}));
-    const tekst::TextBuffer tabs{QStringLiteral("a {\n\tb\n\tc\n}\n")};
-    QCOMPARE(tekst::indentation::detect(tabs, 100, fallback), (Style{.width = 4, .kind = Kind::Tabs}));
-    const tekst::TextBuffer flat{QStringLiteral("a\nb\n")};
+    const kode::TextBuffer twoSpaces{QStringLiteral("a {\n  b {\n    c\n  }\n}\n")};
+    QCOMPARE(kode::indentation::detect(twoSpaces, 100, fallback), (Style{.width = 2, .kind = Kind::Spaces}));
+    const kode::TextBuffer tabs{QStringLiteral("a {\n\tb\n\tc\n}\n")};
+    QCOMPARE(kode::indentation::detect(tabs, 100, fallback), (Style{.width = 4, .kind = Kind::Tabs}));
+    const kode::TextBuffer flat{QStringLiteral("a\nb\n")};
     QCOMPARE(
-        tekst::indentation::detect(flat, 100, {.width = 8, .kind = Kind::Tabs}),
+        kode::indentation::detect(flat, 100, {.width = 8, .kind = Kind::Tabs}),
         (Style{.width = 8, .kind = Kind::Tabs})
     );
 }
 
 void TestIndentation::readsTheBrackets()
 {
-    using tekst::indentation::Brackets;
-    using tekst::indentation::brackets;
+    using kode::indentation::Brackets;
+    using kode::indentation::brackets;
     QCOMPARE(brackets(u"    } else {", {}), (Brackets{.leading = 1, .open = 1, .closed = 0, .colon = 0}));
     QCOMPARE(brackets(u"foo(function() {", {}), (Brackets{.leading = 0, .open = 2, .closed = 0, .colon = 0}));
     QCOMPARE(brackets(u"  b);", {}), (Brackets{.leading = 0, .open = 0, .closed = 1, .colon = 0}));
@@ -52,18 +52,18 @@ void TestIndentation::readsTheBrackets()
 
 void TestIndentation::indentsAfterTheLineAbove()
 {
-    using tekst::indentation::Brackets;
-    using tekst::indentation::indentAfter;
-    const tekst::indentation::Style spaces{.width = 4, .kind = tekst::indentation::Kind::Spaces};
-    const tekst::indentation::Style tabs{.width = 4, .kind = tekst::indentation::Kind::Tabs};
+    using kode::indentation::Brackets;
+    using kode::indentation::indentAfter;
+    const kode::indentation::Style spaces{.width = 4, .kind = kode::indentation::Kind::Spaces};
+    const kode::indentation::Style tabs{.width = 4, .kind = kode::indentation::Kind::Tabs};
     QCOMPARE(indentAfter(4, Brackets{.leading = 0, .open = 2, .closed = 0, .colon = 0}, 0, spaces, false), 8);
     QCOMPARE(indentAfter(8, Brackets{.leading = 0, .open = 0, .closed = 1, .colon = 0}, 0, spaces, false), 4);
     QCOMPARE(indentAfter(8, Brackets{}, 1, spaces, false), 4);
     QCOMPARE(indentAfter(0, Brackets{}, 1, spaces, false), 0);
     QCOMPARE(indentAfter(0, Brackets{.leading = 0, .open = 0, .closed = 0, .colon = 1}, 0, spaces, true), 4);
     QCOMPARE(indentAfter(0, Brackets{.leading = 0, .open = 0, .closed = 0, .colon = 1}, 0, spaces, false), 0);
-    QCOMPARE(tekst::indentation::whitespace(6, tabs), QStringLiteral("\t  "));
-    QCOMPARE(tekst::indentation::columns(u"\t  ", 4), 6);
+    QCOMPARE(kode::indentation::whitespace(6, tabs), QStringLiteral("\t  "));
+    QCOMPARE(kode::indentation::columns(u"\t  ", 4), 6);
 }
 
 QTEST_MAIN(TestIndentation)

@@ -5,7 +5,7 @@
 
 #include <algorithm>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -152,4 +152,4 @@ QVariantList OpenDocuments::modifiedDocuments() const
     return toList(modified);
 }
 
-} // namespace tekst
+} // namespace kode

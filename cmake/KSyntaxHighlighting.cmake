@@ -4,27 +4,27 @@
 # ${CMAKE_BINARY_DIR}/deps, then imported as KF6::SyntaxHighlighting (a
 # shared library, embedded in the bundle like the rask ones).
 
-set(tekst_deps_prefix "${CMAKE_BINARY_DIR}/deps")
-set(tekst_ksh_stamp "${tekst_deps_prefix}/ksyntaxhighlighting.stamp")
+set(kode_deps_prefix "${CMAKE_BINARY_DIR}/deps")
+set(kode_ksh_stamp "${kode_deps_prefix}/ksyntaxhighlighting.stamp")
 execute_process(
     COMMAND git rev-parse HEAD
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/external/syntax-highlighting"
-    OUTPUT_VARIABLE tekst_ksh_revision
+    OUTPUT_VARIABLE kode_ksh_revision
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-set(tekst_ksh_built "")
-if(EXISTS "${tekst_ksh_stamp}")
-    file(READ "${tekst_ksh_stamp}" tekst_ksh_built)
+set(kode_ksh_built "")
+if(EXISTS "${kode_ksh_stamp}")
+    file(READ "${kode_ksh_stamp}" kode_ksh_built)
 endif()
 
-function(tekst_build_dependency name source)
+function(kode_build_dependency name source)
     set(build "${CMAKE_BINARY_DIR}/deps-build/${name}")
     message(STATUS "Building ${name} (once)")
     execute_process(
         COMMAND ${CMAKE_COMMAND} -S "${source}" -B "${build}" -G Ninja
             -DCMAKE_BUILD_TYPE=Release
-            "-DCMAKE_INSTALL_PREFIX=${tekst_deps_prefix}"
-            "-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH};${tekst_deps_prefix}"
+            "-DCMAKE_INSTALL_PREFIX=${kode_deps_prefix}"
+            "-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH};${kode_deps_prefix}"
             "-DCMAKE_OSX_ARCHITECTURES=${CMAKE_OSX_ARCHITECTURES}"
             "-DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}"
             -DBUILD_TESTING=OFF
@@ -48,10 +48,10 @@ function(tekst_build_dependency name source)
     endif()
 endfunction()
 
-if(NOT tekst_ksh_built STREQUAL tekst_ksh_revision)
-    tekst_build_dependency(extra-cmake-modules "${CMAKE_CURRENT_SOURCE_DIR}/external/extra-cmake-modules")
-    tekst_build_dependency(syntax-highlighting "${CMAKE_CURRENT_SOURCE_DIR}/external/syntax-highlighting")
-    file(WRITE "${tekst_ksh_stamp}" "${tekst_ksh_revision}")
+if(NOT kode_ksh_built STREQUAL kode_ksh_revision)
+    kode_build_dependency(extra-cmake-modules "${CMAKE_CURRENT_SOURCE_DIR}/external/extra-cmake-modules")
+    kode_build_dependency(syntax-highlighting "${CMAKE_CURRENT_SOURCE_DIR}/external/syntax-highlighting")
+    file(WRITE "${kode_ksh_stamp}" "${kode_ksh_revision}")
 endif()
 
-find_package(KF6SyntaxHighlighting REQUIRED CONFIG PATHS "${tekst_deps_prefix}" NO_DEFAULT_PATH)
+find_package(KF6SyntaxHighlighting REQUIRED CONFIG PATHS "${kode_deps_prefix}" NO_DEFAULT_PATH)

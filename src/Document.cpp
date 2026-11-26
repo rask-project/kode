@@ -4,7 +4,7 @@
 #include <QFileInfo>
 #include <QSaveFile>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -248,4 +248,4 @@ void Document::setFileUrl(const QUrl &fileUrl)
     emit fileUrlChanged();
 }
 
-} // namespace tekst
+} // namespace kode

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <numeric>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -171,4 +171,4 @@ qsizetype WrapIndex::lineAt(qsizetype row) const
     return std::max(qsizetype{0}, m_lineCount - 1);
 }
 
-} // namespace tekst
+} // namespace kode

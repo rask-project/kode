@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -226,4 +226,4 @@ void TextBuffer::remove(qsizetype position, qsizetype count)
     m_newlines -= newlines;
 }
 
-} // namespace tekst
+} // namespace kode

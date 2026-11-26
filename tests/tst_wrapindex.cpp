@@ -11,13 +11,13 @@ namespace
 
 constexpr qsizetype columns{10};
 
-qsizetype expectedRows(const tekst::TextBuffer &buffer, qsizetype line)
+qsizetype expectedRows(const kode::TextBuffer &buffer, qsizetype line)
 {
     return std::max(qsizetype{1}, (buffer.lineLength(line) + columns - 1) / columns);
 }
 
 // Whether `index` holds the estimates of every line of `buffer`.
-bool matches(const tekst::WrapIndex &index, const tekst::TextBuffer &buffer)
+bool matches(const kode::WrapIndex &index, const kode::TextBuffer &buffer)
 {
     if (index.lineCount() != buffer.lineCount()) {
         return false;
@@ -37,8 +37,8 @@ bool matches(const tekst::WrapIndex &index, const tekst::TextBuffer &buffer)
 
 void TestWrapIndex::estimatesFromLengths()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("short\n0123456789abc\n\n") + QString(25, QLatin1Char('x'))};
-    tekst::WrapIndex index;
+    const kode::TextBuffer buffer{QStringLiteral("short\n0123456789abc\n\n") + QString(25, QLatin1Char('x'))};
+    kode::WrapIndex index;
     index.reset(buffer, columns);
     QCOMPARE(index.rows(0), 1);
     QCOMPARE(index.rows(1), 2);
@@ -57,8 +57,8 @@ void TestWrapIndex::randomEditsMatchCountingAgain()
     for (qint32 line{0}; line < 5000; ++line) {
         text += QString(static_cast<qsizetype>(random.bounded(40)), QLatin1Char('a')) + QLatin1Char('\n');
     }
-    tekst::TextBuffer buffer{text};
-    tekst::WrapIndex index;
+    kode::TextBuffer buffer{text};
+    kode::WrapIndex index;
     index.reset(buffer, columns);
     QVERIFY(matches(index, buffer));
     const std::array<QString, 4>
@@ -81,8 +81,8 @@ void TestWrapIndex::randomEditsMatchCountingAgain()
 
 void TestWrapIndex::measuredRowsMoveTheLinesBelow()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("a\nb\nc\n")};
-    tekst::WrapIndex index;
+    const kode::TextBuffer buffer{QStringLiteral("a\nb\nc\n")};
+    kode::WrapIndex index;
     index.reset(buffer, columns);
     index.setRows(1, 4);
     QCOMPARE(index.rowOf(2), 5);

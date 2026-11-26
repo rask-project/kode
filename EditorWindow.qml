@@ -9,7 +9,7 @@ import Rask.Dialogs
 import Rask.Platform
 import Rask.Window
 
-import Tekst
+import Kode
 
 // An editor window: its splits up to the top (the bars there fill the
 // title bar, after the window buttons), the editor splits (Splits, PaneLayout) each showing one of the open
@@ -122,7 +122,7 @@ ApplicationWindow {
     minimumWidth: 400
     minimumHeight: 240
     // Feeds the Window menu and the window switcher; the title bar shows none.
-    title: activeDocument ? activeDocument.fileName : "Tekst"
+    title: activeDocument ? activeDocument.fileName : "Kode"
     flags: Qt.Window | Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint
     color: "transparent"
     // ApplicationWindow pads its content by the safe area; the title bar draws there itself.
@@ -716,7 +716,7 @@ ApplicationWindow {
                 }
             }
             MenuItem {
-                text: "About Tekst"
+                text: "About Kode"
                 onTriggered: root.app.showAbout()
             }
             MenuItem {

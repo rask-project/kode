@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-namespace tekst
+namespace kode
 {
 
 Syntaxes::Syntaxes(QObject *parent) : QObject(parent) {}
@@ -35,4 +35,4 @@ QStringList Syntaxes::names(const QString &section) const
     return names;
 }
 
-} // namespace tekst
+} // namespace kode

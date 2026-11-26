@@ -4,7 +4,7 @@
 
 #include <array>
 
-namespace tekst::matching
+namespace kode::matching
 {
 
 namespace
@@ -110,4 +110,4 @@ QList<Range> wholeWords(QStringView text, QStringView word)
     return found;
 }
 
-} // namespace tekst::matching
+} // namespace kode::matching

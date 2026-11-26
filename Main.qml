@@ -5,7 +5,7 @@ import QtQuick
 import Rask.Application
 import Rask.Dialogs
 
-import Tekst
+import Kode
 
 // The app: its windows (EditorWindow) over the documents they share
 // (OpenDocuments), opening files, closing documents in every split that

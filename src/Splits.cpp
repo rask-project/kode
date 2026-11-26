@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <vector>
 
-namespace tekst
+namespace kode
 {
 
 namespace
@@ -123,7 +123,7 @@ SplitNode::ViewPointer Splits::createView(const QVariantMap &properties)
 {
     if (m_viewComponent == nullptr && m_editorPane == nullptr && qmlEngine(this) != nullptr) {
         m_editorPane =
-            std::make_unique<QQmlComponent>(qmlEngine(this), QStringLiteral("Tekst"), QStringLiteral("EditorPane"));
+            std::make_unique<QQmlComponent>(qmlEngine(this), QStringLiteral("Kode"), QStringLiteral("EditorPane"));
     }
     QQmlComponent *const component{m_viewComponent != nullptr ? m_viewComponent.get() : m_editorPane.get()};
     if (component == nullptr || component->engine() == nullptr) {
@@ -307,4 +307,4 @@ bool Splits::restore(const QJsonArray &state)
     return true;
 }
 
-} // namespace tekst
+} // namespace kode

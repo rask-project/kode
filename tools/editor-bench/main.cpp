@@ -1,9 +1,9 @@
 // Measures one editor on one file and prints one line of results:
 //
-//   tekst-editor-bench textedit|editorview FILE
+//   kode-editor-bench textedit|editorview FILE
 //       mode size_mb open_ms key_update_avg key_update_max key_frame_max
 //       scroll_update_avg scroll_update_max rss_delta_mb
-//   tekst-editor-bench try FILE     opens FILE in EditorView to try it by hand
+//   kode-editor-bench try FILE     opens FILE in EditorView to try it by hand
 //
 // "open" is from handing the text to the editor to its first frame on
 // screen. For a keystroke in the middle of the text and for a jump of the
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
     const QGuiApplication app{argc, argv};
     const QStringList arguments{QCoreApplication::arguments()};
     if (arguments.size() != 3) {
-        std::fputs("usage: tekst-editor-bench textedit|editorview|try FILE\n", stderr);
+        std::fputs("usage: kode-editor-bench textedit|editorview|try FILE\n", stderr);
         return 2;
     }
     const QString &mode{arguments.at(1)};
@@ -133,7 +133,7 @@ int main(int argc, char *argv[])
 
     QQuickView view;
     view.setResizeMode(QQuickView::SizeRootObjectToView);
-    view.loadFromModule("TekstEditorBench", mode == QStringLiteral("textedit") ? "TextEditCase" : "EditorViewCase");
+    view.loadFromModule("KodeEditorBench", mode == QStringLiteral("textedit") ? "TextEditCase" : "EditorViewCase");
     QObject *const root{view.rootObject()};
     if (root == nullptr) {
         return 1;

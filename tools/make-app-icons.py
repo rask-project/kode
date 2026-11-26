@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-# Draws the layers of Tekst's app icon (assets/tekst.icon, an Icon Composer
-# document) and the legacy icon files, assets/tekst.svg (the whole icon on
-# the macOS grid), tekst.png and tekst.icns (tools/render-icon.swift and
+# Draws the layers of Kode's app icon (assets/kode.icon, an Icon Composer
+# document) and the legacy icon files, assets/kode.svg (the whole icon on
+# the macOS grid), kode.png and kode.icns (tools/render-icon.swift and
 # iconutil), in the style of Konsoll's (../konsoll/tools/make-app-icons.py):
 # a silver ring (the system's rounded square), a border and a sheet with
 # chamfered top-left and bottom-right corners. Where Konsoll shows ">_",
-# Tekst shows indented, syntax-coloured lines of code ending at the
+# Kode shows indented, syntax-coloured lines of code ending at the
 # insertion point (the I-beam caret): text and code editing in one mark.
 #
-#   python3 tools/make-app-icons.py                  # writes assets/tekst.icon, .svg, .png, .icns
+#   python3 tools/make-app-icons.py                  # writes assets/kode.icon, .svg, .png, .icns
 #   python3 tools/make-app-icons.py --preview DIR    # composite previews of every palette
 #   ICON_PALETTE=polar python3 tools/make-app-icons.py
 import os, sys
@@ -149,24 +149,24 @@ if len(sys.argv) == 3 and sys.argv[1] == "--preview":
     out = sys.argv[2]
     os.makedirs(out, exist_ok=True)
     for name, p in PALETTES.items():
-        open(f"{out}/tekst-{name}.svg", "w").write(composite(p))
+        open(f"{out}/kode-{name}.svg", "w").write(composite(p))
     sys.exit(0)
 
 palette = PALETTES[os.environ.get("ICON_PALETTE", "natt")]
 assets = f"{root}/assets"
-d = f"{assets}/tekst.icon/Assets"
+d = f"{assets}/kode.icon/Assets"
 os.makedirs(d, exist_ok=True)
 for name, svg in layers(palette).items():
     open(f"{d}/{name}.svg", "w").write(svg)
-open(f"{assets}/tekst.svg", "w").write(composite(palette, grid=True))
+open(f"{assets}/kode.svg", "w").write(composite(palette, grid=True))
 
-# The PNG and the .icns, rendered from tekst.svg (macOS: swift, iconutil).
+# The PNG and the .icns, rendered from kode.svg (macOS: swift, iconutil).
 import shutil, subprocess, tempfile
 if shutil.which("swift") and shutil.which("iconutil"):
     with tempfile.TemporaryDirectory() as work:
-        iconset = f"{work}/tekst.iconset"
-        subprocess.run(["swift", f"{root}/tools/render-icon.swift", f"{assets}/tekst.svg",
-                        f"{assets}/tekst.png", iconset], check=True)
-        subprocess.run(["iconutil", "-c", "icns", iconset, "-o", f"{assets}/tekst.icns"], check=True)
+        iconset = f"{work}/kode.iconset"
+        subprocess.run(["swift", f"{root}/tools/render-icon.swift", f"{assets}/kode.svg",
+                        f"{assets}/kode.png", iconset], check=True)
+        subprocess.run(["iconutil", "-c", "icns", iconset, "-o", f"{assets}/kode.icns"], check=True)
 else:
-    print("swift/iconutil not found: tekst.png and tekst.icns not updated", file=sys.stderr)
+    print("swift/iconutil not found: kode.png and kode.icns not updated", file=sys.stderr)

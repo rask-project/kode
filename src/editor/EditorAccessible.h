@@ -3,7 +3,7 @@
 #include <QAccessible>
 #include <QAccessibleObject>
 
-namespace tekst
+namespace kode
 {
 
 class EditorView;
@@ -74,4 +74,4 @@ private:
     [[nodiscard]] QString textOf(Range range, int *startOffset, int *endOffset) const;
 };
 
-} // namespace tekst
+} // namespace kode

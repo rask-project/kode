@@ -8,16 +8,16 @@
 namespace
 {
 
-QList<qsizetype> starts(const tekst::TextSearch &search)
+QList<qsizetype> starts(const kode::TextSearch &search)
 {
     QList<qsizetype> result;
-    for (const tekst::TextSearch::Match &match : search.matches()) {
+    for (const kode::TextSearch::Match &match : search.matches()) {
         result.append(match.start);
     }
     return result;
 }
 
-void searchAll(tekst::TextSearch &search)
+void searchAll(kode::TextSearch &search)
 {
     QVERIFY(search.advance(QDeadlineTimer{QDeadlineTimer::Forever}));
 }
@@ -26,8 +26,8 @@ void searchAll(tekst::TextSearch &search)
 
 void TestTextSearch::findsPlainTextIgnoringCase()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("a.b A.B\nx a.b")};
-    tekst::TextSearch search{&buffer};
+    const kode::TextBuffer buffer{QStringLiteral("a.b A.B\nx a.b")};
+    kode::TextSearch search{&buffer};
     search.setQuery(QStringLiteral("a.b"), false, false);
     searchAll(search);
     QCOMPARE(starts(search), (QList<qsizetype>{0, 4, 10}));
@@ -38,8 +38,8 @@ void TestTextSearch::findsPlainTextIgnoringCase()
 
 void TestTextSearch::honoursCaseAndRegularExpressions()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("Foo foo f0o")};
-    tekst::TextSearch search{&buffer};
+    const kode::TextBuffer buffer{QStringLiteral("Foo foo f0o")};
+    kode::TextSearch search{&buffer};
     search.setQuery(QStringLiteral("foo"), true, false);
     searchAll(search);
     QCOMPARE(starts(search), (QList<qsizetype>{4}));
@@ -50,8 +50,8 @@ void TestTextSearch::honoursCaseAndRegularExpressions()
 
 void TestTextSearch::reportsInvalidExpressions()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("text")};
-    tekst::TextSearch search{&buffer};
+    const kode::TextBuffer buffer{QStringLiteral("text")};
+    kode::TextSearch search{&buffer};
     search.setQuery(QStringLiteral("(unclosed"), false, true);
     QVERIFY(!search.isActive());
     QVERIFY(!search.error().isEmpty());
@@ -61,21 +61,21 @@ void TestTextSearch::reportsInvalidExpressions()
 
 void TestTextSearch::searchesInSlices()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("needle in a haystack\n").repeated(200000)};
-    tekst::TextSearch search{&buffer};
+    const kode::TextBuffer buffer{QStringLiteral("needle in a haystack\n").repeated(200000)};
+    kode::TextSearch search{&buffer};
     search.setQuery(QStringLiteral("needle"), false, false);
     QVERIFY(!search.advance(QDeadlineTimer{1}));
     QVERIFY(!search.matches().isEmpty());
     searchAll(search);
     // Stored up to the cap.
-    QCOMPARE(search.matches().size(), tekst::TextSearch::maxMatches);
+    QCOMPARE(search.matches().size(), kode::TextSearch::maxMatches);
     QVERIFY(search.isCapped());
 }
 
 void TestTextSearch::expandsCaptures()
 {
-    const tekst::TextBuffer buffer{QStringLiteral("key = value")};
-    tekst::TextSearch search{&buffer};
+    const kode::TextBuffer buffer{QStringLiteral("key = value")};
+    kode::TextSearch search{&buffer};
     search.setQuery(QStringLiteral("(\\w+) = (\\w+)"), false, true);
     searchAll(search);
     QCOMPARE(

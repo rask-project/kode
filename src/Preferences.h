@@ -5,7 +5,7 @@
 #include <QStringList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
-namespace tekst
+namespace kode
 {
 
 // The user's preferences, kept in QSettings (the only copy) and shared by
@@ -76,4 +76,4 @@ private:
     void store(const QString &key, const QVariant &value);
 };
 
-} // namespace tekst
+} // namespace kode
