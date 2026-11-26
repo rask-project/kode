@@ -38,4 +38,32 @@ void TestIndentation::detectsTheStyle()
     );
 }
 
+void TestIndentation::readsTheBrackets()
+{
+    using tekst::indentation::Brackets;
+    using tekst::indentation::brackets;
+    QCOMPARE(brackets(u"    } else {", {}), (Brackets{.leading = 1, .open = 1, .closed = 0, .colon = 0}));
+    QCOMPARE(brackets(u"foo(function() {", {}), (Brackets{.leading = 0, .open = 2, .closed = 0, .colon = 0}));
+    QCOMPARE(brackets(u"  b);", {}), (Brackets{.leading = 0, .open = 0, .closed = 1, .colon = 0}));
+    QCOMPARE(brackets(u"if a:  ", {}), (Brackets{.leading = 0, .open = 0, .closed = 0, .colon = 1}));
+    // In a string or comment (columns 4..7): nothing.
+    QCOMPARE(brackets(u"x = \"{\" ", {{.start = 4, .end = 7}}), Brackets{});
+}
+
+void TestIndentation::indentsAfterTheLineAbove()
+{
+    using tekst::indentation::Brackets;
+    using tekst::indentation::indentAfter;
+    const tekst::indentation::Style spaces{.width = 4, .kind = tekst::indentation::Kind::Spaces};
+    const tekst::indentation::Style tabs{.width = 4, .kind = tekst::indentation::Kind::Tabs};
+    QCOMPARE(indentAfter(4, Brackets{.leading = 0, .open = 2, .closed = 0, .colon = 0}, 0, spaces, false), 8);
+    QCOMPARE(indentAfter(8, Brackets{.leading = 0, .open = 0, .closed = 1, .colon = 0}, 0, spaces, false), 4);
+    QCOMPARE(indentAfter(8, Brackets{}, 1, spaces, false), 4);
+    QCOMPARE(indentAfter(0, Brackets{}, 1, spaces, false), 0);
+    QCOMPARE(indentAfter(0, Brackets{.leading = 0, .open = 0, .closed = 0, .colon = 1}, 0, spaces, true), 4);
+    QCOMPARE(indentAfter(0, Brackets{.leading = 0, .open = 0, .closed = 0, .colon = 1}, 0, spaces, false), 0);
+    QCOMPARE(tekst::indentation::whitespace(6, tabs), QStringLiteral("\t  "));
+    QCOMPARE(tekst::indentation::columns(u"\t  ", 4), 6);
+}
+
 QTEST_MAIN(TestIndentation)

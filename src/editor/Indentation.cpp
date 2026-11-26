@@ -73,6 +73,73 @@ QString outdented(QStringView lines, Style style)
     });
 }
 
+Brackets brackets(QStringView line, const QList<Span> &ignored)
+{
+    Brackets result;
+    qint32 depth{0};
+    bool started{false};
+    const auto skipped{[&ignored](qsizetype column) {
+        return std::ranges::any_of(ignored, [column](const Span &span) {
+            return column >= span.start && column < span.end;
+        });
+    }};
+    for (qsizetype column{0}; column < line.size(); ++column) {
+        const QChar character{line.at(column)};
+        if (character.isSpace() || skipped(column)) {
+            continue;
+        }
+        result.colon = character == QLatin1Char(':') ? 1 : 0;
+        const bool opening{QStringView{u"([{"}.contains(character)};
+        const bool closing{QStringView{u")]}"}.contains(character)};
+        if (closing && !started) {
+            ++result.leading;
+            continue;
+        }
+        started = true;
+        if (opening) {
+            ++depth;
+        } else if (closing && depth > 0) {
+            --depth;
+        } else if (closing) {
+            ++result.closed;
+        }
+    }
+    result.open = depth;
+    return result;
+}
+
+qsizetype columns(QStringView whitespace, qsizetype width)
+{
+    qsizetype count{0};
+    for (const QChar character : whitespace) {
+        count += character == QLatin1Char('\t') ? width - (count % width) : 1;
+    }
+    return count;
+}
+
+QString whitespace(qsizetype count, Style style)
+{
+    if (style.kind == Kind::Spaces) {
+        return QString(count, QLatin1Char(' '));
+    }
+    return QString(count / style.width, QLatin1Char('\t')) + QString(count % style.width, QLatin1Char(' '));
+}
+
+qsizetype indentAfter(qsizetype previous, const Brackets &before, qint32 leading, Style style, bool colonBlocks)
+{
+    qsizetype levels{0};
+    if (before.open > 0 || (colonBlocks && before.colon > 0)) {
+        ++levels;
+    }
+    if (before.closed > 0) {
+        --levels;
+    }
+    if (leading > 0) {
+        --levels;
+    }
+    return std::max(qsizetype{0}, previous + (levels * style.width));
+}
+
 Style detect(const TextBuffer &buffer, qsizetype maxLines, Style fallback)
 {
     qsizetype tabLines{0};

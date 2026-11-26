@@ -198,7 +198,19 @@ Guidance for AI agents working in this repository.
   - `Indentation` — free functions: the style (tabs/spaces, width),
     what Tab inserts, block indent/outdent and detecting the style from
     the first lines; `EditorView` applies them (`indent()`, `outdent()`,
-    auto-indent on Return) as single edits.
+    auto-indent on Return) as single edits. Indenting without knowing the
+    language: `brackets()` (what a line's brackets do, those in comments
+    and strings aside — `SyntaxHighlighter::nonCode()` by the formats'
+    text styles) and `indentAfter()` (a level in after a bracket left
+    open, out for closing ones; a ':' too where indentation is the
+    syntax). Return indents so (between brackets, the closing one on a
+    line of its own); a closing bracket typed on an empty line goes under
+    the line of its opening one; `reindent()` (Edit > Re-Indent, ⌃I, as
+    in Xcode) and `reindentAll()` (before saving, with
+    `Preferences.reindentOnSave`: only what moves is replaced, the caret
+    stays on its text) indent lines again, comment and string lines moving
+    with the line before; not for indentation-based languages, nor when
+    highlighting cannot be ready in 2 s.
   - `Matching` — free functions for the marks drawn behind the text: the
     bracket pairing with the one at the caret (bounded line scan), the
     word at the caret and its whole-word occurrences in the rows in view.

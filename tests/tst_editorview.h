@@ -28,6 +28,10 @@ private slots:
     void replaceAllIsOneUndo();
     void goesToLineAndColumn();
     void returnKeepsIndentation();
+    void closingBracketGoesUnderItsOpening();
+    void reindentsByBrackets();
+    void reindentsEverythingKeepingTheCaret();
+    void colonOpensABlockInPython();
     void tabIndentsSelectedLines();
     void wrappedLinesAddRowsAndMoveByRow();
     void wrappingFollowsEditsAndNewText();

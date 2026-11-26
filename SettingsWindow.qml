@@ -186,6 +186,15 @@ Window {
                         onValueModified: Preferences.indentWidth = value
                     }
                 }
+                FormRow {
+                    label: qsTr("Re-indent on save")
+                    detail: qsTr("By the brackets, as Edit > Re-Indent (not for Python and the like)")
+
+                    Switch {
+                        checked: Preferences.reindentOnSave
+                        onToggled: Preferences.reindentOnSave = checked
+                    }
+                }
             }
 
             Item {

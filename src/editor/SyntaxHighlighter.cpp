@@ -25,6 +25,29 @@ namespace tekst
 namespace
 {
 
+// Text a bracket in means nothing to the code.
+bool isNonCode(KSyntaxHighlighting::Theme::TextStyle style)
+{
+    using enum KSyntaxHighlighting::Theme::TextStyle;
+    switch (style) {
+    case Char:
+    case SpecialChar:
+    case String:
+    case VerbatimString:
+    case SpecialString:
+    case Comment:
+    case Documentation:
+    case CommentVar:
+    case RegionMarker:
+    case Information:
+    case Warning:
+    case Alert:
+        return true;
+    default:
+        return false;
+    }
+}
+
 // The regions `events` (see m_regions) begin and leave open, in order.
 QList<qint32> openRegions(const QList<qint32> &events)
 {
@@ -273,12 +296,22 @@ QList<QTextLayout::FormatRange> SyntaxHighlighter::formats(qsizetype line, QStri
     }
     m_collected.clear();
     m_regions.clear();
+    m_nonCode.clear();
     m_collecting = line;
     // The end state is known already.
     std::ignore = highlightLine(text, startState(line));
     m_collecting = -1;
     m_opened = openRegions(m_regions).size();
     return m_collected;
+}
+
+QList<indentation::Span> SyntaxHighlighter::nonCode(qsizetype line, QStringView text)
+{
+    if (!isActive() || !isReady(line)) {
+        return {};
+    }
+    std::ignore = formats(line, text);
+    return m_nonCode;
 }
 
 std::optional<qsizetype> SyntaxHighlighter::regionEnd(qsizetype line, const QDeadlineTimer &deadline)
@@ -345,7 +378,17 @@ void SyntaxHighlighter::applyFolding(int /*offset*/, int /*length*/, KSyntaxHigh
 
 void SyntaxHighlighter::applyFormat(int offset, int length, const KSyntaxHighlighting::Format &format)
 {
-    if (m_collecting < 0 || length == 0 || format.isDefaultTextStyle(theme())) {
+    if (m_collecting < 0 || length == 0) {
+        return;
+    }
+    if (isNonCode(format.textStyle())) {
+        if (!m_nonCode.isEmpty() && m_nonCode.last().end == offset) {
+            m_nonCode.last().end = offset + length;
+        } else {
+            m_nonCode.append({.start = offset, .end = offset + length});
+        }
+    }
+    if (format.isDefaultTextStyle(theme())) {
         return;
     }
     m_collected.append({.start = offset, .length = length, .format = charFormat(format)});

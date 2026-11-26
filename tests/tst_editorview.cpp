@@ -336,14 +336,91 @@ void TestEditorView::goesToLineAndColumn()
 void TestEditorView::returnKeepsIndentation()
 {
     tekst::EditorView editor;
+    editor.setText(QStringLiteral("    foo();"));
+    editor.setCursorPosition(editor.length());
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    QCOMPARE(editor.text(), QStringLiteral("    foo();\n    "));
+    // A level more after a bracket left open.
     editor.setText(QStringLiteral("    if (x) {"));
     editor.setCursorPosition(editor.length());
-    QKeyEvent enter{QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r")};
-    QCoreApplication::sendEvent(&editor, &enter);
-    QCOMPARE(editor.text(), QStringLiteral("    if (x) {\n    "));
-    QKeyEvent tab{QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, QStringLiteral("\t")};
-    QCoreApplication::sendEvent(&editor, &tab);
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
     QCOMPARE(editor.text(), QStringLiteral("    if (x) {\n        "));
+    // Between brackets, the closing one goes on a line of its own.
+    editor.setText(QStringLiteral("f() {}"));
+    editor.setCursorPosition(5);
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    QCOMPARE(editor.text(), QStringLiteral("f() {\n    \n}"));
+    QCOMPARE(editor.cursorLine(), 1);
+    QCOMPARE(editor.cursorColumn(), 4);
+}
+
+void TestEditorView::closingBracketGoesUnderItsOpening()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("    if (x) {\n        a();\n        "));
+    editor.setCursorPosition(editor.length());
+    type(editor, QStringLiteral("}"));
+    QCOMPARE(editor.text(), QStringLiteral("    if (x) {\n        a();\n    }"));
+    QCOMPARE(editor.cursorColumn(), 5);
+    // Not after other text.
+    type(editor, QStringLiteral(")"));
+    QCOMPARE(editor.text(), QStringLiteral("    if (x) {\n        a();\n    })"));
+}
+
+void TestEditorView::reindentsByBrackets()
+{
+    tekst::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(QStringLiteral("void f() {\nif (a) {\nx = \"{\";   // {\n}\n\n  /* a\n   * b */\nfoo(1,\n2);\n}"));
+    editor.selectAll();
+    editor.reindent();
+    // Brackets in strings and comments don't count; a comment's lines move with it.
+    QCOMPARE(
+        editor.text(),
+        QStringLiteral(
+            "void f() {\n    if (a) {\n        x = \"{\";   // {\n    }\n\n    /* a\n     * b */\n    foo(1,\n        "
+            "2);\n}"
+        )
+    );
+    // One line: the caret stays on its text.
+    editor.setText(QStringLiteral("{\nab\n}"));
+    editor.setCursorPosition(3);
+    editor.reindent();
+    QCOMPARE(editor.text(), QStringLiteral("{\n    ab\n}"));
+    QCOMPARE(editor.cursorColumn(), 5);
+}
+
+void TestEditorView::reindentsEverythingKeepingTheCaret()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("a {\nb {\nc;\n}\n}"));
+    editor.setCursorPosition(editor.text().indexOf(QLatin1Char('c')) + 1);
+    editor.reindentAll();
+    QCOMPARE(editor.text(), QStringLiteral("a {\n    b {\n        c;\n    }\n}"));
+    QCOMPARE(editor.cursorLine(), 2);
+    QCOMPARE(editor.cursorColumn(), 9);
+    // One undo.
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("a {\nb {\nc;\n}\n}"));
+}
+
+void TestEditorView::colonOpensABlockInPython()
+{
+    tekst::EditorView editor;
+    editor.setText(QStringLiteral("def f():"));
+    editor.setCursorPosition(editor.length());
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    QCOMPARE(editor.text(), QStringLiteral("def f():\n"));
+    editor.setSyntax(QStringLiteral("Python"));
+    editor.setText(QStringLiteral("def f():  # x"));
+    editor.setCursorPosition(editor.length());
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    QCOMPARE(editor.text(), QStringLiteral("def f():  # x\n    "));
+    // Python's indentation is its own: Re-Indent leaves it.
+    editor.setText(QStringLiteral("if a:\nb"));
+    editor.selectAll();
+    editor.reindent();
+    QCOMPARE(editor.text(), QStringLiteral("if a:\nb"));
 }
 
 void TestEditorView::tabIndentsSelectedLines()

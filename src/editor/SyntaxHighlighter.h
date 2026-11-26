@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Indentation.h"
+
 #include <KSyntaxHighlighting/AbstractHighlighter>
 #include <KSyntaxHighlighting/FoldingRegion>
 #include <KSyntaxHighlighting/State>
@@ -59,6 +61,9 @@ public:
     [[nodiscard]] KSyntaxHighlighting::State startState(qsizetype line) const;
     // The formats of `line`, whose text is `text` (it must be ready).
     [[nodiscard]] QList<QTextLayout::FormatRange> formats(qsizetype line, QStringView text);
+    // The columns of `line` (whose text is `text`) in comments and strings;
+    // none when it is not ready.
+    [[nodiscard]] QList<indentation::Span> nonCode(qsizetype line, QStringView text);
     // How many folding regions the line formats() last took opens and leaves open.
     [[nodiscard]] qsizetype openedRegions() const noexcept { return m_opened; }
     // The line where the first region `line` leaves open ends; none when it
@@ -84,6 +89,8 @@ private:
     // The folding regions of the line highlighted last, in order: id + 1
     // where one begins, -(id + 1) where one ends.
     QList<qint32> m_regions;
+    // The comments and strings of the line highlighted last.
+    QList<indentation::Span> m_nonCode;
     qsizetype m_valid{0};
     qsizetype m_resumeEnd{0};
     qsizetype m_checkFrom{0};

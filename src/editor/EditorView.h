@@ -36,6 +36,7 @@ class EditorNode;
 namespace indentation
 {
 struct Style;
+struct Span;
 } // namespace indentation
 class SyntaxHighlighter;
 class TextSearch;
@@ -220,6 +221,12 @@ public:
     // The selected lines (or the caret's) one level in or out, as one edit.
     Q_INVOKABLE void indent();
     Q_INVOKABLE void outdent();
+    // Indents the selected lines (or the caret's) again by their brackets,
+    // without knowing the language: a level inside each one left open.
+    // Nothing for languages indentation means something in (Python).
+    Q_INVOKABLE void reindent();
+    // The same for the whole text, changing only what moves (as before saving).
+    Q_INVOKABLE void reindentAll();
     // Takes the indentation style from the text (see indentation::detect()).
     Q_INVOKABLE void detectIndentation() { m_document->detectIndentation(); }
     // Moves the caret to "line" or "line:column" (from 1, clamped); false
@@ -462,8 +469,19 @@ private:
     // Replaces the lines the selection (or caret) touches with
     // `change(their text)` and selects them.
     void changeSelectedLines(bool outdenting);
-    // Return: a newline and the current line's indentation.
+    // Return: a newline indented as the line before, a level more after a
+    // bracket left open (between brackets, the closing one on a line of its own).
     void insertNewline();
+    // After a closing bracket typed where only indentation was: the line
+    // indented as the one the bracket it closes is on.
+    void alignClosing();
+    // Lines firstLine..lastLine indented again (see reindent()); none when
+    // that cannot be told.
+    [[nodiscard]] std::optional<QString> reindented(qsizetype firstLine, qsizetype lastLine);
+    // The comments and strings of `line` (whose text is `text`), where brackets don't count.
+    [[nodiscard]] QList<indentation::Span> nonCode(qsizetype line, QStringView text);
+    // A ':' ending a line opens a block (indentation-based languages).
+    [[nodiscard]] bool colonBlocks() const;
     void insertTab();
     [[nodiscard]] indentation::Style indentStyle() const;
     // The rectangles of columns [start, end) of `row`, one per visual line

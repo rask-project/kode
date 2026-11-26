@@ -393,7 +393,10 @@ columns, a block selection), and ⇧←/→ extend every caret's selection.
 Code folding: by KSyntaxHighlighting's regions or by indentation, from
 the gutter's markers or View > Code Folding (⌥⌘← / ⌥⌘→, as in Xcode).
 Indent guides, the caret's block in the accent color, as Neovim's
-indent-blankline (View > Show Indent Guides, on by default). Every icon is an SF Symbol
+indent-blankline (View > Show Indent Guides, on by default). Auto-indent
+by brackets without knowing the language (comments and strings told apart
+by the highlighting): Return, closing brackets, Edit > Re-Indent (⌃I) and
+re-indenting on save (Settings, off by default). Every icon is an SF Symbol
 (`icon.name`). `Rask.Controls` got `ToolbarGroup`/`ToolbarButton` (a glass
 toolbar capsule) along the way, unused here for now.
 

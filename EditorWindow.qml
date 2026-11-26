@@ -51,7 +51,13 @@ ApplicationWindow {
     }
 
     // Saves `document`, asking for a file when it has none, then runs `then`.
+    // With Re-indent on save, a split showing it re-indents it first (one
+    // that is shown nowhere is saved as it is).
     function save(document: Document, then) {
+        if (Preferences.reindentOnSave) {
+            const view = root.activeDocument === document ? root.activeView : root.app.viewsOf(document)[0] ?? null;
+            view?.editor.reindentAll();
+        }
         if (document.fileUrl.toString() === "") {
             root.saveAs(document, then);
         } else if (document.save() && then) {
@@ -400,6 +406,15 @@ ApplicationWindow {
                     enabled: root.editor !== null
                     shortcut: "Ctrl+["
                     onTriggered: root.editor.outdent()
+                }
+            }
+            MenuItem {
+                // As in Xcode.
+                action: Action {
+                    text: qsTr("Re-Indent")
+                    enabled: root.editor !== null
+                    shortcut: "Meta+I"
+                    onTriggered: root.editor.reindent()
                 }
             }
             MenuSeparator {}

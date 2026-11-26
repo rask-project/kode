@@ -10,4 +10,6 @@ private slots:
     void tabsAndUnits();
     void indentsAndOutdentsBlocks();
     void detectsTheStyle();
+    void readsTheBrackets();
+    void indentsAfterTheLineAbove();
 };
