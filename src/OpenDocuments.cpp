@@ -1,8 +1,13 @@
 #include "OpenDocuments.h"
 
+#include <QDesktopServices>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QQmlEngine>
+
+#include "FileTypes.h"
+#include "TextCodec.h"
 
 #include <algorithm>
 
@@ -21,6 +26,20 @@ QUrl localFile(const QUrl &url)
         return url;
     }
     return QUrl::fromLocalFile(QDir::cleanPath(url.path()));
+}
+
+// Not text: a NUL byte in its first 8000 bytes (as git tells), or a type the
+// system knows as not text (PDF…) and bytes that are not UTF-8 (a TypeScript
+// .ts is an MPEG stream to the system).
+bool isBinaryFile(const QString &path)
+{
+    constexpr qint64 headSize{8000};
+    QFile file{path};
+    if (!file.open(QIODevice::ReadOnly)) {
+        return false;
+    }
+    const QByteArray head{file.read(headSize)};
+    return codec::isBinary(head) || (isKnownNonTextType(path) && !codec::isUtf8Prefix(head));
 }
 
 QVariantList toList(const std::vector<Document *> &documents)
@@ -75,6 +94,11 @@ Document *OpenDocuments::open(const QUrl &file)
     if (file.scheme() == commandScheme && local.isLocalFile() && !QFileInfo::exists(local.toLocalFile())) {
         document->startFile(local);
         return adopt(std::move(document));
+    }
+    // Not text: the system's app for it opens it, as a double click in the Finder.
+    if (local.isLocalFile() && isBinaryFile(local.toLocalFile())) {
+        QDesktopServices::openUrl(local);
+        return nullptr;
     }
     if (!document->load(local)) {
         return nullptr;

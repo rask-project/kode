@@ -147,6 +147,8 @@ qt_add_executable(tst_splits
     ../src/Splits.cpp
     ../src/OpenDocuments.h
     ../src/OpenDocuments.cpp
+    ../src/FileTypes.h
+    ../src/FileTypes.mm
     ../src/DocumentHistory.h
     ../src/DocumentHistory.cpp
     ../src/Document.h
@@ -156,7 +158,8 @@ qt_add_executable(tst_splits
     ${editor_sources}
 )
 target_include_directories(tst_splits PRIVATE ../src ../src/editor)
-target_link_libraries(tst_splits PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_link_libraries(tst_splits PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation" "-framework Foundation" "-framework UniformTypeIdentifiers")
+set_source_files_properties(../src/FileTypes.mm TARGET_DIRECTORY tst_splits PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 add_test(NAME tst_splits COMMAND tst_splits)
 set_tests_properties(tst_splits PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

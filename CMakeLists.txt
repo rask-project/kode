@@ -114,6 +114,8 @@ qt_add_qml_module(kode
         src/FileOperations.cpp
         src/FileTree.h
         src/FileTree.cpp
+        src/FileTypes.h
+        src/FileTypes.mm
         src/Preferences.h
         src/Preferences.cpp
         src/Session.h
@@ -247,7 +249,10 @@ target_link_libraries(kode
         Rask::Dialogs
         Rask::Updater
         "-framework CoreFoundation"
+        "-framework Foundation"
+        "-framework UniformTypeIdentifiers"
 )
+set_source_files_properties(src/FileTypes.mm PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 
 # Before the bundle is signed below: its signature covers the libraries.
 rask_embed_libraries(kode LIBRARIES KF6::SyntaxHighlighting Rask::Application Rask::Controls Rask::Platform Rask::Window Rask::Dialogs Rask::Updater)

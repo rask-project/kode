@@ -133,7 +133,10 @@ Guidance for AI agents working in this repository.
   it shows the one selected, Escape cancels.
 - `src/OpenDocuments.{h,cpp}` — `OpenDocuments` (QML singleton): every
   open `Document`, owned (`deleteLater`), most recently shown first, by
-  name for the menu; one document per file; untitled ones numbered. A
+  name for the menu; one document per file; untitled ones numbered; a
+  binary file (a NUL in its first 8000 bytes, as git tells, or a type the
+  system knows as not text — `src/FileTypes.mm`, `UTType` — and not UTF-8)
+  goes to the system's app for it (`QDesktopServices`). A
   `kode:///path` URL (from the `kode` command, for a file that does not
   exist yet: `open` refuses those) opens empty (`Document::startFile()`;
   saving writes it, making its folders).

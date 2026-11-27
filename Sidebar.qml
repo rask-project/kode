@@ -96,6 +96,12 @@ Item {
         fileTree.revealInFinder(url);
     }
 
+    // Keys to the tree (Return opens), ending a rename: the tree is a focus
+    // scope, so focusing it alone would leave the name field focused inside.
+    function focusTree() {
+        tree.contentItem.forceActiveFocus();
+    }
+
     // Opens the folders down to `url` and scrolls to it.
     function show(url: url) {
         const index = fileTree.indexOf(url);
@@ -122,10 +128,12 @@ Item {
 
     // The name typed in place (`original` when unchanged or cancelled).
     function commitRename(url: url, name: string, original: string) {
-        // Already done (Return, then the field losing focus as it goes).
-        if (url.toString() === "" || url.toString() !== sidebar.renaming.toString())
+        // Already done (Return, then the field losing focus as it goes). Not
+        // compared with `url`: a typed url argument's text is percent-encoded.
+        if (sidebar.renaming.toString() === "")
             return;
         sidebar.renaming = "";
+        sidebar.focusTree();
         const renamed = name === original ? url : fileTree.rename(url, name);
         if (renamed.toString() === "")
             return;
@@ -553,7 +561,9 @@ Item {
 
                     font.pixelSize: sidebar.fontSize
                     text: original
-                    onAccepted: sidebar.commitRename(nameField.target, nameField.text, nameField.original)
+                    // Not onAccepted: TextField lets Return go on, to the tree, which would open the file.
+                    Keys.onReturnPressed: sidebar.commitRename(nameField.target, nameField.text, nameField.original)
+                    Keys.onEnterPressed: sidebar.commitRename(nameField.target, nameField.text, nameField.original)
                     onActiveFocusChanged: {
                         if (activeFocus)
                             nameField.editing = true;
@@ -575,6 +585,7 @@ Item {
                 acceptedButtons: Qt.RightButton
                 onTapped: {
                     sidebar.selectedFile = entry.fileUrl;
+                    sidebar.focusTree();
                     entryMenu.show(entry.fileUrl, entry.isFolder, false);
                 }
             }
@@ -583,8 +594,7 @@ Item {
                 enabled: !entry.renaming
                 onTapped: {
                     sidebar.selectedFile = entry.fileUrl;
-                    // For Return.
-                    tree.forceActiveFocus();
+                    sidebar.focusTree();
                 }
                 // On a folder TreeView itself opens or closes it.
                 onDoubleTapped: {
@@ -595,6 +605,16 @@ Item {
                     sidebar.fileChosen(entry.fileUrl);
                 }
             }
+        }
+    }
+
+    // A click where no entry is ends a rename.
+    TapHandler {
+        enabled: tree.visible && sidebar.renaming.toString() !== ""
+        onTapped: eventPoint => {
+            const inContent = tree.contentItem.mapFromItem(sidebar, eventPoint.position);
+            if (tree.cellAtPosition(inContent, false).y < 0)
+                sidebar.focusTree();
         }
     }
 

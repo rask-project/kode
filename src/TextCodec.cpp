@@ -4,6 +4,7 @@
 #include <QStringDecoder>
 #include <QStringEncoder>
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <type_traits>
@@ -91,6 +92,22 @@ Format detect(const QByteArray &bytes)
         return {.encoding = QStringLiteral("Windows-1252"), .byteOrderMark = {}};
     }
     return {.encoding = QStringLiteral("ISO-8859-1"), .byteOrderMark = {}};
+}
+
+bool isBinary(QByteArrayView head)
+{
+    const bool utf16{std::ranges::any_of(marks, [head](const Mark &mark) {
+        return mark.encoding.startsWith(QLatin1StringView{"UTF-16"}) && head.startsWith(mark.bytes);
+    })};
+    return !utf16 && head.contains('\0');
+}
+
+bool isUtf8Prefix(QByteArrayView head)
+{
+    // Stateful: a character cut at the end waits for more instead of failing.
+    QStringDecoder decoder{QStringConverter::Utf8};
+    [[maybe_unused]] const QString text{decoder.decode(head)};
+    return !decoder.hasError();
 }
 
 QByteArray byteOrderMark(const QString &encoding)

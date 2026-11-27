@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QByteArrayView>
 #include <QString>
 #include <QStringList>
 
@@ -22,6 +23,13 @@ struct Format {
 // The format of `bytes`: by its byte order mark, else UTF-8 if it is valid
 // UTF-8, else Windows-1252 (else ISO-8859-1, which decodes anything).
 [[nodiscard]] Format detect(const QByteArray &bytes);
+
+// Whether a file starting with `head` is not text: a NUL byte, as git tells,
+// unless a UTF-16 byte order mark explains it.
+[[nodiscard]] bool isBinary(QByteArrayView head);
+
+// Whether `head` (a file's first bytes, maybe cut inside a character) is valid UTF-8.
+[[nodiscard]] bool isUtf8Prefix(QByteArrayView head);
 
 // `bytes` (without the byte order mark) as text in `encoding`; nothing if
 // they are not valid in it.
