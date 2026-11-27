@@ -36,6 +36,19 @@ Item {
     // The entry being renamed in place; a new file opens once named.
     property url renaming
     property bool openAfterRename: false
+    // What the file operations act on: the selection, else the folder.
+    readonly property url target: selectedFile.toString() !== "" ? selectedFile : folder
+    readonly property bool targetIsRoot: selectedFile.toString() === ""
+    readonly property bool targetIsFolder: targetIsRoot || OpenDocuments.isFolder(selectedFile)
+    // Keys go to the tree (not to a name being typed): its shortcuts apply.
+    readonly property bool treeFocused: tree.contentItem.activeFocus && renaming.toString() === "" && folder.toString() !== ""
+    readonly property bool canCut: !targetIsRoot
+    readonly property bool canPaste: entryMenu.pasteAvailable
+    // The window's Edit and View actions, for the right-click menu (their shortcuts show).
+    property Action cutAction
+    property Action copyAction
+    property Action pasteAction
+    property Action collapseAllAction
     // Settings > Files > Sidebar size: small, medium, large.
     readonly property int fontSize: [12, 13, 15][Preferences.sidebarSize]
     readonly property int iconSize: [14, 16, 20][Preferences.sidebarSize]
@@ -64,6 +77,43 @@ Item {
         }
         sidebar.selectedFile = "";
         sidebar.fileChosen(url);
+    }
+
+    // Asks first; the window then closes the documents of it (trashRequested).
+    function confirmTrash(url: url) {
+        if (url.toString() === "")
+            return;
+        trashAlert.target = url;
+        trashAlert.open();
+    }
+
+    function cutSelected(cut: bool) {
+        fileTree.copy(sidebar.target, cut);
+        sidebar.refreshPaste();
+    }
+
+    function pasteHere() {
+        const pasted = fileTree.paste(fileTree.folderFor(sidebar.target));
+        if (pasted.toString() === "")
+            return;
+        sidebar.selectedFile = pasted;
+        sidebar.show(pasted);
+    }
+
+    function refreshPaste() {
+        entryMenu.pasteAvailable = fileTree.canPaste();
+    }
+
+    onTreeFocusedChanged: {
+        if (treeFocused)
+            refreshPaste();
+    }
+
+    function renameSelected() {
+        if (sidebar.selectedFile.toString() === "")
+            return;
+        sidebar.openAfterRename = false;
+        sidebar.renaming = sidebar.selectedFile;
     }
 
     // Moves `url` to the Trash; true when it went.
@@ -211,21 +261,30 @@ Item {
         text: qsTr("The operation could not be completed.")
     }
 
-    // Right click on an entry, or on the folder's name (the root).
+    Alert {
+        id: trashAlert
+
+        property url target
+
+        window: sidebar.Window.window
+        style: Alert.Warning
+        text: qsTr("Move “%1” to the Trash?").arg(decodeURIComponent(target.toString().split("/").pop()))
+        informativeText: qsTr("You can restore it from the Trash.")
+        buttons: [qsTr("Move to Trash"), qsTr("Cancel")]
+        onFinished: button => {
+            if (button === 0)
+                sidebar.trashRequested(trashAlert.target);
+        }
+    }
+
+    // Right click on an entry, or where none is (the root): its file operations.
     Menu {
         id: entryMenu
 
-        property url target
-        property bool targetIsFolder: false
-        property bool targetIsRoot: false
         property bool pasteAvailable: false
 
-        // `url` (a folder when `folder`; the root when `root`).
-        function show(url: url, folder: bool, root: bool) {
-            entryMenu.target = url;
-            entryMenu.targetIsFolder = folder;
-            entryMenu.targetIsRoot = root;
-            entryMenu.pasteAvailable = fileTree.canPaste();
+        function show() {
+            sidebar.refreshPaste();
             entryMenu.popup();
         }
 
@@ -233,31 +292,24 @@ Item {
 
         MenuItem {
             text: qsTr("New File")
-            onTriggered: sidebar.createEntry(entryMenu.target, false)
+            onTriggered: sidebar.createEntry(sidebar.target, false)
         }
         MenuItem {
             text: qsTr("New Folder")
-            onTriggered: sidebar.createEntry(entryMenu.target, true)
+            onTriggered: sidebar.createEntry(sidebar.target, true)
         }
         MenuSeparator {}
         MenuItem {
-            text: qsTr("Open")
-            enabled: !entryMenu.targetIsFolder
-            onTriggered: sidebar.fileChosen(entryMenu.target)
+            action: openAction
         }
         MenuItem {
-            text: qsTr("Rename")
-            enabled: !entryMenu.targetIsRoot
-            onTriggered: {
-                sidebar.openAfterRename = false;
-                sidebar.renaming = entryMenu.target;
-            }
+            action: renameAction
         }
         MenuItem {
             text: qsTr("Duplicate")
-            enabled: !entryMenu.targetIsRoot
+            enabled: !sidebar.targetIsRoot
             onTriggered: {
-                const copy = fileTree.duplicate(entryMenu.target);
+                const copy = fileTree.duplicate(sidebar.target);
                 if (copy.toString() !== "") {
                     sidebar.selectedFile = copy;
                     sidebar.show(copy);
@@ -265,50 +317,77 @@ Item {
             }
         }
         MenuItem {
-            text: qsTr("Move to Trash")
-            enabled: !entryMenu.targetIsRoot
-            onTriggered: sidebar.trashRequested(entryMenu.target)
+            action: trashAction
         }
         MenuSeparator {}
         MenuItem {
-            text: qsTr("Cut")
-            enabled: !entryMenu.targetIsRoot
-            onTriggered: fileTree.copy(entryMenu.target, true)
+            action: sidebar.cutAction
         }
         MenuItem {
-            text: qsTr("Copy")
-            onTriggered: fileTree.copy(entryMenu.target, false)
+            action: sidebar.copyAction
         }
         MenuItem {
-            text: qsTr("Paste")
-            enabled: entryMenu.pasteAvailable
-            onTriggered: {
-                const pasted = fileTree.paste(fileTree.folderFor(entryMenu.target));
-                if (pasted.toString() !== "") {
-                    sidebar.selectedFile = pasted;
-                    sidebar.show(pasted);
-                }
-            }
+            action: sidebar.pasteAction
         }
         MenuSeparator {}
         MenuItem {
-            text: qsTr("Copy Path")
-            onTriggered: fileTree.copyPath(entryMenu.target)
+            action: copyPathAction
         }
         MenuItem {
-            text: qsTr("Reveal in Finder")
-            onTriggered: fileTree.revealInFinder(entryMenu.target)
+            action: revealAction
         }
         MenuSeparator {}
         MenuItem {
             text: qsTr("Make Root")
-            enabled: entryMenu.targetIsFolder && !entryMenu.targetIsRoot
-            onTriggered: sidebar.folderChosen(entryMenu.target)
+            enabled: sidebar.targetIsFolder && !sidebar.targetIsRoot
+            onTriggered: sidebar.folderChosen(sidebar.target)
         }
         MenuItem {
-            text: qsTr("Collapse All")
-            onTriggered: sidebar.collapseAll()
+            action: sidebar.collapseAllAction
         }
+    }
+
+    // Their shortcuts work while the tree has the focus, as the Finder's (⌘↓,
+    // ⌘Delete, ⌥⌘C) and VS Code's (F2, ⌥⌘R).
+    Action {
+        id: openAction
+
+        text: qsTr("Open")
+        shortcut: "Ctrl+Down"
+        enabled: sidebar.treeFocused && !sidebar.targetIsFolder
+        onTriggered: sidebar.openSelected()
+    }
+    Action {
+        id: renameAction
+
+        text: qsTr("Rename")
+        shortcut: "F2"
+        enabled: sidebar.treeFocused && !sidebar.targetIsRoot
+        onTriggered: sidebar.renameSelected()
+    }
+    Action {
+        id: trashAction
+
+        text: qsTr("Move to Trash")
+        shortcut: "Ctrl+Backspace"
+        enabled: sidebar.treeFocused && !sidebar.targetIsRoot
+        onTriggered: sidebar.confirmTrash(sidebar.target)
+    }
+    Action {
+        id: copyPathAction
+
+        text: qsTr("Copy Path")
+        shortcut: "Ctrl+Alt+C"
+        enabled: sidebar.treeFocused
+        onTriggered: fileTree.copyPath(sidebar.target)
+    }
+    Action {
+        id: revealAction
+
+        text: qsTr("Reveal in Finder")
+        shortcut: "Ctrl+Alt+R"
+        enabled: sidebar.treeFocused
+        onTriggered: fileTree.revealInFinder(sidebar.target)
     }
 
     // The filter button's menu.
@@ -359,7 +438,11 @@ Item {
 
         TapHandler {
             acceptedButtons: Qt.RightButton
-            onTapped: entryMenu.show(sidebar.folder, true, true)
+            onTapped: {
+                sidebar.selectedFile = "";
+                sidebar.focusTree();
+                entryMenu.show();
+            }
         }
 
         Label {
@@ -439,12 +522,16 @@ Item {
         onWidthChanged: tree.forceLayout()
         onWidestChanged: Qt.callLater(tree.forceLayout)
 
-        // Return alone; every other key goes on (⇧⌘W and the like reach the menus).
+        // Return opens, Delete trashes (⌘Delete too: trashAction); every
+        // other key goes on (⇧⌘W and the like reach the menus).
         Keys.onPressed: event => {
-            const open = (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && (event.modifiers & ~Qt.KeypadModifier) === Qt.NoModifier;
-            if (open)
+            const plain = (event.modifiers & ~Qt.KeypadModifier) === Qt.NoModifier;
+            if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter) && plain)
                 sidebar.openSelected();
-            event.accepted = open;
+            else if ((event.key === Qt.Key_Backspace || event.key === Qt.Key_Delete) && plain)
+                sidebar.confirmTrash(sidebar.selectedFile);
+            else
+                event.accepted = false;
         }
 
         ScrollBar.vertical: OverlayScrollBar {}
@@ -586,7 +673,7 @@ Item {
                 onTapped: {
                     sidebar.selectedFile = entry.fileUrl;
                     sidebar.focusTree();
-                    entryMenu.show(entry.fileUrl, entry.isFolder, false);
+                    entryMenu.show();
                 }
             }
 
@@ -627,8 +714,11 @@ Item {
             if (inTree.y < 0 || inTree.y > tree.height)
                 return;
             const inContent = tree.contentItem.mapFromItem(sidebar, eventPoint.position);
-            if (tree.cellAtPosition(inContent, false).y < 0)
-                entryMenu.show(sidebar.folder, true, true);
+            if (tree.cellAtPosition(inContent, false).y >= 0)
+                return;
+            sidebar.selectedFile = "";
+            sidebar.focusTree();
+            entryMenu.show();
         }
     }
 

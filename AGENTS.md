@@ -92,8 +92,11 @@ Guidance for AI agents working in this repository.
   right-click menu makes it the root, as Neovim's file trees (both change
   the window's folder); Collapse All (View, ⌥⌘-, and the right-click menus
   of a folder and of the folder's name); the right-click menu's file
-  operations (New File/Folder, named in place, Rename in place, Duplicate,
-  Move to Trash, Cut/Copy/Paste, Copy Path, Reveal in Finder); text, icon
+  operations on the selection, else the folder (New File/Folder, named in
+  place, Open ⌘↓, Rename in place F2, Duplicate, Move to Trash ⌘Delete or
+  Delete, confirmed, Cut/Copy/Paste — the Edit menu's, acting on the tree
+  while it has the focus —, Copy Path ⌥⌘C, Reveal in Finder ⌥⌘R; shortcuts
+  only while the tree has the focus); text, icon
   and row sizes from `Preferences.sidebarSize`;
 - `OverlayScrollBar.qml` — the editor's and the sidebar's scroll bar: no
   track, a handle that shows while scrolling.

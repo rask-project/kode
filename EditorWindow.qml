@@ -470,9 +470,10 @@ ApplicationWindow {
                     id: cutAction
 
                     text: qsTr("Cut")
-                    enabled: root.editor?.hasSelection ?? false
+                    // The sidebar's file while its tree has the focus, as in the Finder.
+                    enabled: sidebar.treeFocused ? sidebar.canCut : (root.editor?.hasSelection ?? false)
                     shortcut: StandardKey.Cut
-                    onTriggered: root.editor.cut()
+                    onTriggered: sidebar.treeFocused ? sidebar.cutSelected(true) : root.editor.cut()
                 }
             }
             MenuItem {
@@ -480,9 +481,9 @@ ApplicationWindow {
                     id: copyAction
 
                     text: qsTr("Copy")
-                    enabled: root.editor?.hasSelection ?? false
+                    enabled: sidebar.treeFocused || (root.editor?.hasSelection ?? false)
                     shortcut: StandardKey.Copy
-                    onTriggered: root.editor.copy()
+                    onTriggered: sidebar.treeFocused ? sidebar.cutSelected(false) : root.editor.copy()
                 }
             }
             MenuItem {
@@ -490,9 +491,9 @@ ApplicationWindow {
                     id: pasteAction
 
                     text: qsTr("Paste")
-                    enabled: root.editor?.canPaste ?? false
+                    enabled: sidebar.treeFocused ? sidebar.canPaste : (root.editor?.canPaste ?? false)
                     shortcut: StandardKey.Paste
-                    onTriggered: root.editor.paste()
+                    onTriggered: sidebar.treeFocused ? sidebar.pasteHere() : root.editor.paste()
                 }
             }
             MenuItem {
@@ -663,6 +664,8 @@ ApplicationWindow {
             }
             MenuItem {
                 action: Action {
+                    id: collapseAllAction
+
                     text: qsTr("Collapse All Folders")
                     shortcut: "Ctrl+Alt+-"
                     enabled: root.sidebarVisible && root.folder.toString() !== ""
@@ -950,6 +953,10 @@ ApplicationWindow {
             currentFile: root.activeDocument ? root.activeDocument.fileUrl : ""
             topInset: content.titleBarHeight
             nativeWindow: windowStyle
+            cutAction: cutAction
+            copyAction: copyAction
+            pasteAction: pasteAction
+            collapseAllAction: collapseAllAction
             onFileChosen: file => root.app.openFiles([file], root)
             onOpenFolderRequested: folderDialog.open()
             onFolderChosen: folder => root.app.openFolder(folder, root)
