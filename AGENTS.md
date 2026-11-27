@@ -30,7 +30,8 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Kode uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`, `HelpTag` for tooltips, the Settings controls), `Rask.Dialogs`
+  (`SearchBar`, `HelpTag` for tooltips, `OverlayScrollBar` for the editor's
+  and the sidebar's scroll bars, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler` with the "Open in Kode" Service,
   `RecentDocuments`, `DefaultApplication`, `CommandLineTool`) and
@@ -98,8 +99,6 @@ Guidance for AI agents working in this repository.
   while it has the focus —, Copy Path ⌥⌘C, Reveal in Finder ⌥⌘R; shortcuts
   only while the tree has the focus); text, icon
   and row sizes from `Preferences.sidebarSize`;
-- `OverlayScrollBar.qml` — the editor's and the sidebar's scroll bar: no
-  track, a handle that shows while scrolling.
 - `src/FileTree.{h,cpp}` — `FileTree`: a `QSortFilterProxyModel` over a
   `QFileSystemModel` (folders read in its thread, changes on disk
   followed): the name column, folders first, names by `QCollator`
@@ -320,6 +319,15 @@ Guidance for AI agents working in this repository.
     definition; `EditorView::toggleLineComment()` (⌘/) and
     `toggleBlockComment()` (⌥⌘/, line comments without block ones) apply
     them as one edit (`changeSelectedLines()`, as indenting).
+  - `Minimap` (`QQuickItem`, a friend of `EditorView`, beside it in
+    `TextEditor.qml`; View > Show Minimap, `Preferences.showMinimap`) — the
+    view's text at 2 px a line, each run of characters a block in its
+    highlighting color, the part in view under a slider (click a line to
+    center it, drag the slider); past its height it scrolls at the view's
+    fraction. Keeps only the lines it shows (each highlighted once, again
+    when its start state changes; highlighting is the view's, lines it has
+    not reached drawn plain until `highlightingAdvanced()`), drawn in chunks of 64 lines (one
+    vertex-colored geometry node each) that scrolling only moves.
   - `Matching` — free functions for the marks drawn behind the text: the
     bracket pairing with the one at the caret (bounded line scan), the
     word at the caret and its whole-word occurrences in the rows in view.

@@ -702,6 +702,14 @@ ApplicationWindow {
                     onTriggered: Preferences.showIndentGuides = checked
                 }
             }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Show Minimap")
+                    checkable: true
+                    checked: Preferences.showMinimap
+                    onTriggered: Preferences.showMinimap = checked
+                }
+            }
             // As in Xcode's Editor > Code Folding.
             Menu {
                 title: qsTr("Code Folding")

@@ -29,6 +29,7 @@ class Preferences : public QObject
     Q_PROPERTY(bool wrap READ wrap WRITE setWrap NOTIFY changed)
     Q_PROPERTY(bool showInvisibles READ showInvisibles WRITE setShowInvisibles NOTIFY changed)
     Q_PROPERTY(bool showIndentGuides READ showIndentGuides WRITE setShowIndentGuides NOTIFY changed)
+    Q_PROPERTY(bool showMinimap READ showMinimap WRITE setShowMinimap NOTIFY changed)
     // Re-Indent the whole text before saving it.
     Q_PROPERTY(bool reindentOnSave READ reindentOnSave WRITE setReindentOnSave NOTIFY changed)
     // For new documents and files whose indentation cannot be told.
@@ -65,6 +66,8 @@ public:
     void setShowInvisibles(bool show);
     [[nodiscard]] static bool showIndentGuides();
     void setShowIndentGuides(bool show);
+    [[nodiscard]] static bool showMinimap();
+    void setShowMinimap(bool show);
     [[nodiscard]] static bool reindentOnSave();
     void setReindentOnSave(bool reindent);
     [[nodiscard]] static bool indentWithTabs();

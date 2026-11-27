@@ -639,6 +639,17 @@ qsizetype EditorView::topLine() const
     return lineAtRow(std::max(row, qsizetype{0}));
 }
 
+qsizetype EditorView::bottomLine() const
+{
+    const auto row{static_cast<qsizetype>(std::floor((m_contentY + height() - topPadding) / m_lineHeight))};
+    return lineAtRow(std::max(row, qsizetype{0}));
+}
+
+qreal EditorView::lineTop(qsizetype line) const
+{
+    return topPadding + (static_cast<qreal>(rowOfLine(line)) * m_lineHeight);
+}
+
 void EditorView::resetWrap(qsizetype anchorLine)
 {
     m_wrapWidth = wrapWidth();
@@ -1976,6 +1987,7 @@ void EditorView::highlightAhead()
         m_guess = {};
         polish();
     }
+    emit highlightingAdvanced();
     if (!done) {
         m_highlightTimer.start();
     }

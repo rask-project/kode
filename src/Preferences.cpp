@@ -18,6 +18,7 @@ const QString themeKey{QStringLiteral("view/theme")};
 const QString wrapKey{QStringLiteral("view/wrap")};
 const QString showInvisiblesKey{QStringLiteral("view/showInvisibles")};
 const QString showIndentGuidesKey{QStringLiteral("view/showIndentGuides")};
+const QString showMinimapKey{QStringLiteral("view/showMinimap")};
 const QString reindentOnSaveKey{QStringLiteral("editor/reindentOnSave")};
 const QString indentWithTabsKey{QStringLiteral("editor/indentWithTabs")};
 const QString indentWidthKey{QStringLiteral("editor/indentWidth")};
@@ -111,6 +112,16 @@ bool Preferences::showIndentGuides()
 void Preferences::setShowIndentGuides(bool show)
 {
     store(showIndentGuidesKey, show);
+}
+
+bool Preferences::showMinimap()
+{
+    return QSettings().value(showMinimapKey, true).toBool();
+}
+
+void Preferences::setShowMinimap(bool show)
+{
+    store(showMinimapKey, show);
 }
 
 bool Preferences::reindentOnSave()

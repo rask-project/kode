@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
 
+import Rask.Controls
 import Rask.Dialogs
 import Rask.Platform
 import Rask.Window

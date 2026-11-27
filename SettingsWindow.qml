@@ -179,6 +179,15 @@ Window {
                         onToggled: Preferences.showIndentGuides = checked
                     }
                 }
+                FormRow {
+                    label: qsTr("Show minimap")
+                    detail: qsTr("The text at a small scale beside it; click or drag to scroll")
+
+                    Switch {
+                        checked: Preferences.showMinimap
+                        onToggled: Preferences.showMinimap = checked
+                    }
+                }
             }
 
             FormGroup {

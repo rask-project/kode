@@ -298,6 +298,8 @@ signals:
     void layoutOptionsChanged();
     // A right click (or ⌃click), the caret moved there unless on the selection.
     void contextMenuRequested();
+    // Highlighting went further down the text (a slice ahead of the view).
+    void highlightingAdvanced();
 
 protected:
     void updatePolish() override;
@@ -319,6 +321,7 @@ protected:
 
 private:
     friend class EditorAccessible;
+    friend class Minimap;
 
     // A laid out line in view. Rows are found again by their text (and
     // `variant` and highlighting state), not their line number: an edit
@@ -553,8 +556,11 @@ private:
     // The wrap index estimated again (width, font or wrapping changed),
     // keeping `anchorLine` at the top of the view.
     void resetWrap(qsizetype anchorLine);
-    // The line at the top of the view.
+    // The line at the top of the view, and at its bottom.
     [[nodiscard]] qsizetype topLine() const;
+    [[nodiscard]] qsizetype bottomLine() const;
+    // The top of `line`, in content coordinates.
+    [[nodiscard]] qreal lineTop(qsizetype line) const;
     // The layout of `line` if it is laid out in view, else nullptr.
     [[nodiscard]] const QTextLayout *laidOut(qsizetype line) const;
     // The caret's rectangle at `position`, in content coordinates.

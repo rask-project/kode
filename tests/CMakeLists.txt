@@ -15,6 +15,8 @@ set(editor_sources
     ../src/editor/Indentation.cpp
     ../src/editor/Matching.h
     ../src/editor/Matching.cpp
+    ../src/editor/Minimap.h
+    ../src/editor/Minimap.cpp
     ../src/editor/SyntaxHighlighter.h
     ../src/editor/SyntaxHighlighter.cpp
     ../src/editor/TextBuffer.h
