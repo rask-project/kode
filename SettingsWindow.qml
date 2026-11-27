@@ -381,7 +381,7 @@ Window {
                     label: qsTr("Add a path")
                     detail: invalid ? qsTr("Not a folder") : qsTr("Type a folder, e.g. /opt/Qt/6.12.0/macos/bin")
 
-                    TextField {
+                    FilledTextField {
                         id: pathField
 
                         Layout.preferredWidth: 220
@@ -512,7 +512,7 @@ Window {
                         Layout.preferredWidth: 160
                         model: Syntaxes.all
                     }
-                    TextField {
+                    FilledTextField {
                         id: customLanguageId
 
                         Layout.preferredWidth: 90
@@ -525,7 +525,7 @@ Window {
                     label: qsTr("Command")
                     detail: qsTr("The program and its arguments, e.g. jdtls -data ~/.cache/jdtls")
 
-                    TextField {
+                    FilledTextField {
                         id: customCommand
 
                         Layout.preferredWidth: 220
