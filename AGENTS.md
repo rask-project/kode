@@ -136,6 +136,20 @@ Guidance for AI agents working in this repository.
 - `StartPage.qml` — what a split without a document shows, as in Qt
   Creator: "Open a document" and how (closing the last document leaves
   the windows open on it).
+- `FindFile.qml` — ⌘K (Navigate > Find File…, the sidebar's magnifying
+  glass), as Qt Creator's Locate: a popup in the middle of the window over
+  a blur of its content (`behind`, the window's SplitView — not its
+  contentItem, which holds the overlay: a recursive capture; an opaque
+  base under the blur, the editor's background being transparent), a
+  field and `FileSearch`'s list: each file's name with the letters found
+  marked, its path ("~"); ↑ ↓ choose, Return opens in the window's active
+  split, Escape closes.
+- `src/FileSearch.{h,cpp}` — `FileSearch`: a folder's files (listed on a
+  worker thread while `active`, `QPromise`; .git, build, cmake-build-*,
+  node_modules and links to folders left out, hidden ones with
+  `showHidden`), filtered by `score()` (a name starting with the query,
+  then holding it, then its letters in order, word starts preferred), the
+  best 200 by score then path length.
 - `DocumentSwitcher.qml` — the Ctrl+Tab popup, as in Qt Creator: every open
   document, those the split showed first by recent use; Tab moves on while Control is held, releasing
   it shows the one selected, Escape cancels.

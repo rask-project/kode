@@ -2,6 +2,7 @@
 
 #include "FileKinds.h"
 #include "FileOperations.h"
+#include "FileSearch.h"
 #include "FileTree.h"
 
 #include <QDir>
@@ -9,6 +10,8 @@
 #include <QFileInfo>
 #include <QSignalSpy>
 #include <QTest>
+
+using namespace Qt::StringLiterals;
 
 namespace
 {
@@ -190,6 +193,33 @@ void TestFileTree::knowsCodeFilesByExtensionOrName()
     QVERIFY(!kode::fileKind(u"README"));
     QCOMPARE(kode::fileKindByKey(u"cpp")->label, QLatin1StringView{"C++"});
     QCOMPARE(kode::fileKindByKey(u"CM")->color, kode::fileKind(u"x.cmake")->color);
+}
+
+void TestFileTree::scoresFileNames()
+{
+    using kode::FileSearch;
+    QVERIFY(FileSearch::score(u"main.cpp", u"main") < FileSearch::score(u"domain.cpp", u"main"));
+    QVERIFY(FileSearch::score(u"domain.cpp", u"main") < FileSearch::score(u"EditorView.cpp", u"edv"));
+    // Word starts: E and V of EditorView before letters scattered in a word.
+    QVERIFY(FileSearch::score(u"EditorView.cpp", u"ev") < FileSearch::score(u"beaver.cpp", u"ev"));
+    QCOMPARE(FileSearch::score(u"main.cpp", u"xyz"), -1);
+    QCOMPARE(FileSearch::matchedLetters(u"EditorView.cpp", u"ev"), (QList<qsizetype>{0, 6}));
+    QCOMPARE(FileSearch::matchedLetters(u"domain.cpp", u"main"), (QList<qsizetype>{2, 3, 4, 5}));
+}
+
+void TestFileTree::listsFilesForSearch()
+{
+    const QTemporaryDir folder;
+    const QDir root{folder.path()};
+    for (const QString &path : {u"src/a.cpp"_s, u"build/b.cpp"_s, u".git/c"_s, u"src/deep/d.h"_s}) {
+        QVERIFY(root.mkpath(QFileInfo{root.filePath(path)}.path()));
+        QFile file{root.filePath(path)};
+        QVERIFY(file.open(QIODevice::WriteOnly));
+    }
+    QVERIFY(QFile::link(root.filePath(u"src"_s), root.filePath(u"loop"_s)));
+    QStringList files{kode::FileSearch::listFiles(folder.path(), true, 100)};
+    files.sort();
+    QCOMPARE(files, (QStringList{u"src/a.cpp"_s, u"src/deep/d.h"_s}));
 }
 
 QTEST_MAIN(TestFileTree)

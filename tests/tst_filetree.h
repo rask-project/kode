@@ -19,6 +19,11 @@ private slots:
     void movesButNotIntoItself();
     void pastesACutFileByMovingIt();
     void knowsCodeFilesByExtensionOrName();
+    // ⌘K's matching: a name starting with the query first, then holding it,
+    // then its letters in order, word starts preferred.
+    void scoresFileNames();
+    // Its listing: build folders, .git and links to folders left out.
+    void listsFilesForSearch();
 
 private:
     QTemporaryDir m_dir;

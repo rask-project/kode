@@ -61,6 +61,8 @@ Item {
     property int iconVersion: 0
 
     signal fileChosen(url file)
+    // The magnifying glass: find a file of the folder (⌘K).
+    signal findFileRequested
     signal openFolderRequested
     // The tree's root moves to `folder` (the window's folder).
     signal folderChosen(url folder)
@@ -492,6 +494,14 @@ Item {
                 Accessible.name: qsTr("Filter")
                 toolTip: qsTr("Filter")
                 onClicked: filterMenu.popup(filterButton, 0, filterButton.height)
+            }
+            BarButton {
+                icon.name: "magnifyingglass"
+                icon.width: 15
+                icon.height: 15
+                Accessible.name: qsTr("Find file")
+                toolTip: qsTr("Find File (⌘K)")
+                onClicked: sidebar.findFileRequested()
             }
             BarButton {
                 icon.name: "link"

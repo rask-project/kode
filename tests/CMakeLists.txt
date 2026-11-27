@@ -194,6 +194,8 @@ qt_add_executable(tst_filetree
     tst_filetree.cpp
     ../src/FileTree.h
     ../src/FileTree.cpp
+    ../src/FileSearch.h
+    ../src/FileSearch.cpp
     ../src/FileOperations.h
     ../src/FileOperations.cpp
     ../src/FileKinds.h

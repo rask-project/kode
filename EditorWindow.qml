@@ -264,6 +264,15 @@ ApplicationWindow {
         }
     }
 
+    // ⌘K: a file of the window's folder, found by name.
+    FindFile {
+        id: findFile
+
+        folder: root.folder
+        behind: content
+        onChosen: file => root.app.openFiles([file], root)
+    }
+
     FileDialog {
         id: openDialog
 
@@ -826,6 +835,15 @@ ApplicationWindow {
 
             MenuItem {
                 action: Action {
+                    text: qsTr("Find File…")
+                    enabled: root.folder.toString() !== ""
+                    // ⌘K, as Qt Creator's Locate.
+                    shortcut: "Ctrl+K"
+                    onTriggered: findFile.open()
+                }
+            }
+            MenuItem {
+                action: Action {
                     id: goToDefinitionAction
 
                     text: qsTr("Go to Definition")
@@ -1010,6 +1028,8 @@ ApplicationWindow {
 
         Sidebar {
             id: sidebar
+
+            onFindFileRequested: findFile.open()
 
             visible: root.sidebarVisible
             SplitView.preferredWidth: root.sidebarWidth

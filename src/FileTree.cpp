@@ -218,18 +218,22 @@ void FileTree::revealInFinder(const QUrl &url)
     QProcess::startDetached(QStringLiteral("/usr/bin/open"), {QStringLiteral("-R"), url.toLocalFile()});
 }
 
+QString FileTree::iconSource(const QString &path, bool folder)
+{
+    if (!folder) {
+        if (const std::optional<FileKind> kind{fileKind(path.sliced(path.lastIndexOf(u'/') + 1))}) {
+            return QStringLiteral("image://codeicon/") + kind->key;
+        }
+    }
+    return QStringLiteral("image://fileicon") + QString::fromLatin1(QUrl::toPercentEncoding(path, "/"));
+}
+
 QVariant FileTree::data(const QModelIndex &index, qint32 role) const
 {
     switch (role) {
     case IconSourceRole: {
         const QModelIndex source{mapToSource(index)};
-        if (!m_files.isDir(source)) {
-            if (const std::optional<FileKind> kind{fileKind(m_files.fileName(source))}) {
-                return QStringLiteral("image://codeicon/") + kind->key;
-            }
-        }
-        return QStringLiteral("image://fileicon") +
-               QString::fromLatin1(QUrl::toPercentEncoding(m_files.filePath(source), "/"));
+        return iconSource(m_files.filePath(source), m_files.isDir(source));
     }
     case IsFolderRole:
         return m_files.isDir(mapToSource(index));

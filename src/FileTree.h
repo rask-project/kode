@@ -73,6 +73,8 @@ public:
     Q_INVOKABLE QUrl paste(const QUrl &folder);
     Q_INVOKABLE static void copyPath(const QUrl &url);
     Q_INVOKABLE static void revealInFinder(const QUrl &url);
+    // An entry's icon (IconSourceRole): a code file's, else the system's.
+    [[nodiscard]] static QString iconSource(const QString &path, bool folder);
 
     [[nodiscard]] QVariant data(const QModelIndex &index, qint32 role) const override;
     [[nodiscard]] QHash<qint32, QByteArray> roleNames() const override;
