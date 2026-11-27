@@ -597,6 +597,15 @@ ApplicationWindow {
                     onTriggered: root.editor.reindent()
                 }
             }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Show Completions")
+                    enabled: (root.editor?.document?.languageServer ?? "") !== ""
+                    // ⌃Space, as in Xcode and VS Code.
+                    shortcut: "Meta+Space"
+                    onTriggered: root.activeView.showCompletions()
+                }
+            }
             MenuSeparator {}
             MenuItem {
                 action: Action {

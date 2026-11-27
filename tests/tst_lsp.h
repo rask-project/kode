@@ -15,4 +15,6 @@ private slots:
     // With clangd installed: an error in a file shows as a diagnostic, and
     // goes once fixed.
     void clangdReportsAnError();
+    // With clangd installed: completions after "s." list the struct's member.
+    void clangdCompletesAMember();
 };

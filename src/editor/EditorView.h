@@ -231,6 +231,9 @@ public:
     Q_INVOKABLE [[nodiscard]] QString selectedText() const;
     // Replaces the selection (or inserts at the caret), as typing does.
     Q_INVOKABLE void insert(const QString &text);
+    // Makes `changes` (by position, apart) as one undo step, the caret left
+    // after the text of `changes[main]` (a completion and its other edits).
+    void applyChanges(const QList<TextDocument::Change> &changes, qsizetype main);
     Q_INVOKABLE void select(qint64 start, qint64 end);
     Q_INVOKABLE void selectAll();
     // As in VS Code and Qt Creator: selects the word at the caret, or adds the
@@ -318,6 +321,8 @@ signals:
     void layoutOptionsChanged();
     // A right click (or ⌃click), the caret moved there unless on the selection.
     void contextMenuRequested();
+    // Text typed at the caret (a key, an input method's commit).
+    void textTyped(const QString &text);
     // A ⌘click: the caret moved to `position`, whose definition is wanted.
     void definitionRequested(qint64 position);
     void diagnosticAreasChanged();
@@ -556,6 +561,13 @@ private:
     // Return: a newline indented as the line before, a level more after a
     // bracket left open (between brackets, the closing one on a line of its own).
     void insertNewline();
+    // Typing an opening bracket or quote adds its closing one after the
+    // caret; typing a closing one before the same steps over it. False when
+    // `text` is typed as it is.
+    bool typePair(const QString &text);
+    // Return after an opening bracket left open at a line's end, with no
+    // block under it yet: the closing one two lines down.
+    [[nodiscard]] std::optional<QChar> closerToAdd(qsizetype line, QStringView before, QStringView rest) const;
     // After a closing bracket typed where only indentation was: the line
     // indented as the one the bracket it closes is on.
     void alignClosing();

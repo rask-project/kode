@@ -141,6 +141,8 @@ qt_add_qml_module(kode
         src/editor/Matching.cpp
         src/editor/Minimap.h
         src/editor/Minimap.cpp
+        src/lsp/Completion.h
+        src/lsp/Completion.cpp
         src/lsp/LanguageServer.h
         src/lsp/LanguageServer.cpp
         src/lsp/LanguageServers.h
@@ -181,7 +183,7 @@ target_include_directories(kode PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
 set_property(SOURCE main.cpp src/Document.cpp src/DocumentHistory.cpp src/FileIcons.cpp src/FileKinds.cpp src/FileOperations.cpp src/FileTree.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/Commenting.cpp src/editor/Folding.cpp src/editor/EditorAccessible.cpp
-    src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/Minimap.cpp src/editor/TextSearch.cpp src/lsp/LanguageServer.cpp src/lsp/LanguageServers.cpp src/lsp/Protocol.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
+    src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/Minimap.cpp src/editor/TextSearch.cpp src/lsp/Completion.cpp src/lsp/LanguageServer.cpp src/lsp/LanguageServers.cpp src/lsp/Protocol.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
 # Debug builds get a bundle id of their own, so they don't share macOS

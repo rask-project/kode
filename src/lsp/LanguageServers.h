@@ -88,12 +88,19 @@ public:
     // The header of a source or the other way round: beside it, else as
     // clangd knows it; locationsFound() with the ticket (an empty list: none).
     qint32 switchHeaderSource(const Document *document);
+    // Completions at `position` (after typing `trigger`, if any):
+    // completionsFound() with the ticket returned (0: no server offers them).
+    qint32 requestCompletion(const Document *document, qsizetype position, const QString &trigger);
+    // What typed asks `document`'s server for completions besides a word.
+    [[nodiscard]] QStringList completionTriggers(const Document *document) const;
 
 signals:
     void settingsChanged();
     void serversChanged();
     // Each {file, line, column (-1, 0: no place), label}.
     void locationsFound(qint32 ticket, const QVariantList &locations);
+    // The protocol's CompletionItems; `incomplete`: typing more needs asking again.
+    void completionsFound(qint32 ticket, const QJsonArray &items, bool incomplete);
 
 private:
     static constexpr quint64 Enabled{1U << 0U};

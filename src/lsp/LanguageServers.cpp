@@ -297,14 +297,6 @@ QJsonObject protocolPosition(qsizetype line, qsizetype character)
     return {{u"line"_s, line}, {u"character"_s, character}};
 }
 
-// Characters, from `value`'s line and character (UTF-16, as the buffer), clamped to the text.
-qsizetype positionIn(const TextBuffer &buffer, const QJsonValue &value)
-{
-    const qsizetype line{std::clamp(value[u"line"_s].toInteger(), qint64{0}, buffer.lineCount() - 1)};
-    const qsizetype character{std::clamp(value[u"character"_s].toInteger(), qint64{0}, buffer.lineLength(line))};
-    return buffer.lineStart(line) + character;
-}
-
 } // namespace
 
 LanguageServers::LanguageServers(QObject *parent) : QObject(parent)
@@ -513,6 +505,56 @@ qint32 LanguageServers::findDefinition(const Document *document, qsizetype posit
             }
         );
     return ticket;
+}
+
+qint32 LanguageServers::requestCompletion(const Document *document, qsizetype position, const QString &trigger)
+{
+    const auto found{m_entries.constFind(document)};
+    if (found == m_entries.cend() || found->server == nullptr || found->document == nullptr) {
+        return 0;
+    }
+    LanguageServer *const server{find(found->server)};
+    if (server == nullptr || !server->completes()) {
+        return 0;
+    }
+    const TextBuffer &buffer{found->document->textDocument()->buffer()};
+    const qsizetype line{buffer.lineAt(position)};
+    // The protocol's trigger kinds: invoked (a word, ⌃Space), a trigger character.
+    constexpr qint64 invoked{1};
+    constexpr qint64 triggerCharacter{2};
+    QJsonObject context{{u"triggerKind"_s, trigger.isEmpty() ? invoked : triggerCharacter}};
+    if (!trigger.isEmpty()) {
+        context.insert(u"triggerCharacter"_s, trigger);
+    }
+    const qint32 ticket{++m_lastTicket};
+    server->request(
+        u"textDocument/completion"_s,
+        QJsonObject{
+            {u"textDocument"_s, QJsonObject{{u"uri"_s, found->uri.toString()}}},
+            {u"position"_s, protocolPosition(line, position - buffer.lineStart(line))},
+            {u"context"_s, context},
+        },
+        // A list, or a CompletionList: {isIncomplete, items}.
+        [this, wide = qint64{ticket}](const QJsonValue &result) {
+            const bool list{result.isObject()};
+            emit completionsFound(
+                static_cast<qint32>(wide),
+                list ? result[u"items"_s].toArray() : result.toArray(),
+                list && result[u"isIncomplete"_s].toBool()
+            );
+        }
+    );
+    return ticket;
+}
+
+QStringList LanguageServers::completionTriggers(const Document *document) const
+{
+    const auto found{m_entries.constFind(document)};
+    if (found == m_entries.cend() || found->server == nullptr) {
+        return {};
+    }
+    const LanguageServer *const server{find(found->server)};
+    return server != nullptr ? server->completionTriggers() : QStringList{};
 }
 
 qint32 LanguageServers::switchHeaderSource(const Document *document)

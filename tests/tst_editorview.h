@@ -28,6 +28,10 @@ private slots:
     void replaceAllIsOneUndo();
     void goesToLineAndColumn();
     void returnKeepsIndentation();
+    // With a syntax: brackets and quotes typed get their closing one.
+    void typingPairsWithASyntax();
+    // Return after "Rectangle {" with nothing under it: the closing brace two lines down.
+    void returnAfterAnOpenBraceAddsItsClosing();
     void closingBracketGoesUnderItsOpening();
     void reindentsByBrackets();
     void reindentsEditedLinesKeepingTheCaret();

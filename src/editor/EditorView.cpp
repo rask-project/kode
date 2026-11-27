@@ -921,6 +921,23 @@ void EditorView::insert(const QString &text)
     replace(selectionStart(), selectionEnd() - selectionStart(), text, !hasSelection() && text.size() == 1);
 }
 
+void EditorView::applyChanges(const QList<TextDocument::Change> &changes, qsizetype main)
+{
+    if (main < 0 || main >= changes.size()) {
+        return;
+    }
+    m_others.clear();
+    m_flags |= Editing;
+    m_document->replaceEach(changes, {.cursor = m_cursor, .anchor = m_anchor});
+    m_flags &= ~Editing;
+    const TextDocument::Change &chosen{changes.at(main)};
+    qsizetype caret{chosen.range.position + chosen.text.size()};
+    for (const TextDocument::Change &before : changes.first(main)) {
+        caret += before.text.size() - before.range.count;
+    }
+    editedTo({.cursor = caret, .anchor = caret});
+}
+
 void EditorView::deleteSelection()
 {
     if (hasSelection()) {
@@ -1396,7 +1413,76 @@ void EditorView::insertNewline()
         moveCaret(start + inner.size(), Select::Collapse);
         return;
     }
+    if (const std::optional<QChar> closer{above.open > 0 ? closerToAdd(line, before, rest) : std::nullopt}) {
+        const QString inner{QStringLiteral("\n") + indentFor(0)};
+        replace(start, count, inner + QStringLiteral("\n") + indentFor(1) + *closer, false);
+        moveCaret(start + inner.size(), Select::Collapse);
+        return;
+    }
     replace(start, count, QStringLiteral("\n") + indentFor(closing), false);
+}
+
+std::optional<QChar> EditorView::closerToAdd(qsizetype line, QStringView before, QStringView rest) const
+{
+    constexpr QStringView openers{u"([{"};
+    constexpr QStringView closers{u")]}"};
+    const QStringView trimmed{before.trimmed()};
+    if (m_document->syntax().isEmpty() || !rest.trimmed().isEmpty() || trimmed.isEmpty() ||
+        !openers.contains(trimmed.back())) {
+        return std::nullopt;
+    }
+    // A block already under it (its first line indented deeper): it has its closing one.
+    constexpr qsizetype linesToRead{50};
+    const indentation::Style style{indentStyle()};
+    const qsizetype own{indentation::columns(indentation::leadingWhitespace(before), style.width)};
+    const qsizetype last{std::min(buffer().lineCount() - 1, line + linesToRead)};
+    for (qsizetype next{line + 1}; next <= last; ++next) {
+        const QString text{buffer().line(next)};
+        if (text.trimmed().isEmpty()) {
+            continue;
+        }
+        if (indentation::columns(indentation::leadingWhitespace(text), style.width) > own) {
+            return std::nullopt;
+        }
+        break;
+    }
+    return closers.at(openers.indexOf(trimmed.back()));
+}
+
+bool EditorView::typePair(const QString &text)
+{
+    constexpr QStringView openers{u"([{\"'`"};
+    constexpr QStringView closers{u")]}\"'`"};
+    if (text.size() != 1 || !m_others.isEmpty() || hasSelection() || m_document->syntax().isEmpty()) {
+        return false;
+    }
+    const QChar typed{text.front()};
+    const qsizetype lineStart{buffer().lineStart(buffer().lineAt(m_cursor))};
+    const QString line{buffer().line(buffer().lineAt(m_cursor))};
+    const qsizetype column{m_cursor - lineStart};
+    const QChar next{column < line.size() ? line.at(column) : QChar{}};
+    const QChar previous{column > 0 ? line.at(column - 1) : QChar{}};
+    if (closers.contains(typed) && next == typed) {
+        moveCaret(m_cursor + 1, Select::Collapse);
+        return true;
+    }
+    const qsizetype pair{openers.indexOf(typed)};
+    // Only before a space, the line's end or what ends an expression.
+    if (pair < 0 || (!next.isNull() && !next.isSpace() && !QStringView{u")]};,."}.contains(next))) {
+        return false;
+    }
+    // A quote not after a word (an apostrophe), the same quote or an escape;
+    // never in prose.
+    constexpr qsizetype firstQuote{3};
+    const bool prose{m_document->syntax() == QLatin1StringView{"Markdown"}};
+    if (pair >= firstQuote &&
+        (prose || matching::isWordCharacter(previous) || previous == typed || previous == u'\\')) {
+        return false;
+    }
+    const qsizetype at{m_cursor};
+    replace(at, 0, QString{typed} + closers.at(pair), false);
+    moveCaret(at + 1, Select::Collapse);
+    return true;
 }
 
 void EditorView::alignClosing()
@@ -2938,6 +3024,16 @@ bool EditorView::handleDeletion(const QKeyEvent *event)
         return true;
     }
     const qsizetype target{deletionTarget(m_cursor, backspace, command, option)};
+    // Backspace between an empty pair, "(|)", takes both.
+    if (backspace && !command && !option && !m_document->syntax().isEmpty() && m_cursor > 0 &&
+        m_cursor < buffer().length()) {
+        const QString around{buffer().text(m_cursor - 1, 2)};
+        const qsizetype opener{QStringView{u"([{\"'`"}.indexOf(around.front())};
+        if (opener >= 0 && around.back() == QStringView{u")]}\"'`"}.at(opener)) {
+            replace(m_cursor - 1, 2, {}, false);
+            return true;
+        }
+    }
     const qsizetype from{std::min(m_cursor, target)};
     const qsizetype to{std::max(m_cursor, target)};
     if (from != to) {
@@ -3022,10 +3118,13 @@ void EditorView::keyPressEvent(QKeyEvent *event)
     const Qt::KeyboardModifiers modifiers{event->modifiers()};
     const bool printable{!text.isEmpty() && text.front().isPrint()};
     if (printable && !modifiers.testFlag(Qt::ControlModifier) && !modifiers.testFlag(Qt::MetaModifier)) {
-        insert(text);
+        if (!typePair(text)) {
+            insert(text);
+        }
         if (m_others.isEmpty()) {
             alignClosing();
         }
+        emit textTyped(text);
         return;
     }
     event->ignore();
@@ -3040,7 +3139,10 @@ void EditorView::inputMethodEvent(QInputMethodEvent *event)
         const qsizetype from{std::max(qsizetype{0}, m_cursor + event->replacementStart())};
         replace(from, std::min<qsizetype>(event->replacementLength(), buffer().length() - from), commit, false);
     } else if (!commit.isEmpty()) {
-        insert(commit);
+        if (!typePair(commit)) {
+            insert(commit);
+        }
+        emit textTyped(commit);
     }
 
     const QString preedit{event->preeditString()};

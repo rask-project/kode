@@ -1,13 +1,25 @@
 #include "Protocol.h"
 
+#include "TextBuffer.h"
+
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QJsonValue>
 #include <QList>
 
 #include <algorithm>
 
 namespace kode::lsp
 {
+
+qsizetype positionIn(const TextBuffer &buffer, const QJsonValue &position)
+{
+    const qsizetype line{std::clamp(position[QStringLiteral("line")].toInteger(), qint64{0}, buffer.lineCount() - 1)};
+    const qsizetype character{
+        std::clamp(position[QStringLiteral("character")].toInteger(), qint64{0}, buffer.lineLength(line))
+    };
+    return buffer.lineStart(line) + character;
+}
 
 namespace
 {

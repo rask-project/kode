@@ -158,7 +158,20 @@ Guidance for AI agents working in this repository.
   its file's context under `ComponentBehavior: Bound`).
 - `src/lsp/` — the Language Server Protocol client (`kode::lsp`):
   - `Protocol` — `frame()` and `MessageReader` (Content-Length framing over
-    a stream that arrives in pieces).
+    a stream that arrives in pieces); `positionIn()` (a protocol Position
+    into a buffer's characters).
+  - `Completion` (a list model, one per `TextEditor.qml`, which draws it
+    under the caret; keys before the view: ↑↓, PageUp/Down, Return/Tab,
+    Escape) — asks the document's server (`requestCompletion()`, ticket,
+    `completionsFound`) when a word starts (`EditorView::textTyped`), after
+    one of the server's trigger characters, or on ⌃Space (Edit > Show
+    Completions); filters by what is typed since the word's start (prefix
+    first, then the characters in order; sortText), asking again while the
+    server says the list was cut short; leaves on a move out of the word,
+    a selection or losing focus. Accepting replaces the server's range (or
+    the word) and makes its additionalTextEdits in one undo step
+    (`EditorView::applyChanges()`); snippets lose their tab stops (plain
+    text is asked for).
   - `LanguageServer` — one server's process (`QProcess`, stderr dropped,
     PATH given): `initialize` (UTF-16 positions, versioned diagnostics),
     messages held until it answers, requests with handlers, requests from
@@ -197,6 +210,7 @@ Guidance for AI agents working in this repository.
     `findDefinition()` (`textDocument/definition`) and
     `switchHeaderSource()` (the file beside it, else clangd's
     `textDocument/switchSourceHeader`) answer with `locationsFound(ticket)`,
+    `requestCompletion()` with `completionsFound(ticket)`;
     through `OpenDocuments` (which exposes `languageServers`).
 - `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
   in QSettings `session/folders` (JSON by canonical folder URL:
@@ -364,7 +378,9 @@ Guidance for AI agents working in this repository.
     text styles) and `indentAfter()` (a level in after a bracket left
     open, out for closing ones; a ':' too where indentation is the
     syntax). Return indents so (between brackets, the closing one on a
-    line of its own); a closing bracket typed on an empty line goes under
+    line of its own; after an opening bracket left open at a line's end
+    with no deeper-indented line under it, its closing one is added two
+    lines down: `closerToAdd()`); a closing bracket typed on an empty line goes under
     the line of its opening one; `reindent()` (Edit > Re-Indent, ⌃I, as
     in Xcode) and `reindentEdited()` (before saving, with
     `Preferences.reindentOnSave`: the lines edited since the last save,
@@ -375,6 +391,11 @@ Guidance for AI agents working in this repository.
     strings (`SyntaxHighlighter::startsInNonCode()` tells the rest, once per
     state); not for indentation-based languages, nor when highlighting
     cannot be ready in 2 s.
+  - Pairs (`typePair()`, with a syntax, one caret, no selection): an
+    opening bracket or quote typed before a space, the line's end or
+    `)]};,.` gets its closing one after the caret (a quote not after a
+    word, the same quote or `\`, never in Markdown); a closing one typed
+    before the same steps over it; Backspace in an empty pair takes both.
   - `Commenting` — free functions: the selected lines commented out (or
     back in when all are) with the language's line marker at their least
     indentation (column 0 where the definition asks), each line between
@@ -407,7 +428,8 @@ Guidance for AI agents working in this repository.
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
   randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_commenting`, `tst_wrapindex`, `tst_folding`,
   `tst_preferences`, `tst_filetree`, `tst_lsp` (framing, diagnostics
-  following edits, and with clangd installed a real round trip), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  following edits, and with clangd installed real round trips: an error,
+  a member completed), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
   — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both

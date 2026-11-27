@@ -29,6 +29,12 @@ QJsonObject clientCapabilities()
          QJsonObject{
              {QStringLiteral("synchronization"), QJsonObject{{QStringLiteral("dynamicRegistration"), false}}},
              {QStringLiteral("publishDiagnostics"), QJsonObject{{QStringLiteral("versionSupport"), true}}},
+             // Plain text only: no snippets to expand.
+             {QStringLiteral("completion"),
+              QJsonObject{
+                  {QStringLiteral("completionItem"), QJsonObject{{QStringLiteral("snippetSupport"), false}}},
+                  {QStringLiteral("contextSupport"), true},
+              }},
          }},
     };
 }
@@ -132,6 +138,14 @@ void LanguageServer::initialize(const QJsonObject &options)
     m_pending.insert(m_nextId++, [this](const QJsonValue &result) {
         const QJsonValue sync{result[QStringLiteral("capabilities")][QStringLiteral("textDocumentSync")]};
         m_sync = sync.isObject() ? sync[QStringLiteral("change")].toInteger(FullSync) : sync.toInteger(FullSync);
+        const QJsonValue completion{result[QStringLiteral("capabilities")][QStringLiteral("completionProvider")]};
+        if (completion.isObject()) {
+            m_flags |= Completes;
+            const QJsonArray triggers(completion[QStringLiteral("triggerCharacters")].toArray());
+            std::ranges::transform(triggers, std::back_inserter(m_completionTriggers), [](const QJsonValue &trigger) {
+                return trigger.toString();
+            });
+        }
         m_flags |= Initialized;
         write(
             {{QStringLiteral("jsonrpc"), QStringLiteral("2.0")},

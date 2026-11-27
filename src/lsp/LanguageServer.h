@@ -43,6 +43,9 @@ public:
     [[nodiscard]] QUrl root() const { return m_root; }
     // Edits go as ranges (else the whole text each time).
     [[nodiscard]] bool incrementalSync() const noexcept { return m_sync == IncrementalSync; }
+    // It offers completion; what typed starts it besides a word (".", "->"…).
+    [[nodiscard]] bool completes() const noexcept { return (m_flags & Completes) != 0U; }
+    [[nodiscard]] QStringList completionTriggers() const { return m_completionTriggers; }
     // What it is busy with, the latest work it reported ("Indexing 12/120
     // (10%)"); empty when idle.
     [[nodiscard]] QString activity() const;
@@ -63,6 +66,7 @@ private:
     static constexpr qint64 FullSync{1};
     static constexpr qint64 IncrementalSync{2};
     static constexpr quint64 Initialized{1U << 0U};
+    static constexpr quint64 Completes{1U << 1U};
 
     // Work in progress ($/progress), by token.
     struct Progress {
@@ -86,6 +90,7 @@ private:
     // Held until the server is initialized.
     QList<QJsonObject> m_queued;
     QList<Progress> m_progress;
+    QStringList m_completionTriggers;
     QUrl m_root;
     qint64 m_nextId{1};
     qint64 m_sync{FullSync};

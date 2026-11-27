@@ -505,7 +505,10 @@ for each language (Detect Again; a missing one's install command copied
 by a long press), custom servers (any command for any syntax, before the
 built-in ones). Built in: clangd, Python, Rust, Go, JS/TS, QML, Swift,
 Bash, Lua, Java, Kotlin, YAML, JSON, HTML, CSS, Markdown, CMake,
-Dockerfile, Terraform, TOML. Next: completion, then semantic highlighting.
+Dockerfile, Terraform, TOML. Completion: asked when a word starts, after
+a trigger character or on ⌃Space, filtered as one types, a list under the
+caret (↑↓, Return/Tab, Escape), the server's other edits (an #include) in
+the same undo step. Next: semantic highlighting.
 
 - **Minimap** on top of `EditorView`: the document at a reduced scale
   beside the text, the part in view marked, click and drag to scroll. Bound

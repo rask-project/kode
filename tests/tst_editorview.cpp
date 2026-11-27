@@ -354,6 +354,57 @@ void TestEditorView::returnKeepsIndentation()
     QCOMPARE(editor.cursorColumn(), 4);
 }
 
+void TestEditorView::typingPairsWithASyntax()
+{
+    kode::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    type(editor, QStringLiteral("f("));
+    QCOMPARE(editor.text(), QStringLiteral("f()"));
+    QCOMPARE(editor.cursorPosition(), 2);
+    // The closing one typed before itself steps over it.
+    type(editor, QStringLiteral(")"));
+    QCOMPARE(editor.text(), QStringLiteral("f()"));
+    QCOMPARE(editor.cursorPosition(), 3);
+    // Backspace in an empty pair takes both.
+    type(editor, QStringLiteral("["));
+    QCOMPARE(editor.text(), QStringLiteral("f()[]"));
+    press(editor, Qt::Key_Backspace, Qt::NoModifier, QString{});
+    QCOMPARE(editor.text(), QStringLiteral("f()"));
+    // Quotes, but not after a word (an apostrophe); nothing before other text.
+    type(editor, QStringLiteral(" \""));
+    QCOMPARE(editor.text(), QStringLiteral("f() \"\""));
+    editor.setText(QStringLiteral("it"));
+    editor.setCursorPosition(2);
+    type(editor, QStringLiteral("'"));
+    QCOMPARE(editor.text(), QStringLiteral("it'"));
+    editor.setText(QStringLiteral("x"));
+    editor.setCursorPosition(0);
+    type(editor, QStringLiteral("("));
+    QCOMPARE(editor.text(), QStringLiteral("(x"));
+    // Plain text: as typed.
+    editor.setSyntax({});
+    editor.setText({});
+    type(editor, QStringLiteral("("));
+    QCOMPARE(editor.text(), QStringLiteral("("));
+}
+
+void TestEditorView::returnAfterAnOpenBraceAddsItsClosing()
+{
+    kode::EditorView editor;
+    editor.setSyntax(QStringLiteral("QML"));
+    editor.setText(QStringLiteral("Item {\n    Rectangle {"));
+    editor.setCursorPosition(editor.length());
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    QCOMPARE(editor.text(), QStringLiteral("Item {\n    Rectangle {\n        \n    }"));
+    QCOMPARE(editor.cursorLine(), 2);
+    QCOMPARE(editor.cursorColumn(), 8);
+    // Its block already there (indented deeper below): no second closing one.
+    editor.setText(QStringLiteral("Item {\n    width: 1\n}"));
+    editor.setCursorPosition(6);
+    press(editor, Qt::Key_Return, Qt::NoModifier, QStringLiteral("\r"));
+    QCOMPARE(editor.text(), QStringLiteral("Item {\n    \n    width: 1\n}"));
+}
+
 void TestEditorView::closingBracketGoesUnderItsOpening()
 {
     kode::EditorView editor;

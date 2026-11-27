@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import Rask.Controls
@@ -9,6 +11,9 @@ Flickable {
     id: root
 
     readonly property alias editor: editorView
+    readonly property alias completion: completionModel
+    // The document shown, for its language server's completions.
+    property Document document: null
     // Behind the text; transparent lets the window's background and blur show.
     property color backgroundColor: "transparent"
     property bool showMinimap: false
@@ -93,6 +98,39 @@ Flickable {
         informationColor: Appearance.dark ? "#0a84ff" : "#007aff"
         hintColor: SystemColors.tertiaryLabel
 
+        // While the completion list shows, the keys that move in it and choose.
+        Keys.priority: Keys.BeforeItem
+        Keys.onPressed: event => {
+            event.accepted = false;
+            if (!completionModel.active)
+                return;
+            switch (event.key) {
+            case Qt.Key_Up:
+                completionModel.move(-1);
+                break;
+            case Qt.Key_Down:
+                completionModel.move(1);
+                break;
+            case Qt.Key_PageUp:
+                completionModel.move(-completionList.rows);
+                break;
+            case Qt.Key_PageDown:
+                completionModel.move(completionList.rows);
+                break;
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+            case Qt.Key_Tab:
+                completionModel.accept();
+                break;
+            case Qt.Key_Escape:
+                completionModel.cancel();
+                break;
+            default:
+                return;
+            }
+            event.accepted = true;
+        }
+
         onCaretMoved: root.ensureVisible(editorView.cursorRectangle)
         onScrollRequested: contentY => root.contentY = Math.max(0, Math.min(contentY, root.contentHeight - root.height))
     }
@@ -112,6 +150,124 @@ Flickable {
             HelpTag {
                 text: parent.modelData.message
                 delay: 500
+            }
+        }
+    }
+
+    Completion {
+        id: completionModel
+
+        editor: editorView
+        document: root.document
+        servers: OpenDocuments.languageServers
+    }
+
+    // The completions under the caret (above it when there is no room below).
+    Rectangle {
+        id: completionList
+
+        readonly property int rowHeight: 22
+        readonly property int rows: 9
+        readonly property real below: editorView.cursorRectangle.y + editorView.cursorRectangle.height
+
+        visible: completionModel.active
+        z: 2
+        x: Math.max(root.contentX + editorView.gutterWidth, Math.min(editorView.cursorRectangle.x - 30, root.contentX + root.width - width - 8))
+        y: below + height + 4 <= root.contentY + root.height ? below + 2 : editorView.cursorRectangle.y - height - 2
+        width: 460
+        height: Math.min(completionView.count, rows) * rowHeight + 8
+        radius: 8
+        color: Appearance.dark ? "#2c2c2e" : "#ffffff"
+        border.width: 1
+        border.color: Qt.alpha(SystemColors.label, 0.15)
+
+        ListView {
+            id: completionView
+
+            anchors.fill: parent
+            anchors.margins: 4
+            clip: true
+            model: completionModel
+            currentIndex: completionModel.currentIndex
+            highlightMoveDuration: 0
+            boundsBehavior: Flickable.StopAtBounds
+
+            delegate: Item {
+                id: completionRow
+
+                required property int index
+                required property string label
+                required property string detail
+                required property int kind
+
+                // The protocol's CompletionItemKind (1 Text … 25 TypeParameter): a letter and a hue.
+                readonly property string letter: ["", "T", "M", "F", "C", "P", "V", "C", "I", "M", "P", "U", "V", "E", "K", "S", "C", "F", "R", "F", "E", "C", "S", "E", "O", "T"][kind] ?? "?"
+                readonly property color hue: [2, 3, 4].includes(kind) ? "#5e5ce6" : [5, 6, 10].includes(kind) ? "#30b0c7" : [7, 8, 22, 25].includes(kind) ? "#bf5af2" : [13, 20, 21].includes(kind) ? "#ff9f0a" : kind === 14 ? "#ff375f" : "#8e8e93"
+                readonly property bool current: index === completionModel.currentIndex
+
+                width: ListView.view.width
+                height: completionList.rowHeight
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 5
+                    visible: completionRow.current
+                    color: SystemColors.controlAccent
+                }
+
+                Rectangle {
+                    id: badge
+
+                    anchors.left: parent.left
+                    anchors.leftMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 16
+                    height: 16
+                    radius: 4
+                    color: completionRow.hue
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: completionRow.letter
+                        color: "white"
+                        font.pixelSize: 10
+                        font.bold: true
+                    }
+                }
+
+                Text {
+                    id: completionLabel
+
+                    anchors.left: badge.right
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - badge.width - 20)
+                    elide: Text.ElideRight
+                    text: completionRow.label
+                    font.family: editorView.font.family
+                    font.pixelSize: 12
+                    color: completionRow.current ? "white" : SystemColors.label
+                }
+
+                Text {
+                    anchors.left: completionLabel.right
+                    anchors.leftMargin: 12
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    horizontalAlignment: Text.AlignRight
+                    elide: Text.ElideRight
+                    text: completionRow.detail
+                    font.pixelSize: 11
+                    color: completionRow.current ? Qt.alpha("white", 0.75) : SystemColors.secondaryLabel
+                }
+
+                TapHandler {
+                    onTapped: {
+                        completionModel.currentIndex = completionRow.index;
+                        completionModel.accept();
+                    }
+                }
             }
         }
     }

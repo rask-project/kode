@@ -99,6 +99,11 @@ Item {
         pane.locationTicket = pane.document ? OpenDocuments.findDefinition(pane.document, position) : 0;
     }
 
+    // ⌃Space: the language server's completions at the caret.
+    function showCompletions() {
+        textEditor.completion.trigger();
+    }
+
     // F4: the header of a source file, or its source.
     function switchHeaderSource() {
         pane.locationTicket = pane.document ? OpenDocuments.switchHeaderSource(pane.document) : 0;
@@ -484,6 +489,7 @@ Item {
         // Opaque (Settings > Appearance): the window's color, without its transparency.
         backgroundColor: Preferences.transparentEditor || !pane.nativeWindow ? "transparent" : pane.nativeWindow.color
         editor.document: pane.document ? pane.document.textDocument : null
+        document: pane.document
         editor.syntaxTheme: Syntaxes.themeName(Preferences.theme, Appearance.dark)
         editor.wrap: Preferences.wrap
         editor.showInvisibles: Preferences.showInvisibles

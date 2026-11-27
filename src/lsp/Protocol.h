@@ -8,8 +8,17 @@
 #include <expected>
 #include <optional>
 
+namespace kode
+{
+class TextBuffer;
+} // namespace kode
+
 namespace kode::lsp
 {
+
+// Characters into `buffer`, from a protocol Position (line and UTF-16
+// character, as the buffer counts), clamped to the text.
+[[nodiscard]] qsizetype positionIn(const TextBuffer &buffer, const QJsonValue &position);
 
 // `message` as the Language Server Protocol sends it: a Content-Length
 // header, then the JSON.

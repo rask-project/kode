@@ -8,10 +8,14 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonObject>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
+
+#include <algorithm>
 
 using kode::TextDocument;
 using kode::lsp::frame;
@@ -128,6 +132,42 @@ void TestLsp::clangdReportsAnError()
     // Fixed: the server hears of the edit and drops the error.
     document.textDocument()->replace(error.start, error.end - error.start, QStringLiteral("0"), false, {});
     QTRY_VERIFY_WITH_TIMEOUT(document.textDocument()->errorCount() == 0, 30000);
+    servers.remove(&document);
+}
+
+void TestLsp::clangdCompletesAMember()
+{
+    const QStringList folders{
+        qEnvironmentVariable("PATH").split(u':') +
+        QStringList{QStringLiteral("/opt/homebrew/bin"), QStringLiteral("/usr/local/bin")}
+    };
+    if (QStandardPaths::findExecutable(QStringLiteral("clangd"), folders).isEmpty()) {
+        QSKIP("clangd is not installed");
+    }
+    const QTemporaryDir folder;
+    const QString path{folder.filePath(QStringLiteral("main.cpp"))};
+    QFile file{path};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("struct S { int member; };\nint main() { S s; return s.; }\n");
+    file.close();
+
+    kode::Document document;
+    QVERIFY(document.load(QUrl::fromLocalFile(path)));
+    kode::lsp::LanguageServers servers;
+    servers.setSearchFolders(folders);
+    servers.add(&document);
+    // Once the server knows the file (it reports on it), ask after "s.".
+    QTRY_VERIFY_WITH_TIMEOUT(!servers.completionTriggers(&document).isEmpty(), 30000);
+    const qsizetype position{document.textDocument()->text().indexOf(QStringLiteral("s.;")) + 2};
+    QSignalSpy found{&servers, &kode::lsp::LanguageServers::completionsFound};
+    const qint32 ticket{servers.requestCompletion(&document, position, QStringLiteral("."))};
+    QVERIFY(ticket != 0);
+    QTRY_VERIFY_WITH_TIMEOUT(!found.isEmpty(), 30000);
+    QCOMPARE(found.first().at(0).toInt(), ticket);
+    const QJsonArray items(found.first().at(1).toJsonArray());
+    QVERIFY(std::ranges::any_of(items, [](const QJsonValue &item) {
+        return item[QStringLiteral("label")].toString().contains(QStringLiteral("member"));
+    }));
     servers.remove(&document);
 }
 
