@@ -289,8 +289,7 @@ file name and shebang; Breeze light/dark following `Appearance`
 syntax with a native menu of every definition by section), the bracket
 pairing with the one at the caret and the word at the caret with its
 occurrences in view marked behind the text (brackets in comments and
-strings aside, as far as highlighting has gone). Left: off-thread
-highlighting if large files need it (Stage 10).
+strings aside, as far as highlighting has gone). Large files: Stage 10.
 
 - **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes;
   QtCore/QtGui only) through `AbstractHighlighter`, line by line: each line
@@ -306,7 +305,7 @@ highlighting if large files need it (Stage 10).
   converted by `tools/make-syntax-themes.py`. Plain text keeps the system
   color; KSyntaxHighlighting is syntactic, so the colors Qt Creator gets
   from clangd/QmlJS (fields, parameters, locals, QML ids) need a language
-  server (later).
+  server (Stage 11).
 - Brackets matching and current-word highlight.
 
 ---
@@ -443,7 +442,7 @@ the sidebar and its width are saved with the session.
 
 ---
 
-### Stage 9 — Polish and distribution
+### Stage 9 — Polish and distribution — done
 
 - Done: release via GitHub Actions (`.github/workflows/release.yml`: a `v*`
   tag publishes the ad-hoc-signed `.dmg`/`.zip`; `docs/RELEASE.md`), 1.0.0;
@@ -454,20 +453,17 @@ the sidebar and its width are saved with the session.
   release workflow.
 - Decided: no Developer ID signing or notarization; releases stay signed ad
   hoc (`docs/RELEASE.md`).
-- Liquid Glass (`Rask.Window`'s `GlassEffect`, `GlassSurface` as fallback) on
-  the tab strip/status bar on macOS 26.
-- **`Rask.Style`** (a Qt Quick Controls style for macOS) adopted by Kode.
+- Dropped: Liquid Glass on the bars (tried and reverted) and adopting
+  `Rask.Style`: no gain for the cost.
 
 ---
 
-### Stage 10 — Large files off the GUI thread
+### Stage 10 — Large files off the GUI thread — done
 
 Editing stays on the GUI thread: Qt Quick items, input and accessibility
 live there, a keystroke lays out one line, and documents not in view cost
-nothing. A thread per document would add a round trip and locks to every
-keystroke for no gain. What moves is the work that grows with the file and
-cannot be sliced well, measured first (`kode-work-bench`,
-`docs/editor-bench.md`):
+nothing. What moved is the work that grows with the file, measured first
+(`kode-work-bench`, `docs/editor-bench.md`):
 
 - Done: opening — from 2 MB on, reading, decoding (`TextCodec`) and the
   `TextBuffer`'s line index on a worker; the view shows "Opening…" and
@@ -480,33 +476,40 @@ cannot be sliced well, measured first (`kode-work-bench`,
   instead of after 22 s). Not on a worker: the states form a chain, so a
   thread would not be sooner, and KSyntaxHighlighting's definitions are not
   thread-safe (they cache states while highlighting).
-- Find and Replace All over the whole text (today 3 ms slices on the GUI
-  thread: never blocking, but slower in total).
+- Done: Find and Replace All stay in 3 ms slices on the GUI thread, which
+  already keep up.
 - Done: re-indenting on save — only the lines edited since the last save
   (as VS Code's "format modifications only"), each moved line's
   indentation replaced in one undo step: the cost follows the edits, not
   the file (it re-indented every line before: 2.7 s at 10 MB, a minute at
   100 MB, all blocking).
-- Saving large files.
+- Dropped: saving large files on a worker; measured, no gain for the cost.
 
-How: a snapshot of the `TextBuffer` (its original buffer is immutable and
-the added one append-only, so copying the piece list is enough) with the
-document's version, worked on in a `QThreadPool` (shared by every
-document, as many threads as cores), the result posted back to the GUI
-thread and dropped if the document changed meanwhile. No locks on the
-typing path.
+---
+
+### Stage 11 — Minimap and LSP
+
+- **Minimap** on top of `EditorView`: the document at a reduced scale
+  beside the text, the part in view marked, click and drag to scroll. Bound
+  by what is visible like the rest of the view: nothing per frame scales
+  with the file size.
+- **LSP** (Language Server Protocol): a client talking to the language
+  server of each language over stdio (JSON-RPC), the documents' changes
+  sent incrementally; completion, diagnostics in the text and the gutter,
+  and semantic highlighting (the colors Qt Creator gets from
+  clangd/QmlJS: fields, parameters, locals) over KSyntaxHighlighting's.
 
 ---
 
 ## 4. Future items (outside the initial scope)
 
-On top of `EditorView`: a minimap (code folding and multiple cursors are done).
-Also Markdown with preview, LSP (completion/diagnostics), compare mode
-(diff), Quick Look and Spotlight integration, AppleScript/Shortcuts support.
+- **Plugin support**: a way to extend Kode from outside its core. Markdown
+  with preview is built as a plugin, not in the core.
+- Compare mode (diff), Quick Look and Spotlight integration,
+  AppleScript/Shortcuts support.
+
+Not planned: git support (status, blame).
 
 ## 5. Open decisions
 
 - Git submodule vs. `FetchContent` with a tag.
-- Whether `Rask.Style` becomes a standalone style selectable via
-  `QQuickStyle::setStyle("Rask.Style")` or stays an extension of the `macOS`
-  style.
