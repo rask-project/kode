@@ -148,6 +148,41 @@ thread would not bring the colors sooner: each line's state comes from the
 one before, and KSyntaxHighlighting's definitions cache states as they
 highlight (`DefinitionData::unify`), so two threads cannot share one.
 
+## Memory in the app, against Xcode and VS Code
+
+The prototype's memory column above is resident size, which macOS memory
+compression understates (it was measured with the text compressed away).
+This is the physical footprint (`footprint`, which counts compressed
+memory too), of the whole app: Kode's Release build, Xcode 27.2 and VS Code
+1.148 run from its disk image, each with the 100 MB C++ file of
+`run-work.sh` (3.1 million lines) open; for VS Code, the sum of its
+processes. Apple M1 with 8 GB, macOS 27.2.1, on 2026-11-27.
+
+| App | Empty (MB) | File open (MB) | Peak (MB) | Highlighted |
+|---|---:|---:|---:|---|
+| Kode | 250 | ~500 | 495 | yes, to the end |
+| VS Code | 722 | ~1 220 | 2 094 | no |
+| Xcode | — | ~3 160 | 3 307 | yes |
+
+- **Kode** keeps the text as UTF-16 (200 MB for 100 MB of ASCII), its line
+  index (32 MB) and a highlighting state per line (32 MB): about 265 MB for
+  the file. "Empty" is a window with two splits and a folder in the
+  sidebar. Opening peaked at 782 MB before: the file's bytes (100 MB), the
+  text decoded (200 MB) and a second decoding made only to check the bytes
+  were UTF-8 (200 MB, freed at once); malloc then kept the bytes' block
+  for reuse. Now `codec::readFile()` decodes UTF-8 as it reads, 4 MB at a
+  time, into the text, and tries each encoding by decoding it once: the
+  peak is the footprint at rest. (`QByteArrayView::isValidUtf8()` would
+  have saved the second decoding's memory, but it checks byte by byte:
+  68 ms for 100 MB, where decoding takes 8–20 ms.)
+- **VS Code** turns highlighting, folding and wrapping off for files over
+  20 MB; with `editor.largeFileOptimizations` off and the file opened again
+  it still showed it plain. Its renderer (the editor) went from 252 MB to
+  ~610 MB, peaking at 1.5 GB while opening.
+- **Xcode** holds 2.3 GB in small allocations; with 8 GB of RAM nearly all
+  of it was compressed (37 MB resident), and scrolling and jumping in the
+  file were slow.
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal

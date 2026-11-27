@@ -162,12 +162,14 @@ permalink: /features/
         <ul>
           <li><strong>A piece table</strong> holds the text with an index of its lines; typing grows one piece and never copies the text.</li>
           <li><strong>Only the lines in view</strong> are laid out and drawn, each a scene-graph node moved by its matrix as you scroll.</li>
-          <li><strong>Highlighting and search</strong> run in slices of a few milliseconds ahead of the view.</li>
+          <li><strong>Highlighting and search</strong> run in slices of a few milliseconds ahead of the view; a jump far down a large file colors the lines in view at once, from a guess, until the slices get there.</li>
+          <li><strong>Large files open in the background:</strong> from 2 MB on, reading and decoding happen off the main thread, and the window never waits.</li>
         </ul>
         <div class="form-group">
           <div class="form-row"><span>Open 100 MB to the first frame</span><span>83 ms (TextEdit: 19.6 s)</span></div>
           <div class="form-row"><span>Worst keystroke at 100 MB</span><span>12.9 ms (TextEdit: 1.2 s)</span></div>
-          <div class="form-row"><span>Memory for 100 MB of text</span><span>32 MB (TextEdit: 1.2 GB)</span></div>
+          <div class="form-row"><span>Color a jump to the end of 100 MB</span><span>7 ms (from the top: 22 s)</span></div>
+          <div class="form-row"><span>Memory with 100 MB of C++ open</span><span>500 MB (VS Code: 1.2 GB, Xcode: 3.2 GB)</span></div>
         </div>
         <p>Release build on an Apple M1; the method is in <a href="{{ site.github_url }}/blob/main/docs/editor-bench.md">editor-bench.md</a>.</p>
       </section>

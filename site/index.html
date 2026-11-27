@@ -59,7 +59,7 @@ body_class: home
     <a class="feature-card glass-card" href="{{ '/features/#performance' | relative_url }}">
       <img class="app-icon" src="{{ icons }}speed.svg" alt="">
       <h3>Large files, no wait</h3>
-      <p>A 100 MB file opens in 83 ms. Kode lays out and draws only the lines in view, on a piece table that never copies the text.</p>
+      <p>A 100 MB file opens in 83 ms, and a jump to its end is already colored. Kode lays out and draws only the lines in view, on a piece table that never copies the text.</p>
     </a>
     <a class="feature-card glass-card" href="{{ '/features/#documents' | relative_url }}">
       <img class="app-icon" src="{{ icons }}documents.svg" alt="">
@@ -186,13 +186,13 @@ body_class: home
   <div class="section-head">
     <p class="eyebrow">Performance</p>
     <h2>Flat from 1 MB to 100 MB.</h2>
-    <p class="lead">Kode's editing surface against Qt Quick's own TextEdit, Release build on an Apple M1.</p>
+    <p class="lead">Release build on an Apple M1: Kode's editing surface against Qt Quick's own TextEdit, and the whole app against Xcode and VS Code.</p>
   </div>
   <div class="stats">
     <div class="stat glass-card"><span class="stat-value">83 ms</span><span class="stat-label">to open 100 MB to the first frame</span><span class="stat-compare">TextEdit: 19.6 s</span></div>
     <div class="stat glass-card"><span class="stat-value">12.9 ms</span><span class="stat-label">worst keystroke at 100 MB</span><span class="stat-compare">TextEdit: 1.2 s</span></div>
-    <div class="stat glass-card"><span class="stat-value">32 MB</span><span class="stat-label">of memory for 100 MB of text</span><span class="stat-compare">TextEdit: 1.2 GB</span></div>
-    <div class="stat glass-card"><span class="stat-value">17 ms</span><span class="stat-label">to estimate wrapping for 100 MB</span><span class="stat-compare">on open and on resize</span></div>
+    <div class="stat glass-card"><span class="stat-value">7 ms</span><span class="stat-label">to color a jump to the end of 100 MB</span><span class="stat-compare">from the top: 22 s</span></div>
+    <div class="stat glass-card"><span class="stat-value">500 MB</span><span class="stat-label">with 100 MB of C++ open and highlighted</span><span class="stat-compare">VS Code: 1.2 GB · Xcode: 3.2 GB</span></div>
   </div>
   <p class="button-note" style="text-align:center">The method and every number are in <a href="{{ site.github_url }}/blob/main/docs/editor-bench.md">editor-bench.md</a>.</p>
 </section>
