@@ -105,29 +105,63 @@ Popup {
     contentItem: Column {
         spacing: 12
 
-        TextField {
-            id: field
-
+        // As Spotlight's: the magnifying glass, then a field without a frame.
+        Item {
             width: parent.width
-            placeholderText: qsTr("Find a file in %1").arg(decodeURIComponent(finder.folder.toString().replace(/\/$/, "").split("/").pop()))
-            font.pixelSize: 15
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Down)
-                    list.currentIndex = Math.min(list.count - 1, list.currentIndex + 1);
-                else if (event.key === Qt.Key_Up)
-                    list.currentIndex = Math.max(0, list.currentIndex - 1);
-                else if (event.key === Qt.Key_PageDown)
-                    list.currentIndex = Math.min(list.count - 1, list.currentIndex + finder.shownRows);
-                else if (event.key === Qt.Key_PageUp)
-                    list.currentIndex = Math.max(0, list.currentIndex - finder.shownRows);
-                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                    finder.choose(list.currentIndex);
-                else if (event.key === Qt.Key_Escape)
-                    finder.close();
-                else
-                    return;
-                event.accepted = true;
+            height: 36
+
+            IconImage {
+                id: magnifier
+
+                anchors.left: parent.left
+                anchors.leftMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+                name: "magnifyingglass"
+                sourceSize.width: 20
+                sourceSize.height: 20
+                color: SystemColors.secondaryLabel
             }
+
+            TextField {
+                id: field
+
+                anchors.left: magnifier.right
+                anchors.leftMargin: 10
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                background: null
+                leftPadding: 0
+                rightPadding: 0
+                color: SystemColors.label
+                placeholderTextColor: SystemColors.tertiaryLabel
+                placeholderText: qsTr("Find a file in %1").arg(decodeURIComponent(finder.folder.toString().replace(/\/$/, "").split("/").pop()))
+                font.pixelSize: 22
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_Down)
+                        list.currentIndex = Math.min(list.count - 1, list.currentIndex + 1);
+                    else if (event.key === Qt.Key_Up)
+                        list.currentIndex = Math.max(0, list.currentIndex - 1);
+                    else if (event.key === Qt.Key_PageDown)
+                        list.currentIndex = Math.min(list.count - 1, list.currentIndex + finder.shownRows);
+                    else if (event.key === Qt.Key_PageUp)
+                        list.currentIndex = Math.max(0, list.currentIndex - finder.shownRows);
+                    else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+                        finder.choose(list.currentIndex);
+                    else if (event.key === Qt.Key_Escape)
+                        finder.close();
+                    else
+                        return;
+                    event.accepted = true;
+                }
+            }
+        }
+
+        // A hairline between the field and the list.
+        Rectangle {
+            width: parent.width
+            height: 1
+            visible: list.count > 0 || field.text.trim() !== ""
+            color: Qt.alpha(SystemColors.label, 0.12)
         }
 
         // While typing: the folder still being listed, or nothing found.

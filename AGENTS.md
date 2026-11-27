@@ -30,7 +30,7 @@ Guidance for AI agents working in this repository.
 - `external/rask` — the shared `Rask.*` modules, a git submodule
   (`git submodule update --init`). Kode uses `Rask.Window` (`NativeWindow`),
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
-  (`SearchBar`, `HelpTag` for tooltips, `OverlayScrollBar` for the editor's
+  (`SearchBar`, `FilledTextField` for ⌘L's field, `HelpTag` for tooltips, `OverlayScrollBar` for the editor's
   and the sidebar's scroll bars, the Settings controls), `Rask.Dialogs`
   (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler` with the "Open in Kode" Service,
@@ -144,7 +144,7 @@ Guidance for AI agents working in this repository.
   a blur of its content (`behind`, the window's SplitView — not its
   contentItem, which holds the overlay: a recursive capture; an opaque
   base under the blur, the editor's background being transparent), a
-  field and `FileSearch`'s list: each file's name with the letters found
+  field as Spotlight's (a magnifying glass, no frame) and `FileSearch`'s list: each file's name with the letters found
   marked, its path ("~"); ↑ ↓ choose, Return opens in the window's active
   split, Escape closes.
 - `src/FileSearch.{h,cpp}` — `FileSearch`: a folder's files (listed on a

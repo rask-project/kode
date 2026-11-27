@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 
+import Rask.Controls
 import Rask.Platform
 
 // A small field for "line" or "line:column", in the style of Xcode's.
@@ -26,7 +27,7 @@ Popup {
         field.forceActiveFocus();
     }
 
-    contentItem: TextField {
+    contentItem: FilledTextField {
         id: field
 
         placeholderText: qsTr("Line or line:column")
