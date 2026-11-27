@@ -17,6 +17,8 @@ void writeFile(const QString &path, const QByteArray &bytes)
     file.write(bytes);
 }
 
+constexpr qsizetype largeSize{qsizetype{3} * 1024 * 1024};
+
 QByteArray readFile(const QString &path)
 {
     QFile file{path};
@@ -266,6 +268,59 @@ void TestDocument::ignoresItsOwnSaves()
     editor.insert(QStringLiteral("again "));
     QVERIFY(!changed.wait(500));
     QCOMPARE(editor.text(), QStringLiteral("more again text\n"));
+}
+
+void TestDocument::readsALargeFileOffTheGuiThread()
+{
+    const QUrl url{writeLargeFile(QStringLiteral("large.cpp"))};
+    kode::EditorView editor;
+    kode::Document document;
+    editor.setDocument(document.textDocument());
+    QSignalSpy loaded{&document, &kode::Document::loadingChanged};
+    QVERIFY(document.load(url));
+    QVERIFY(document.loading());
+    QVERIFY(loaded.wait());
+    QVERIFY(!document.loading());
+    QVERIFY(document.crlf());
+    QVERIFY(editor.text().startsWith(QStringLiteral("int value = 42; // the answer\nint")));
+}
+
+void TestDocument::namesALargeFileWhileReadingIt()
+{
+    kode::Document document;
+    QVERIFY(document.load(writeLargeFile(QStringLiteral("named.cpp"))));
+    QCOMPARE(document.fileName(), QStringLiteral("named.cpp"));
+    QVERIFY(!document.modified());
+}
+
+void TestDocument::refusesToSaveWhileReading()
+{
+    kode::Document document;
+    const QSignalSpy errors{&document, &kode::Document::errorOccurred};
+    QVERIFY(document.load(writeLargeFile(QStringLiteral("unsaved.cpp"))));
+    // Its text is not there yet: saving would empty the file.
+    QVERIFY(!document.save());
+    QCOMPARE(errors.size(), 1);
+}
+
+void TestDocument::reportsALargeFileItCannotRead()
+{
+    // Bytes that are not UTF-8 (read as Windows-1252), then asked for as UTF-8.
+    writeFile(path(QStringLiteral("odd.txt")), QByteArray(largeSize, '\xE9'));
+    kode::Document document;
+    QSignalSpy failed{&document, &kode::Document::loadFailed};
+    QVERIFY(document.load(QUrl::fromLocalFile(path(QStringLiteral("odd.txt")))));
+    // A reopen replaces the first read: only its result counts.
+    QVERIFY(document.reopen(QStringLiteral("UTF-8")));
+    QVERIFY(failed.wait());
+}
+
+QUrl TestDocument::writeLargeFile(const QString &name) const
+{
+    // Past the size read on a worker thread, with CRLF line endings.
+    const QByteArray line{"int value = 42; // the answer\r\n"};
+    writeFile(path(name), line.repeated(largeSize / line.size()));
+    return QUrl::fromLocalFile(path(name));
 }
 
 QTEST_MAIN(TestDocument)

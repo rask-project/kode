@@ -87,6 +87,8 @@ public:
     // Replaces everything: no undo history, not modified, the default
     // indentation. `keepPlace`: views keep their caret and scroll (a reload).
     void setText(const QString &text, bool keepPlace = false);
+    // The same with the text already in a buffer (built off the GUI thread).
+    void setBuffer(TextBuffer buffer, bool keepPlace = false);
     // Replaces `count` characters at `position` with `text`, recorded for
     // undo with the caret before it; typing merges into the previous edit
     // while `mergeable`.

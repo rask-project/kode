@@ -389,6 +389,8 @@ Item {
         id: textEditor
 
         visible: pane.document !== null
+        // A large file still being read: nothing to edit yet.
+        enabled: !(pane.document?.loading ?? false)
         anchors.top: searchBar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
@@ -410,6 +412,13 @@ Item {
         editor.onContextMenuRequested: pane.contextMenuRequested()
     }
 
+    Label {
+        anchors.centerIn: textEditor
+        visible: pane.document?.loading ?? false
+        text: qsTr("Opening “%1”…").arg(pane.title)
+        color: SystemColors.secondaryLabel
+    }
+
     Loader {
         id: statusBar
 
@@ -417,7 +426,7 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 26
-        active: pane.document !== null
+        active: pane.document !== null && !pane.document.loading
 
         sourceComponent: StatusBar {
             editor: textEditor.editor

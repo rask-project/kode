@@ -20,7 +20,7 @@ namespace kode
 // EditorViews), loaded from the file and saved back. The file's encoding (detected, or chosen with reopen()), byte
 // order mark and line ending (LF or CRLF) are kept unless changed; saving goes through QSaveFile, so a failed write
 // leaves the file as it was. A change to the file by another program reloads it when there are no unsaved changes, else
-// emits changedOnDisk().
+// emits changedOnDisk(). A large file is read and decoded on a worker thread (`loading` meanwhile).
 class Document : public QObject
 {
     Q_OBJECT
@@ -39,6 +39,8 @@ class Document : public QObject
     // Lines end with CRLF (else LF).
     Q_PROPERTY(bool crlf READ crlf WRITE setCrlf NOTIFY formatChanged)
     Q_PROPERTY(QStringList encodings READ encodings CONSTANT)
+    // A large file is being read: the text shows when it is ready.
+    Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
 public:
     explicit Document(QObject *parent = nullptr);
 
@@ -54,8 +56,10 @@ public:
     [[nodiscard]] bool crlf() const noexcept { return (m_flags & Crlf) != 0U; }
     void setCrlf(bool crlf);
     [[nodiscard]] static QStringList encodings() { return codec::encodings(); }
+    [[nodiscard]] bool loading() const noexcept { return (m_flags & Loading) != 0U; }
 
-    // Each returns false and emits errorOccurred() when it fails.
+    // Each returns false and emits errorOccurred() when it fails (a large
+    // file: later, and loadFailed() too if nothing was read before).
     Q_INVOKABLE bool load(const QUrl &fileUrl);
     // Reads the file again as `encoding` (unsaved changes are lost).
     Q_INVOKABLE bool reopen(const QString &encoding);
@@ -77,15 +81,34 @@ signals:
     void errorOccurred(const QString &message);
     // Another program changed the file while it has unsaved changes here.
     void changedOnDisk();
+    void loadingChanged();
+    void loadFailed();
 
 private:
     static constexpr quint64 Crlf{1U << 0U};
     // The encoding or line ending changed since the file was read or saved.
     static constexpr quint64 FormatChanged{1U << 1U};
+    static constexpr quint64 Loading{1U << 2U};
+    // A file was read into it once.
+    static constexpr quint64 Read{1U << 3U};
+    // The views keep their place when the worker's text arrives.
+    static constexpr quint64 KeepPlace{1U << 4U};
+
+    struct Loaded {
+        TextBuffer buffer;
+        codec::Format format;
+        // Crlf or nothing.
+        quint64 flags{0U};
+    };
+    using ReadResult = std::expected<Loaded, QString>;
 
     // Reads the file as `encoding` (detected when empty); views keep their
     // place when `keepPlace`.
     bool read(const QUrl &fileUrl, const QString &encoding, bool keepPlace);
+    // Any thread.
+    [[nodiscard]] static ReadResult readFile(const QString &path, const QString &encoding);
+    bool finishRead(const QUrl &fileUrl, ReadResult result, bool keepPlace);
+    void setLoading(bool loading);
     [[nodiscard]] std::expected<void, QString> write(const QUrl &fileUrl) const;
     void setFileUrl(const QUrl &fileUrl);
     void setFormatChanged(bool changed);
@@ -103,6 +126,8 @@ private:
     qint64 m_fileSize{-1};
     quint64 m_flags{0U};
     qint64 m_untitledNumber{1};
+    // Bumped by each read: a worker's result for an older one is dropped.
+    quint64 m_generation{0};
 };
 
 } // namespace kode

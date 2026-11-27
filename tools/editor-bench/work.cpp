@@ -2,12 +2,15 @@
 // (Stage 10), on one file, and prints one line of results:
 //
 //   kode-work-bench FILE
-//       size_mb read_ms decode_ms set_text_ms highlight_all_ms search_ms
-//       search_sliced_ms replace_all_ms undo_ms reindent_all_ms save_ms
+//       size_mb read_ms decode_ms set_text_ms load_blocking_ms load_ms
+//       highlight_all_ms search_ms search_sliced_ms replace_all_ms undo_ms
+//       reindent_all_ms save_ms
 //
 // read: the file's bytes; decode: detecting and decoding them, line endings
 // made '\n'; set text: the buffer and its line index, the indentation
-// detected (Document::load() is the three); highlight all: every line's
+// detected (Document::load() is the three); load blocking: what
+// Document::load() blocks the GUI thread for (a large file is read on a
+// worker); load: until its text is there; highlight all: every line's
 // state as C++, from the top; search: finding "Q_OBJECT" in one go;
 // search sliced: the same in the view's 3 ms slices from the event loop,
 // until done (the wall time, not blocking); replace all and undo: the
@@ -80,9 +83,17 @@ int main(int argc, char *argv[])
     })};
 
     kode::Document document;
-    if (!document.load(QUrl::fromLocalFile(path))) {
+    QElapsedTimer loadTimer;
+    loadTimer.start();
+    bool loaded{false};
+    const qreal loadBlockingMs{measure([&] { loaded = document.load(QUrl::fromLocalFile(path)); })};
+    if (!loaded) {
         return 1;
     }
+    while (document.loading()) {
+        QCoreApplication::processEvents(QEventLoop::WaitForMoreEvents);
+    }
+    const qreal loadMs{static_cast<qreal>(loadTimer.nsecsElapsed()) / 1.0e6};
     kode::TextDocument &textDocument{*document.textDocument()};
     textDocument.setSyntax(QStringLiteral("C++"));
     const qsizetype lastLine{textDocument.buffer().lineCount() - 1};
@@ -118,11 +129,13 @@ int main(int argc, char *argv[])
     })};
 
     std::printf(
-        "%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n",
+        "%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n",
         sizeMegabytes,
         readMs,
         decodeMs,
         setTextMs,
+        loadBlockingMs,
+        loadMs,
         highlightMs,
         searchMs,
         searchSlicedMs,

@@ -132,6 +132,12 @@ Apple M1 with 8 GB, macOS 27.2.1, Qt 6.12.0, on 2026-11-26.
   follows (14 s, against 0.2 s without re-indenting).
 - **Saving** blocks for about 0.2 s at 100 MB.
 
+Opening off the GUI thread (from 2 MB on: reading, decoding and the line
+index on a worker): `Document::load()` now blocks for 0.1 ms at 10 and
+100 MB, and the text shows 27 ms and 213 ms later; smaller files are still
+read in place (1.2 MB: 11 ms, most of it loading the syntax definitions the
+first time).
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal

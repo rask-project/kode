@@ -158,6 +158,8 @@ Document *OpenDocuments::adopt(Pointer document)
     disconnect(adopted, nullptr, this, nullptr);
     connect(adopted, &Document::errorOccurred, this, &OpenDocuments::errorOccurred);
     connect(adopted, &Document::changedOnDisk, this, [this, adopted] { emit changedOnDisk(adopted); });
+    // A large file that could not be read after all: it was never open.
+    connect(adopted, &Document::loadFailed, this, [this, adopted] { close(adopted); });
     // Saving an untitled document names it: the others are numbered again.
     connect(adopted, &Document::fileUrlChanged, this, [this] {
         numberUntitled();

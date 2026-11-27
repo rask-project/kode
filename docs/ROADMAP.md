@@ -466,10 +466,12 @@ Editing stays on the GUI thread: Qt Quick items, input and accessibility
 live there, a keystroke lays out one line, and documents not in view cost
 nothing. A thread per document would add a round trip and locks to every
 keystroke for no gain. What moves is the work that grows with the file and
-cannot be sliced well, measured first with `kode-editor-bench`:
+cannot be sliced well, measured first (`kode-work-bench`,
+`docs/editor-bench.md`):
 
-- Opening: reading and decoding (`TextCodec`) a large file without
-  blocking the window; the view shows it when it is ready.
+- Done: opening — from 2 MB on, reading, decoding (`TextCodec`) and the
+  `TextBuffer`'s line index on a worker; the view shows "Opening…" and
+  then the text (100 MB: 0.1 ms blocking instead of ~230 ms).
 - Highlighting ahead of the view (a jump far down a large file).
 - Find and Replace All over the whole text (today 3 ms slices on the GUI
   thread: never blocking, but slower in total).

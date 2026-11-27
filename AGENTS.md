@@ -157,7 +157,10 @@ Guidance for AI agents working in this repository.
   in QSettings `session/folders` (JSON by canonical folder URL:
   `OpenDocuments::cleanFolder()` resolves links, as the Finder does).
 - `src/Document.{h,cpp}` — `Document` (QML type): an open file; owns its
-  text (`textDocument`, a `TextDocument`), loads it and saves it back through `QSaveFile`, keeping its encoding,
+  text (`textDocument`, a `TextDocument`), loads it (from 2 MB on, read,
+  decoded and indexed into a `TextBuffer` on `QThreadPool::globalInstance()`
+  through a `QPromise`, `loading` meanwhile, the result dropped if a later
+  read or the document's end came first; the view says "Opening…") and saves it back through `QSaveFile`, keeping its encoding,
   byte order mark and line ending (changing them marks it modified);
   `reopen()` reads it again in another encoding. A `QFileSystemWatcher` on
   the file and its folder (a file replaced by renaming comes back there)

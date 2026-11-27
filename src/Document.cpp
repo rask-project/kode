@@ -3,7 +3,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFuture>
+#include <QPromise>
 #include <QSaveFile>
+#include <QThreadPool>
 
 namespace kode
 {
@@ -12,6 +15,8 @@ namespace
 {
 
 const QString crlfText{QStringLiteral("\r\n")};
+// Files from this size on are read off the GUI thread (about 7 ms of work on the GUI thread).
+constexpr qint64 backgroundSize{qint64{2} * 1024 * 1024};
 
 } // namespace
 
@@ -157,28 +162,67 @@ void Document::checkFile()
 bool Document::read(const QUrl &fileUrl, const QString &encoding, bool keepPlace)
 {
     const QString path{fileUrl.toLocalFile()};
+    const quint64 generation{++m_generation};
+    if (QFileInfo{path}.size() < backgroundSize) {
+        setLoading(false);
+        return finishRead(fileUrl, readFile(path, encoding), keepPlace);
+    }
+    setLoading(true);
+    m_flags = keepPlace ? (m_flags | KeepPlace) : (m_flags & ~KeepPlace);
+    setFileUrl(fileUrl);
+    QPromise<ReadResult> promise;
+    QFuture<ReadResult> future{promise.future()};
+    QThreadPool::globalInstance()->start([promise = std::move(promise), path, encoding]() mutable {
+        promise.start();
+        promise.addResult(readFile(path, encoding));
+        promise.finish();
+    });
+    // Not run if this document is gone by then.
+    future.then(this, [this, generation, fileUrl](ReadResult result) {
+        if (generation != m_generation) {
+            return;
+        }
+        setLoading(false);
+        const bool readBefore{(m_flags & Read) != 0U};
+        if (!finishRead(fileUrl, std::move(result), (m_flags & KeepPlace) != 0U) && !readBefore) {
+            emit loadFailed();
+        }
+    });
+    return true;
+}
+
+Document::ReadResult Document::readFile(const QString &path, const QString &encoding)
+{
     QFile file{path};
     if (!file.open(QIODevice::ReadOnly)) {
-        emit errorOccurred(tr("“%1” could not be opened: %2").arg(path, file.errorString()));
-        return false;
+        return std::unexpected{tr("“%1” could not be opened: %2").arg(path, file.errorString())};
     }
     const QByteArray bytes{file.readAll()};
     codec::Format format{codec::detect(bytes)};
     if (!encoding.isEmpty() && encoding != format.encoding) {
         format = {.encoding = encoding, .byteOrderMark = {}};
     }
-    const std::optional<QString> text{codec::decode(bytes.sliced(format.byteOrderMark.size()), format.encoding)};
+    std::optional<QString> text{codec::decode(bytes.sliced(format.byteOrderMark.size()), format.encoding)};
     if (!text) {
-        emit errorOccurred(tr("“%1” is not valid %2 text.").arg(path, format.encoding));
+        return std::unexpected{tr("“%1” is not valid %2 text.").arg(path, format.encoding)};
+    }
+    const bool crlf{text->contains(crlfText)};
+    if (crlf) {
+        text->replace(crlfText, QStringLiteral("\n"));
+    }
+    return Loaded{.buffer = TextBuffer{std::move(*text)}, .format = std::move(format), .flags = crlf ? Crlf : 0U};
+}
+
+bool Document::finishRead(const QUrl &fileUrl, ReadResult result, bool keepPlace)
+{
+    if (!result) {
+        emit errorOccurred(result.error());
         return false;
     }
-    const bool fileCrlf{text->contains(crlfText)};
-    QString lines{*text};
-    lines.replace(crlfText, QStringLiteral("\n"));
-    m_format = format;
-    m_flags = fileCrlf ? Crlf : 0U;
+    m_format = std::move(result->format);
+    m_flags = (m_flags & Loading) | Read | result->flags;
     // Also clears the undo history and the modified state.
-    m_text.setText(lines, keepPlace);
+    m_text.setBuffer(std::move(result->buffer), keepPlace);
     m_text.detectSyntax(fileUrl.fileName());
     m_text.detectIndentation();
     setFileUrl(fileUrl);
@@ -186,6 +230,15 @@ bool Document::read(const QUrl &fileUrl, const QString &encoding, bool keepPlace
     emit formatChanged();
     emit modifiedChanged();
     return true;
+}
+
+void Document::setLoading(bool loading)
+{
+    if (this->loading() == loading) {
+        return;
+    }
+    m_flags = loading ? (m_flags | Loading) : (m_flags & ~Loading);
+    emit loadingChanged();
 }
 
 bool Document::save()
@@ -199,6 +252,11 @@ bool Document::save()
 
 bool Document::saveAs(const QUrl &fileUrl)
 {
+    // Its text is not there yet: saving would empty the file.
+    if (loading()) {
+        emit errorOccurred(tr("“%1” is still being opened.").arg(fileName()));
+        return false;
+    }
     if (const std::expected<void, QString> written{write(fileUrl)}; !written) {
         emit errorOccurred(written.error());
         return false;

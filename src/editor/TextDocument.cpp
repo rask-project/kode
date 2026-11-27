@@ -121,9 +121,14 @@ void TextDocument::detectIndentation()
 
 void TextDocument::setText(const QString &text, bool keepPlace)
 {
+    setBuffer(TextBuffer{text}, keepPlace);
+}
+
+void TextDocument::setBuffer(TextBuffer buffer, bool keepPlace)
+{
     const bool wasModified{modified()};
     const bool hadHistory{!m_undo.isEmpty()};
-    m_buffer = TextBuffer{text};
+    m_buffer = std::move(buffer);
     m_highlighter->reset();
     m_undo.clear();
     m_undoIndex = 0;
