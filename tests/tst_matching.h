@@ -10,6 +10,7 @@ private slots:
     void matchesBracketsAcrossLines();
     void prefersTheBracketAfterTheCaret();
     void noMatchWhenUnbalancedOrTooFar();
+    void skipsBracketsInCommentsAndStrings();
     void findsTheWordAtAColumn();
     void findsWholeWordsOnly();
 };

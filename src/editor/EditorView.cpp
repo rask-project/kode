@@ -79,6 +79,18 @@ qsizetype shifted(qsizetype at, qsizetype position, qsizetype removed, qsizetype
 // How far the bracket matching the one at the caret is searched for.
 constexpr qsizetype bracketSearchLines{2000};
 
+// Brackets in comments and strings aside, as far as highlighting has gone.
+std::optional<matching::BracketPair>
+bracketPair(const TextBuffer &buffer, SyntaxHighlighter &highlighter, qsizetype position)
+{
+    return matching::matchingBracket(
+        buffer,
+        position,
+        bracketSearchLines,
+        [&highlighter](qsizetype line, QStringView text) { return highlighter.nonCode(line, text); }
+    );
+}
+
 // What a text node shows: refilled only when its color changes (the layout
 // behind a key never changes).
 struct Shown {
@@ -1307,9 +1319,7 @@ void EditorView::alignClosing()
     if (m_cursor - lineStart != leading.size() + 1 || !QStringView{u")]}"}.contains(text.at(leading.size()))) {
         return;
     }
-    const std::optional<matching::BracketPair> pair{
-        matching::matchingBracket(buffer(), m_cursor - 1, bracketSearchLines)
-    };
+    const std::optional<matching::BracketPair> pair{bracketPair(buffer(), highlighter(), m_cursor - 1)};
     if (!pair || pair->match >= pair->bracket) {
         return;
     }
@@ -2091,9 +2101,7 @@ void EditorView::layoutMarks()
     const auto rowAt{[this](qsizetype line) {
         return std::ranges::find_if(m_rows, [line](const Row &row) { return row.line == line; });
     }};
-    if (const std::optional<matching::BracketPair> pair{
-            matching::matchingBracket(buffer(), m_cursor, bracketSearchLines)
-        }) {
+    if (const std::optional<matching::BracketPair> pair{bracketPair(buffer(), highlighter(), m_cursor)}) {
         for (const qsizetype position : {pair->bracket, pair->match}) {
             const qsizetype line{buffer().lineAt(position)};
             const auto row{rowAt(line)};

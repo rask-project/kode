@@ -288,9 +288,9 @@ file name and shebang; Breeze light/dark following `Appearance`
 (`docs/editor-bench.md`). Then: a status bar (line and column, the
 syntax with a native menu of every definition by section), the bracket
 pairing with the one at the caret and the word at the caret with its
-occurrences in view marked behind the text. Left: off-thread
-highlighting if large files need it (Stage 10), and brackets inside strings and
-comments (today matched like any other).
+occurrences in view marked behind the text (brackets in comments and
+strings aside, as far as highlighting has gone). Left: off-thread
+highlighting if large files need it (Stage 10).
 
 - **KSyntaxHighlighting** (KDE Frameworks, MIT, 300+ languages, themes;
   QtCore/QtGui only) through `AbstractHighlighter`, line by line: each line

@@ -36,6 +36,22 @@ void TestMatching::noMatchWhenUnbalancedOrTooFar()
     QVERIFY(!kode::matching::matchingBracket(far, 2, 10));
 }
 
+void TestMatching::skipsBracketsInCommentsAndStrings()
+{
+    const kode::TextBuffer buffer{QStringLiteral("f(\")\" // )\n)")};
+    // The string ")" at 2–4 and the comment at 6–9, line 0.
+    const kode::matching::NonCode nonCode{[](qsizetype line, QStringView) {
+        return line == 0 ? QList<kode::indentation::Span>{{.start = 2, .end = 5}, {.start = 6, .end = 10}}
+                         : QList<kode::indentation::Span>{};
+    }};
+    QCOMPARE(kode::matching::matchingBracket(buffer, 1, 10, nonCode), (BracketPair{.bracket = 1, .match = 11}));
+    QCOMPARE(kode::matching::matchingBracket(buffer, 12, 10, nonCode), (BracketPair{.bracket = 11, .match = 1}));
+    // A bracket in a string is not matched at all.
+    QVERIFY(!kode::matching::matchingBracket(buffer, 3, 10, nonCode));
+    // Without them, the string's ")" closes it.
+    QCOMPARE(kode::matching::matchingBracket(buffer, 1, 10), (BracketPair{.bracket = 1, .match = 3}));
+}
+
 void TestMatching::findsTheWordAtAColumn()
 {
     QCOMPARE(kode::matching::wordAt(u"int value_1 = 2;", 6), (Range{.start = 4, .end = 11}));
