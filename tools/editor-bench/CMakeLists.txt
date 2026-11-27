@@ -23,6 +23,8 @@ qt_add_qml_module(kode_editor_bench
         ../../src/editor/Indentation.cpp
         ../../src/editor/Matching.h
         ../../src/editor/Matching.cpp
+        ../../src/editor/Minimap.h
+        ../../src/editor/Minimap.cpp
         ../../src/editor/WrapIndex.h
         ../../src/editor/WrapIndex.cpp
         ../../src/editor/TextSearch.h

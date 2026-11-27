@@ -194,6 +194,52 @@ processes. Apple M1 with 8 GB, macOS 27.2.1, on 2026-11-27.
   of it was compressed (37 MB resident), and scrolling and jumping in the
   file were slow.
 
+## Minimap
+
+Stage 11: `kode-editor-bench minimap` is the `editorview` case with the
+`Minimap` beside the view (100 pt wide, 2 pt a line: ~350 lines shown);
+`run.sh` with `MODES="editorview minimap"`. Release build, Apple M1 with
+8 GB, macOS 27.2.1, Qt 6.12.0, on 2026-11-27. Two columns are new: 30
+Returns (each moves every line below it) and 120 short scrolls of 48 pt
+from the middle, as a trackpad does.
+
+"Update" is measured from the window's update request now: the threaded
+render loop polishes the items (the editor's layout, the minimap's lines)
+*before* `afterAnimating`, so the update columns of the tables above,
+timed from there, leave layout out; they are synchronization only.
+
+| Editor | Size (MB) | Keystroke update avg (ms) | Keystroke update max (ms) | Return update avg (ms) | Return update max (ms) | Scroll jump update avg (ms) | Scroll jump update max (ms) | Short scroll update avg (ms) | Short scroll update max (ms) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| EditorView | 1.2 | 1.51 | 4.66 | 0.60 | 2.17 | 4.50 | 11.11 | 0.73 | 4.75 |
+| + minimap | 1.2 | 1.79 | 5.11 | 1.14 | 2.67 | 5.50 | 10.10 | 1.21 | 3.17 |
+| EditorView | 10.0 | 3.69 | 5.03 | 0.90 | 2.19 | 5.89 | 11.10 | 1.07 | 2.75 |
+| + minimap | 10.0 | 3.84 | 8.24 | 1.31 | 2.78 | 6.70 | 10.52 | 1.50 | 2.62 |
+| EditorView | 100.1 | 4.37 | 4.85 | 4.31 | 4.61 | 5.59 | 10.34 | 3.39 | 4.87 |
+| + minimap | 100.1 | 4.38 | 4.99 | 4.37 | 4.70 | 6.56 | 10.72 | 3.30 | 4.69 |
+
+- **CPU**: the minimap adds about 0.5 ms to a Return (the lines below
+  move: their chunks are filled again), about 1 ms to a jump (its ~350
+  lines highlighted and measured, in 2 ms slices, over a frame or two)
+  and up to 0.5 ms to a short scroll (the lines coming in); a keystroke
+  costs about the same. A second run gave the same picture, with one
+  66 ms frame in a short scroll at 10 MB that did not repeat. At 10 and
+  100 MB typing in the middle, highlighting has not got there: both cases
+  pay the view's 4 ms slice in its layout.
+- It used to highlight ahead itself, in 3 ms slices, on top of the
+  view's: +3.1 ms every frame until highlighting got past its lines (7.5
+  against 4.4 ms a keystroke at 100 MB). It now takes the view's
+  highlighting, which runs 1 000 lines ahead of the view and so covers the
+  minimap's, and draws the lines it has not reached plain until the view's
+  `highlightingAdvanced()` says they are ready.
+- **GPU** (`QSG_RENDERER_DEBUG=render`): each chunk of 64 lines is a batch
+  of its own (its transform is the batch root, so a scroll changes a
+  matrix and uploads nothing): 6–7 batches, 12 000–14 000 vertices of
+  12 bytes, ~160 KB. A short scroll uploads one chunk (the one lines come
+  into, ~25 KB); a jump all of them.
+- **Memory**: the lines it keeps, ~350 with a block (12 bytes) per run of
+  characters in one color: ~100 KB whatever the file's size. Resident
+  size moved by 0–7 MB between runs, within its noise.
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal

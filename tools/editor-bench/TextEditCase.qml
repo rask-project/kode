@@ -18,6 +18,10 @@ Flickable {
         contentY = Math.max(0, contentHeight - height) * fraction;
     }
 
+    function scrollBy(pixels) {
+        contentY = Math.max(0, Math.min(contentY + pixels, contentHeight - height));
+    }
+
     width: 900
     height: 700
     contentWidth: width

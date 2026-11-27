@@ -3,7 +3,8 @@
 # prints a Markdown table (paste it into docs/editor-bench.md).
 #
 # Usage: tools/editor-bench/run.sh [BUILD_DIR]
-#        MODES="editorview" tools/editor-bench/run.sh …   (one editor only)
+#        MODES="editorview minimap" tools/editor-bench/run.sh …   (some cases only)
+# Modes: textedit, editorview, minimap (EditorView with the minimap beside it).
 # The files are made from Kode's and rask's sources, repeated, in
 # $TMPDIR/kode-bench. Each case runs in its own process and window.
 set -euo pipefail
@@ -25,11 +26,11 @@ for mb in 1 10 100; do
     while (($(stat -f %z "$file") < mb * 1024 * 1024)); do cat "$seed" >>"$file"; done
 done
 
-echo "| Editor | Size (MB) | Open to first frame (ms) | Keystroke update avg (ms) | Keystroke update max (ms) | Keystroke to screen max (ms) | Scroll update avg (ms) | Scroll update max (ms) | Memory (MB) |"
-echo "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
+echo "| Editor | Size (MB) | Open to first frame (ms) | Keystroke update avg (ms) | Keystroke update max (ms) | Keystroke to screen max (ms) | Return update avg (ms) | Return update max (ms) | Scroll jump update avg (ms) | Scroll jump update max (ms) | Short scroll update avg (ms) | Short scroll update max (ms) | Memory (MB) |"
+echo "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
 for mb in 1 10 100; do
     for mode in ${MODES:-textedit editorview}; do
-        read -r m size open kavg kmax kframe savg smax rss <<<"$("$BENCH" "$mode" "$DIR/code-${mb}mb.txt")"
-        echo "| $m | $size | $open | $kavg | $kmax | $kframe | $savg | $smax | $rss |"
+        read -r m size open kavg kmax kframe ravg rmax savg smax tavg tmax rss <<<"$("$BENCH" "$mode" "$DIR/code-${mb}mb.txt")"
+        echo "| $m | $size | $open | $kavg | $kmax | $kframe | $ravg | $rmax | $savg | $smax | $tavg | $tmax | $rss |"
     done
 done
