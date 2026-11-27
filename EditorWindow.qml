@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
@@ -256,6 +257,8 @@ ApplicationWindow {
     FileDialog {
         id: openDialog
 
+        // Else the process's working directory: / from the Finder.
+        currentFolder: StandardPaths.writableLocation(StandardPaths.HomeLocation)
         title: qsTr("Open")
         fileMode: FileDialog.OpenFiles
         onAccepted: root.app.openFiles(selectedFiles, root)
@@ -264,6 +267,7 @@ ApplicationWindow {
     FolderDialog {
         id: folderDialog
 
+        currentFolder: StandardPaths.writableLocation(StandardPaths.HomeLocation)
         title: qsTr("Open Folder")
         onAccepted: root.app.openFiles([selectedFolder], root)
     }
@@ -275,6 +279,7 @@ ApplicationWindow {
         // Run after a successful save (closing, quitting…).
         property var then: null
 
+        currentFolder: StandardPaths.writableLocation(StandardPaths.HomeLocation)
         title: qsTr("Save As")
         fileMode: FileDialog.SaveFile
         onAccepted: {
