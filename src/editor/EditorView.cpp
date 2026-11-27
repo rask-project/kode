@@ -391,6 +391,8 @@ void EditorView::attach(TextDocument *document)
     connect(document, &TextDocument::indentationChanged, this, &EditorView::documentIndentationChanged);
     connect(document, &TextDocument::defaultIndentationChanged, this, &EditorView::defaultIndentationChanged);
     connect(document, &TextDocument::diagnosticsChanged, this, &QQuickItem::polish);
+    // Rows whose tokens changed are laid out again; the rest stay.
+    connect(document, &TextDocument::semanticTokensChanged, this, &QQuickItem::polish);
     // A document deleted under the view (its file closed): back to its own.
     if (document != m_ownDocument.get()) {
         connect(document, &QObject::destroyed, this, [this] { setDocument(nullptr); });
@@ -1970,6 +1972,46 @@ qsizetype EditorView::positionAt(const QPointF &point) const
     return positionAtRow(row, point.x() + m_contentX - textLeft());
 }
 
+namespace
+{
+
+// The server's styles in place of the highlighting's where its tokens are,
+// as Qt Creator's replace them (what the token's style leaves unset is the
+// plain text's, not the highlighting's).
+QList<QTextLayout::FormatRange> withSemanticTokens(
+    const QList<QTextLayout::FormatRange> &formats,
+    const QList<TextDocument::SemanticToken> &tokens,
+    SyntaxHighlighter &highlighter
+)
+{
+    QList<QTextLayout::FormatRange> result;
+    result.reserve(formats.size() + tokens.size());
+    for (const QTextLayout::FormatRange &range : formats) {
+        const qint32 end{range.start + range.length};
+        qint32 from{range.start};
+        for (const TextDocument::SemanticToken &token : tokens) {
+            const qint32 tokenEnd{token.column + token.length};
+            if (tokenEnd <= from || token.column >= end) {
+                continue;
+            }
+            if (token.column > from) {
+                result.append({.start = from, .length = token.column - from, .format = range.format});
+            }
+            from = std::max(from, tokenEnd);
+        }
+        if (from < end) {
+            result.append({.start = from, .length = end - from, .format = range.format});
+        }
+    }
+    for (const TextDocument::SemanticToken &token : tokens) {
+        result.append({.start = token.column, .length = token.length, .format = highlighter.semanticFormat(token.style)}
+        );
+    }
+    return result;
+}
+
+} // namespace
+
 EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
 {
     // A row already laid out with the same text, variant and starting state
@@ -1978,20 +2020,34 @@ EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
     auto [variant, state]{composing ? std::pair{m_preeditGeneration, KSyntaxHighlighting::State{}} : rowStart(line)};
     const bool highlighted{variant == Highlighted || variant == Guessed};
     QString text{displayText(line)};
-    const auto reusable{std::ranges::find_if(m_rows, [&text, &state, variant](const Row &row) {
-        return row.layout != nullptr && row.variant == variant && row.text == text && row.state == state;
+    const QList<TextDocument::SemanticToken> &semantic{
+        composing ? QList<TextDocument::SemanticToken>{} : m_document->semanticTokens(line)
+    };
+    const auto reusable{std::ranges::find_if(m_rows, [&text, &state, &semantic, variant](const Row &row) {
+        return row.layout != nullptr && row.variant == variant && row.text == text && row.state == state &&
+               row.semantic == semantic;
     })};
     if (reusable != m_rows.end()) {
         Row row{std::move(*reusable)};
         row.line = line;
         return row;
     }
-    Row row{.id = m_nextRowId++, .line = line, .variant = variant, .text = {}, .layout = {}, .state = std::move(state)};
-    row.layout = layoutText(
-        text,
-        composing ? m_cursor - buffer().lineStart(line) : -1,
+    Row row{
+        .id = m_nextRowId++,
+        .line = line,
+        .variant = variant,
+        .text = {},
+        .layout = {},
+        .state = std::move(state),
+        .semantic = semantic,
+    };
+    QList<QTextLayout::FormatRange> formats{
         highlighted ? highlighter().formats(line, text, row.state) : QList<QTextLayout::FormatRange>{}
-    );
+    };
+    if (!semantic.isEmpty()) {
+        formats = withSemanticTokens(formats, semantic, highlighter());
+    }
+    row.layout = layoutText(text, composing ? m_cursor - buffer().lineStart(line) : -1, formats);
     row.opens = highlighted ? highlighter().openedRegions() : 0;
     row.width = row.layout->lineAt(0).naturalTextWidth();
     row.text = std::move(text);

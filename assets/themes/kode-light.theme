@@ -67,8 +67,8 @@
             "selected-text-color": "#008000"
         },
         "Import": {
-            "text-color": "#00677c",
-            "selected-text-color": "#00677c"
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
         },
         "DataType": {
             "text-color": "#800080",
@@ -157,5 +157,101 @@
         "TemplateFocusedPlaceholder": "#76da98",
         "TemplateReadOnlyPlaceholder": "#f6e6e6",
         "WordWrapMarker": "#ededed"
+    },
+    "semantic-styles": {
+        "Type": {
+            "text-color": "#800080",
+            "selected-text-color": "#800080"
+        },
+        "Namespace": {
+            "text-color": "#008000",
+            "selected-text-color": "#008000"
+        },
+        "Local": {
+            "text-color": "#092e64",
+            "selected-text-color": "#092e64"
+        },
+        "Parameter": {
+            "text-color": "#092e64",
+            "selected-text-color": "#092e64"
+        },
+        "Field": {
+            "text-color": "#800000",
+            "selected-text-color": "#800000"
+        },
+        "Global": {
+            "text-color": "#ce5c00",
+            "selected-text-color": "#ce5c00"
+        },
+        "Enumeration": {
+            "text-color": "#800080",
+            "selected-text-color": "#800080"
+        },
+        "Function": {
+            "text-color": "#00677c",
+            "selected-text-color": "#00677c"
+        },
+        "VirtualMethod": {
+            "text-color": "#00677c",
+            "selected-text-color": "#00677c",
+            "italic": true
+        },
+        "Static": {},
+        "Macro": {
+            "text-color": "#00677c",
+            "selected-text-color": "#00677c"
+        },
+        "Label": {
+            "text-color": "#800000",
+            "selected-text-color": "#800000"
+        },
+        "QmlTypeId": {
+            "text-color": "#800080",
+            "selected-text-color": "#800080"
+        },
+        "QmlLocalId": {
+            "italic": true
+        },
+        "QmlExternalId": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080",
+            "italic": true
+        },
+        "QmlRootObjectProperty": {
+            "italic": true
+        },
+        "QmlScopeObjectProperty": {
+            "italic": true
+        },
+        "QmlExternalObjectProperty": {
+            "text-color": "#000080",
+            "selected-text-color": "#000080",
+            "italic": true
+        },
+        "QmlStateName": {
+            "italic": true
+        },
+        "JsScopeVar": {
+            "text-color": "#2985c7",
+            "selected-text-color": "#2985c7",
+            "italic": true
+        },
+        "JsImportVar": {
+            "text-color": "#0055af",
+            "selected-text-color": "#0055af",
+            "italic": true
+        },
+        "JsGlobalVar": {
+            "text-color": "#0055af",
+            "selected-text-color": "#0055af",
+            "italic": true
+        },
+        "Declaration": {
+            "bold": true
+        },
+        "FunctionDefinition": {},
+        "OutputArgument": {
+            "italic": true
+        }
     }
 }

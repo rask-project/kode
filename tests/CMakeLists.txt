@@ -36,6 +36,8 @@ set(lsp_sources
     ../src/lsp/LanguageServers.cpp
     ../src/lsp/Protocol.h
     ../src/lsp/Protocol.cpp
+    ../src/lsp/SemanticTokens.h
+    ../src/lsp/SemanticTokens.cpp
 )
 
 qt_add_executable(tst_document

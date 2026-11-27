@@ -71,6 +71,14 @@ public:
         qsizetype first{0};
         qsizetype last{0};
     };
+    // A name a language server styled: `length` characters from `column`,
+    // semantic::Category and mixins in `style`.
+    struct SemanticToken {
+        qint32 column{0};
+        qint32 length{0};
+        quint32 style{0U};
+        friend bool operator==(const SemanticToken &, const SemanticToken &) = default;
+    };
     // A problem a language server found in characters [start, end); edits move it.
     struct Diagnostic {
         // The protocol's severities.
@@ -114,6 +122,10 @@ public:
     [[nodiscard]] const QList<Diagnostic> &diagnostics() const noexcept { return m_diagnostics; }
     // Sorted by start.
     void setDiagnostics(QList<Diagnostic> diagnostics);
+    // By line: a server's tokens, until the next ones (edits move them on
+    // their lines; those an edit touches go).
+    void setSemanticTokens(QList<QList<SemanticToken>> lines);
+    [[nodiscard]] const QList<SemanticToken> &semanticTokens(qsizetype line) const;
     [[nodiscard]] qint32 errorCount() const;
     [[nodiscard]] qint32 warningCount() const;
     // The first `limit` diagnostics, for a menu: {position, line, column, message, severity}.
@@ -170,6 +182,7 @@ signals:
     void defaultIndentationChanged();
     // New diagnostics (not those an edit moved).
     void diagnosticsChanged();
+    void semanticTokensChanged();
     void languageServerChanged();
 
 private:
@@ -199,12 +212,14 @@ private:
     static bool merge(Step &last, const Step &next);
     void apply(qsizetype position, const QString &from, const QString &to);
     void applyDefinition(const KSyntaxHighlighting::Definition &definition);
+    void moveSemanticTokens(qsizetype line, qsizetype column, const QString &from, const QString &to);
 
     TextBuffer m_buffer;
     std::unique_ptr<SyntaxHighlighter> m_highlighter;
     QList<Step> m_undo;
     QList<Lines> m_edited;
     QList<Diagnostic> m_diagnostics;
+    QList<QList<SemanticToken>> m_semantic;
     QString m_theme;
     QString m_languageServer;
     QString m_languageServerActivity;

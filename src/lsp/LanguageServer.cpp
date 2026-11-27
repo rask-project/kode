@@ -25,10 +25,20 @@ QJsonObject clientCapabilities()
         {QStringLiteral("general"),
          QJsonObject{{QStringLiteral("positionEncodings"), QJsonArray{QStringLiteral("utf-16")}}}},
         {QStringLiteral("window"), QJsonObject{{QStringLiteral("workDoneProgress"), true}}},
+        {QStringLiteral("workspace"),
+         QJsonObject{{QStringLiteral("semanticTokens"), QJsonObject{{QStringLiteral("refreshSupport"), true}}}}},
         {QStringLiteral("textDocument"),
          QJsonObject{
              {QStringLiteral("synchronization"), QJsonObject{{QStringLiteral("dynamicRegistration"), false}}},
              {QStringLiteral("publishDiagnostics"), QJsonObject{{QStringLiteral("versionSupport"), true}}},
+             {QStringLiteral("semanticTokens"),
+              QJsonObject{
+                  {QStringLiteral("requests"),
+                   QJsonObject{{QStringLiteral("full"), QJsonObject{{QStringLiteral("delta"), true}}}}},
+                  {QStringLiteral("tokenTypes"), QJsonArray{}},
+                  {QStringLiteral("tokenModifiers"), QJsonArray{}},
+                  {QStringLiteral("formats"), QJsonArray{QStringLiteral("relative")}},
+              }},
              // Plain text only: no snippets to expand.
              {QStringLiteral("completion"),
               QJsonObject{
@@ -138,6 +148,23 @@ void LanguageServer::initialize(const QJsonObject &options)
     m_pending.insert(m_nextId++, [this](const QJsonValue &result) {
         const QJsonValue sync{result[QStringLiteral("capabilities")][QStringLiteral("textDocumentSync")]};
         m_sync = sync.isObject() ? sync[QStringLiteral("change")].toInteger(FullSync) : sync.toInteger(FullSync);
+        const QJsonValue semantic{result[QStringLiteral("capabilities")][QStringLiteral("semanticTokensProvider")]};
+        const QJsonValue full{semantic[QStringLiteral("full")]};
+        if (semantic.isObject() && (full.toBool() || full.isObject())) {
+            m_flags |= SemanticTokens;
+            if (full[QStringLiteral("delta")].toBool()) {
+                m_flags |= SemanticDelta;
+            }
+            const QJsonValue legend{semantic[QStringLiteral("legend")]};
+            const QJsonArray types(legend[QStringLiteral("tokenTypes")].toArray());
+            const QJsonArray modifiers(legend[QStringLiteral("tokenModifiers")].toArray());
+            std::ranges::transform(types, std::back_inserter(m_tokenTypes), [](const QJsonValue &type) {
+                return type.toString();
+            });
+            std::ranges::transform(modifiers, std::back_inserter(m_tokenModifiers), [](const QJsonValue &modifier) {
+                return modifier.toString();
+            });
+        }
         const QJsonValue completion{result[QStringLiteral("capabilities")][QStringLiteral("completionProvider")]};
         if (completion.isObject()) {
             m_flags |= Completes;
@@ -218,6 +245,9 @@ void LanguageServer::handle(const QJsonObject &message)
     const QString method{message[QStringLiteral("method")].toString()};
     if (!method.isEmpty() && !id.isUndefined()) {
         answer(message);
+        if (method == QLatin1String("workspace/semanticTokens/refresh")) {
+            emit semanticTokensRefresh();
+        }
         return;
     }
     if (method == QLatin1String("textDocument/publishDiagnostics")) {

@@ -1,5 +1,6 @@
 #include "SyntaxHighlighter.h"
 
+#include "SemanticStyle.h"
 #include "TextBuffer.h"
 
 #include <KSyntaxHighlighting/Definition>
@@ -7,9 +8,12 @@
 #include <KSyntaxHighlighting/Repository>
 #include <KSyntaxHighlighting/Theme>
 
+#include <QColor>
+#include <QFile>
 #include <QFileInfo>
-
 #include <QHash>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <algorithm>
 #include <array>
@@ -22,8 +26,26 @@
 namespace kode
 {
 
+using namespace Qt::StringLiterals;
+
 namespace
 {
+
+// A text style's look in `theme` (no background).
+QTextCharFormat textStyleFormat(const KSyntaxHighlighting::Theme &theme, KSyntaxHighlighting::Theme::TextStyle style)
+{
+    QTextCharFormat format;
+    if (const QRgb color{theme.textColor(style)}; color != 0U) {
+        format.setForeground(QColor::fromRgba(color));
+    }
+    if (theme.isBold(style)) {
+        format.setFontWeight(QFont::Bold);
+    }
+    if (theme.isItalic(style)) {
+        format.setFontItalic(true);
+    }
+    return format;
+}
 
 // Text a bracket in means nothing to the code.
 bool isNonCode(KSyntaxHighlighting::Theme::TextStyle style)
@@ -208,6 +230,80 @@ void SyntaxHighlighter::setTheme(const KSyntaxHighlighting::Theme &theme)
 {
     AbstractHighlighter::setTheme(theme);
     m_charFormats.clear();
+    readSemanticStyles();
+}
+
+void SyntaxHighlighter::readSemanticStyles()
+{
+    m_semanticStyles.clear();
+    m_semanticFormats.clear();
+    QFile file{theme().filePath()};
+    if (!file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    const QJsonObject styles{QJsonDocument::fromJson(file.readAll()).object().value(u"semantic-styles"_s).toObject()};
+    for (auto style{styles.begin()}; style != styles.end(); ++style) {
+        const QJsonObject value{style.value().toObject()};
+        QTextCharFormat format;
+        if (const QString color{value.value(u"text-color"_s).toString()}; !color.isEmpty()) {
+            format.setForeground(QColor::fromString(color));
+        }
+        if (value.value(u"bold"_s).toBool()) {
+            format.setFontWeight(QFont::Bold);
+        }
+        if (value.value(u"italic"_s).toBool()) {
+            format.setFontItalic(true);
+        }
+        m_semanticStyles.insert(style.key(), format);
+    }
+}
+
+QTextCharFormat SyntaxHighlighter::semanticFormat(quint32 style)
+{
+    if (const auto cached{m_semanticFormats.constFind(style)}; cached != m_semanticFormats.cend()) {
+        return *cached;
+    }
+    const quint32 category{std::min<quint32>(style & semantic::categoryMask, semantic::CategoryCount - 1)};
+    const bool themed{!m_semanticStyles.isEmpty()};
+    QTextCharFormat format{
+        themed ? m_semanticStyles.value(semantic::names.at(category))
+               : textStyleFormat(theme(), semantic::fallbacks.at(category))
+    };
+    if (!themed && category == semantic::VirtualMethod) {
+        format.setFontItalic(true);
+    }
+    // As Qt Creator: the category sets its weight and slant either way (a
+    // color only if it has one); each mixin's color wins, its italic and
+    // bold only add.
+    format.setFontWeight(format.fontWeight() == QFont::Bold ? QFont::Bold : QFont::Normal);
+    format.setFontItalic(format.fontItalic());
+    for (std::size_t bit{0}; bit < semantic::mixinNames.size(); ++bit) {
+        if ((style & (semantic::Declaration << bit)) == 0U) {
+            continue;
+        }
+        const QLatin1StringView name{semantic::mixinNames.at(bit)};
+        QTextCharFormat mixin;
+        if (themed) {
+            mixin = m_semanticStyles.value(name);
+        } else if (name == QLatin1StringView{"Declaration"}) {
+            mixin.setFontWeight(QFont::Bold);
+        } else if (name == QLatin1StringView{"OutputArgument"}) {
+            mixin.setFontItalic(true);
+        } else if (name == QLatin1StringView{"Function"}) {
+            mixin = textStyleFormat(theme(), KSyntaxHighlighting::Theme::Function);
+        }
+        if (mixin.hasProperty(QTextFormat::ForegroundBrush)) {
+            format.setForeground(mixin.foreground());
+        }
+        if (!format.fontItalic() && mixin.fontItalic()) {
+            format.setFontItalic(true);
+        }
+        if (format.fontWeight() == QFont::Normal && mixin.fontWeight() == QFont::Bold) {
+            format.setFontWeight(QFont::Bold);
+        }
+    }
+    m_semanticFormats.insert(style, format);
+    return format;
 }
 
 bool SyntaxHighlighter::isActive() const
@@ -310,7 +406,57 @@ SyntaxHighlighter::formats(qsizetype line, QStringView text, const KSyntaxHighli
     std::ignore = highlightLine(text, start);
     m_collecting = -1;
     m_opened = openRegions(m_regions).size();
+    appendPropertyKeywords(text);
     return m_collected;
+}
+
+void SyntaxHighlighter::appendPropertyKeywords(QStringView text)
+{
+    // As Qt Creator's C++ editor: the words of a Q_PROPERTY(…) are keywords.
+    static constexpr std::array words{
+        u"READ",
+        u"WRITE",
+        u"MEMBER",
+        u"RESET",
+        u"NOTIFY",
+        u"REVISION",
+        u"DESIGNABLE",
+        u"SCRIPTABLE",
+        u"STORED",
+        u"USER",
+        u"CONSTANT",
+        u"FINAL",
+        u"BINDABLE",
+        u"REQUIRED",
+    };
+    static constexpr QStringView macro{u"Q_PROPERTY("};
+    const qsizetype open{text.indexOf(macro)};
+    if (open < 0 || !definition().name().contains(u"C++"_s)) {
+        return;
+    }
+    const qsizetype close{text.indexOf(u')', open)};
+    const QStringView inside{text.sliced(open + macro.size(), (close < 0 ? text.size() : close) - open - macro.size())};
+    const QTextCharFormat keyword{textStyleFormat(theme(), KSyntaxHighlighting::Theme::Keyword)};
+    qsizetype at{0};
+    while (at < inside.size()) {
+        if (!inside.at(at).isLetter()) {
+            ++at;
+            continue;
+        }
+        qsizetype end{at};
+        while (end < inside.size() && (inside.at(end).isLetterOrNumber() || inside.at(end) == u'_')) {
+            ++end;
+        }
+        const QStringView word{inside.sliced(at, end - at)};
+        if (std::ranges::contains(words, word)) {
+            m_collected.append(
+                {.start = static_cast<qint32>(open + macro.size() + at),
+                 .length = static_cast<qint32>(word.size()),
+                 .format = keyword}
+            );
+        }
+        at = end;
+    }
 }
 
 void SyntaxHighlighter::guess(Guess &guess, qsizetype first, qsizetype end, const QDeadlineTimer &deadline)

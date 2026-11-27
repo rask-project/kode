@@ -90,6 +90,10 @@ public:
     // Whether `line` starts inside a comment or string (it must be ready):
     // known from the state it starts in, so asked once per state.
     [[nodiscard]] bool startsInNonCode(qsizetype line);
+    // How a semantic token's `style` (semantic::Category and mixins) looks in
+    // the theme: its "semantic-styles" (Kode's themes, from Qt Creator's
+    // schemes), else the nearest text styles.
+    [[nodiscard]] QTextCharFormat semanticFormat(quint32 style);
     // How many folding regions the line formats() last took opens and leaves open.
     [[nodiscard]] qsizetype openedRegions() const noexcept { return m_opened; }
     // The line where the first region `line` leaves open ends; none when it
@@ -104,6 +108,9 @@ protected:
 
 private:
     [[nodiscard]] QTextCharFormat charFormat(const KSyntaxHighlighting::Format &format);
+    // Qt Creator styles a Q_PROPERTY's words (READ, NOTIFY…) as keywords.
+    void appendPropertyKeywords(QStringView text);
+    void readSemanticStyles();
 
     const TextBuffer *m_buffer{nullptr};
     // The state each line ends in: lines [0, m_valid) are right; while
@@ -111,6 +118,9 @@ private:
     // from before it, and a match at or past m_checkFrom means they are right.
     QList<KSyntaxHighlighting::State> m_states;
     QHash<qint32, QTextCharFormat> m_charFormats;
+    // The theme's "semantic-styles", by Qt Creator's names; empty: it has none.
+    QHash<QString, QTextCharFormat> m_semanticStyles;
+    QHash<quint32, QTextCharFormat> m_semanticFormats;
     QHash<KSyntaxHighlighting::State, bool> m_startsInNonCode;
     QList<QTextLayout::FormatRange> m_collected;
     // The folding regions of the line highlighted last, in order: id + 1

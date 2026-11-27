@@ -368,6 +368,8 @@ private:
         std::unique_ptr<QTextLayout> layout;
         // The highlighting state the line starts in.
         KSyntaxHighlighting::State state;
+        // The language server's tokens it was laid out with.
+        QList<TextDocument::SemanticToken> semantic;
         qreal width{0.0};
         // Its top, relative to m_baseLine's (rows above it may wrap).
         qreal top{0.0};

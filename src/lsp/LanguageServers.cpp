@@ -2,6 +2,7 @@
 
 #include "Document.h"
 #include "LanguageServer.h"
+#include "SemanticTokens.h"
 #include "TextBuffer.h"
 #include "TextDocument.h"
 
@@ -304,6 +305,11 @@ LanguageServers::LanguageServers(QObject *parent) : QObject(parent)
     m_bindTimer.setSingleShot(true);
     m_bindTimer.setInterval(0);
     connect(&m_bindTimer, &QTimer::timeout, this, &LanguageServers::bindScheduled);
+    // Tokens follow typing a moment later, not at each key.
+    constexpr qint32 semanticDelayMs{200};
+    m_semanticTimer.setSingleShot(true);
+    m_semanticTimer.setInterval(semanticDelayMs);
+    connect(&m_semanticTimer, &QTimer::timeout, this, &LanguageServers::semanticScheduled);
     // An interactive login shell, as a terminal starts: PATH is often set in .zshrc.
     m_shell.setProgram(qEnvironmentVariable("SHELL", u"/bin/zsh"_s));
     m_shell.setArguments({u"-ilc"_s, u"printf '\\n%s%s%s' %1 \"$PATH\" %1"_s.arg(pathMarker)});
@@ -630,6 +636,7 @@ void LanguageServers::remove(const Document *document)
         disconnect(found->document->textDocument(), nullptr, this, nullptr);
     }
     m_toBind.remove(document);
+    m_semanticPending.remove(document);
     m_entries.erase(found);
 }
 
@@ -671,6 +678,7 @@ void LanguageServers::bind(Entry &entry)
     LanguageServer *const server{this->server(program.path, program.arguments, serverOptions(program, root), root)};
     entry.server = server;
     entry.uri = QUrl::fromLocalFile(file);
+    entry.languageId = choice->languageId;
     entry.version = 1;
     server->notify(
         u"textDocument/didOpen"_s,
@@ -685,6 +693,74 @@ void LanguageServers::bind(Entry &entry)
         }
     );
     showStatus(entry);
+    scheduleSemantic(document);
+}
+
+void LanguageServers::scheduleSemantic(const Document *document)
+{
+    m_semanticPending.insert(document);
+    m_semanticTimer.start();
+}
+
+void LanguageServers::semanticScheduled()
+{
+    for (const Document *document : std::as_const(m_semanticPending)) {
+        if (const auto found{m_entries.find(document)}; found != m_entries.end()) {
+            requestSemantic(*found);
+        }
+    }
+    m_semanticPending.clear();
+}
+
+void LanguageServers::requestSemantic(Entry &entry)
+{
+    LanguageServer *const server{entry.server != nullptr ? find(entry.server) : nullptr};
+    if (server == nullptr || entry.document == nullptr || !server->semanticTokens()) {
+        return;
+    }
+    const bool delta{server->semanticDelta() && !entry.semanticResultId.isEmpty()};
+    QJsonObject params{{u"textDocument"_s, QJsonObject{{u"uri"_s, entry.uri.toString()}}}};
+    if (delta) {
+        params.insert(u"previousResultId"_s, entry.semanticResultId);
+    }
+    const Document *const document{entry.document};
+    server->request(
+        delta ? u"textDocument/semanticTokens/full/delta"_s : u"textDocument/semanticTokens/full"_s,
+        params,
+        [this, document, version = entry.version](const QJsonValue &result) {
+            semanticTokensFound(document, version, result);
+        }
+    );
+}
+
+void LanguageServers::semanticTokensFound(const Document *document, qint64 version, const QJsonValue &result)
+{
+    const auto found{m_entries.find(document)};
+    if (found == m_entries.end() || found->document == nullptr || found->server == nullptr || !result.isObject()) {
+        return;
+    }
+    // Edited since: these would land on moved text; the edit asked again.
+    if (version != found->version) {
+        return;
+    }
+    if (result[u"edits"_s].isArray()) {
+        applyTokenEdits(found->semanticData, result[u"edits"_s].toArray());
+    } else {
+        const QJsonArray data(result[u"data"_s].toArray());
+        found->semanticData.clear();
+        found->semanticData.reserve(data.size());
+        std::ranges::transform(data, std::back_inserter(found->semanticData), [](const QJsonValue &value) {
+            return static_cast<quint32>(value.toInteger());
+        });
+    }
+    found->semanticResultId = result[u"resultId"_s].toString();
+    const LanguageServer *const server{find(found->server)};
+    if (server == nullptr) {
+        return;
+    }
+    const SemanticLegend legend{server->tokenTypes(), server->tokenModifiers(), found->languageId == u"qml"_s};
+    TextDocument *const text{found->document->textDocument()};
+    text->setSemanticTokens(decodeTokens(found->semanticData, legend, text->buffer().lineCount()));
 }
 
 void LanguageServers::unbind(Entry &entry)
@@ -700,11 +776,14 @@ void LanguageServers::unbind(Entry &entry)
     }
     entry.server = nullptr;
     entry.fileState.clear();
+    entry.semanticData.clear();
+    entry.semanticResultId.clear();
     if (entry.document == nullptr) {
         return;
     }
     TextDocument *const text{entry.document->textDocument()};
     text->setLanguageServer({}, {});
+    text->setSemanticTokens({});
     if (!text->diagnostics().isEmpty()) {
         text->setDiagnostics({});
     }
@@ -786,6 +865,7 @@ void LanguageServers::documentEdited(
             {u"contentChanges"_s, QJsonArray{change}},
         }
     );
+    scheduleSemantic(document);
 }
 
 void LanguageServers::documentReset(const Document *document)
@@ -802,6 +882,7 @@ void LanguageServers::documentReset(const Document *document)
                 {u"contentChanges"_s, QJsonArray{QJsonObject{{u"text"_s, found->document->textDocument()->text()}}}},
             }
         );
+    scheduleSemantic(document);
 }
 
 void LanguageServers::diagnosticsPublished(
@@ -842,9 +923,12 @@ void LanguageServers::serverFinished(const LanguageServer *server)
         }
         entry.server = nullptr;
         entry.fileState.clear();
+        entry.semanticData.clear();
+        entry.semanticResultId.clear();
         if (entry.document != nullptr) {
             entry.document->textDocument()->setDiagnostics({});
             entry.document->textDocument()->setLanguageServer({}, {});
+            entry.document->textDocument()->setSemanticTokens({});
         }
     }
     std::erase_if(m_servers, [server](const std::unique_ptr<LanguageServer> &owned) { return owned.get() == server; });
@@ -880,6 +964,13 @@ LanguageServer *LanguageServers::server(
         [this, key](const QUrl &uri, const QString &state) { fileStatusChanged(key, uri, state); }
     );
     connect(started.get(), &LanguageServer::activityChanged, this, [this, key] { activityChanged(key); });
+    connect(started.get(), &LanguageServer::semanticTokensRefresh, this, [this, key] {
+        for (const Entry &entry : std::as_const(m_entries)) {
+            if (entry.server == key) {
+                scheduleSemantic(entry.document);
+            }
+        }
+    });
     // Queued: the server is deleted then, not from its own signal.
     connect(started.get(), &LanguageServer::finished, this, [this, key] { serverFinished(key); }, Qt::QueuedConnection);
     m_servers.emplace_back(std::move(started));

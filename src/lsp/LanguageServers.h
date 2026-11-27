@@ -111,6 +111,11 @@ private:
         QUrl uri;
         // What the server is doing with it (clangd's file status).
         QString fileState;
+        QString languageId;
+        // Its last semantic tokens as the server sent them, and their id
+        // (for asking only what changed since).
+        QList<quint32> semanticData;
+        QString semanticResultId;
         const LanguageServer *server{nullptr};
         qint64 version{0};
     };
@@ -119,6 +124,11 @@ private:
     // on a server once they settle.
     void scheduleBind(const Document *document);
     void bindScheduled();
+    // Its semantic tokens, asked once edits pause.
+    void scheduleSemantic(const Document *document);
+    void semanticScheduled();
+    void requestSemantic(Entry &entry);
+    void semanticTokensFound(const Document *document, qint64 version, const QJsonValue &result);
     // Opens the document on the server for it, if any, after closing it where it was.
     void bind(Entry &entry);
     void unbind(Entry &entry);
@@ -152,6 +162,8 @@ private:
     QSet<const Document *> m_toBind;
     QProcess m_shell;
     QTimer m_bindTimer;
+    QTimer m_semanticTimer;
+    QSet<const Document *> m_semanticPending;
     QTimer m_shellTimeout;
     QStringList m_searchFolders;
     QVariantList m_found;

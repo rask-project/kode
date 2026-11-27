@@ -17,4 +17,13 @@ private slots:
     void clangdReportsAnError();
     // With clangd installed: completions after "s." list the struct's member.
     void clangdCompletesAMember();
+    // clangd's legend: a variable's scope, virtual, static, a constructor and mixins.
+    void legendStylesAsQtCreator();
+    // The protocol's relative encoding, by line; types without a style skipped.
+    void decodesRelativeTokens();
+    void appliesTokenEdits();
+    // Tokens move with an edit on their line; those it touches go; lines split.
+    void semanticTokensMoveWithEdits();
+    // With clangd installed: a type's name styled as a type.
+    void clangdStylesAType();
 };

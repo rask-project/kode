@@ -130,6 +130,48 @@ void TextDocument::setDiagnostics(QList<Diagnostic> diagnostics)
     emit diagnosticsChanged();
 }
 
+void TextDocument::setSemanticTokens(QList<QList<SemanticToken>> lines)
+{
+    m_semantic = std::move(lines);
+    emit semanticTokensChanged();
+}
+
+const QList<TextDocument::SemanticToken> &TextDocument::semanticTokens(qsizetype line) const
+{
+    static const QList<SemanticToken> none;
+    return line >= 0 && line < m_semantic.size() ? m_semantic.at(line) : none;
+}
+
+void TextDocument::moveSemanticTokens(qsizetype line, qsizetype column, const QString &from, const QString &to)
+{
+    if (line >= m_semantic.size()) {
+        return;
+    }
+    const qsizetype removedLines{newlines(from)};
+    const qsizetype insertedLines{newlines(to)};
+    QList<SemanticToken> &tokens{m_semantic[line]};
+    if (removedLines == 0 && insertedLines == 0) {
+        // Within the line: those after move, those it touches go.
+        const auto shift{static_cast<qint32>(to.size() - from.size())};
+        const qsizetype end{column + from.size()};
+        tokens.removeIf([column, end](const SemanticToken &token) {
+            return token.column < end && token.column + token.length > column;
+        });
+        for (SemanticToken &token : tokens) {
+            if (token.column >= end) {
+                token.column += shift;
+            }
+        }
+        return;
+    }
+    // Lines split or joined: this line keeps what is before the edit, the
+    // lines it removed go, those it inserted have none until the next tokens.
+    tokens.removeIf([column](const SemanticToken &token) { return token.column + token.length > column; });
+    const qsizetype removed{std::min(removedLines, m_semantic.size() - line - 1)};
+    m_semantic.remove(line + 1, removed);
+    m_semantic.insert(line + 1, insertedLines, {});
+}
+
 qint32 TextDocument::errorCount() const
 {
     return static_cast<qint32>(std::ranges::count(m_diagnostics, Diagnostic::Error, &Diagnostic::severity));
@@ -188,6 +230,10 @@ void TextDocument::setBuffer(TextBuffer buffer, bool keepPlace)
     if (!m_diagnostics.isEmpty()) {
         m_diagnostics.clear();
         emit diagnosticsChanged();
+    }
+    if (!m_semantic.isEmpty()) {
+        m_semantic.clear();
+        emit semanticTokensChanged();
     }
     m_undo.clear();
     m_undoIndex = 0;
@@ -353,12 +399,15 @@ void TextDocument::apply(qsizetype position, const QString &from, const QString 
     const qsizetype line{m_buffer.lineAt(position)};
     m_highlighter->linesReplaced(line, newlines(from), newlines(to));
     noteEdited(line, newlines(from), newlines(to));
+    moveSemanticTokens(line, position - m_buffer.lineStart(line), from, to);
     // A diagnostic's ends move with the text after them; inside the edit, to its end.
-    const auto moved{[position, &from, &to](qsizetype at) {
+    const qsizetype removed{from.size()};
+    const qsizetype inserted{to.size()};
+    const auto moved{[position, removed, inserted](qsizetype at) {
         if (at <= position) {
             return at;
         }
-        return at >= position + from.size() ? at + to.size() - from.size() : position + to.size();
+        return at >= position + removed ? at + inserted - removed : position + inserted;
     }};
     for (Diagnostic &diagnostic : m_diagnostics) {
         diagnostic.start = moved(diagnostic.start);
