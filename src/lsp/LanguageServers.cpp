@@ -262,13 +262,9 @@ QUrl rootFor(const QString &file)
 // The folder of the compilation database clangd would not find itself: it
 // looks in the root and in build/, not in a build folder of each
 // configuration (build/Debug, cmake-build-debug…). The newest wins.
-QString compilationDatabase(const QString &root)
+// The folder holding the newest `name` among the root's subfolders and build/'s.
+QString newestBuildFolder(const QString &root, const QString &name)
 {
-    const QString name{u"compile_commands.json"_s};
-    const QDir dir{root};
-    if (dir.exists(name) || dir.exists(u"build/"_s + name)) {
-        return {};
-    }
     QFileInfoList found;
     for (const QString &parent : {root, root + u"/build"_s}) {
         for (const QFileInfo &folder : QDir{parent}.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)) {
@@ -279,6 +275,31 @@ QString compilationDatabase(const QString &root)
     }
     const auto newest{std::ranges::max_element(found, {}, [](const QFileInfo &file) { return file.lastModified(); })};
     return newest != found.cend() ? newest->absolutePath() : QString{};
+}
+
+QString compilationDatabase(const QString &root)
+{
+    const QString name{u"compile_commands.json"_s};
+    const QDir dir{root};
+    if (dir.exists(name) || dir.exists(u"build/"_s + name)) {
+        return {};
+    }
+    return newestBuildFolder(root, name);
+}
+
+// qmlls finds the project's own modules in its build folder (CMake's), and
+// is kept from running CMake builds itself.
+QStringList qmllsArguments(const QString &root)
+{
+    const QString build{
+        QFileInfo::exists(root + u"/build/CMakeCache.txt"_s) ? root + u"/build"_s
+                                                             : newestBuildFolder(root, u"CMakeCache.txt"_s)
+    };
+    QStringList arguments{u"--no-cmake-calls"_s};
+    if (!build.isEmpty()) {
+        arguments << u"-b"_s << build;
+    }
+    return arguments;
 }
 
 QJsonObject serverOptions(const Program &program, const QUrl &root)
@@ -796,7 +817,10 @@ void LanguageServers::bind(Entry &entry)
     }
     const QString file{document->fileUrl().toLocalFile()};
     const QUrl root{rootFor(file)};
-    const Program program{.path = choice->path, .arguments = choice->arguments};
+    Program program{.path = choice->path, .arguments = choice->arguments};
+    if (QFileInfo{program.path}.fileName() == u"qmlls"_s && !program.arguments.contains(u"-b"_s)) {
+        program.arguments << qmllsArguments(root.toLocalFile());
+    }
     LanguageServer *const server{this->server(program.path, program.arguments, serverOptions(program, root), root)};
     entry.server = server;
     entry.uri = QUrl::fromLocalFile(file);
@@ -880,9 +904,16 @@ void LanguageServers::semanticTokensFound(const Document *document, qint64 versi
     if (server == nullptr) {
         return;
     }
-    const SemanticLegend legend{server->tokenTypes(), server->tokenModifiers(), found->languageId == u"qml"_s};
+    const bool qml{found->languageId == u"qml"_s};
+    const SemanticLegend legend{server->tokenTypes(), server->tokenModifiers(), qml};
     TextDocument *const text{found->document->textDocument()};
-    text->setSemanticTokens(decodeTokens(found->semanticData, legend, text->buffer().lineCount()));
+    QList<QList<TextDocument::SemanticToken>> lines{
+        decodeTokens(found->semanticData, legend, text->buffer().lineCount())
+    };
+    if (qml) {
+        refineQmlTokens(lines, text->buffer());
+    }
+    text->setSemanticTokens(std::move(lines));
 }
 
 void LanguageServers::unbind(Entry &entry)

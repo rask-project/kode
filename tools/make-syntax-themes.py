@@ -89,6 +89,11 @@ SEMANTIC_DEFAULTS = {
     "JsScopeVar": {"foreground": "#2985c7", "italic": "true"},
     "JsImportVar": {"foreground": "#0055af", "italic": "true"},
     "JsGlobalVar": {"foreground": "#0055af", "italic": "true"},
+    "Binding": {"foreground": "#800000"},
+    "Keyword": {"foreground": "#808000"},
+    # Kode's own: plain text (no color, the system's), over what the
+    # highlighting would style.
+    "Plain": {},
     "Declaration": {"bold": "true"},
     "FunctionDefinition": {},
     "OutputArgument": {"italic": "true"},

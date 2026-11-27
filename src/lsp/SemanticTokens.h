@@ -48,6 +48,13 @@ private:
 [[nodiscard]] QList<QList<TextDocument::SemanticToken>>
 decodeTokens(const QList<quint32> &data, const SemanticLegend &legend, qsizetype lineCount);
 
+// qmlls's tokens as Qt Creator shows QML, by their text: an id (declared
+// with "id:") in italics, other variables plain; a property's name where it
+// is bound as a binding, read elsewhere plain; value types (url, bool…)
+// plain. Plain is a style of its own: it covers what the highlighting would
+// style there.
+void refineQmlTokens(QList<QList<TextDocument::SemanticToken>> &lines, const TextBuffer &buffer);
+
 // `data` changed by `edits` (SemanticTokensEdit: start, deleteCount, data).
 void applyTokenEdits(QList<quint32> &data, const QJsonArray &edits);
 

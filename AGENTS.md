@@ -169,7 +169,12 @@ Guidance for AI agents working in this repository.
     static members; Declaration,
     FunctionDefinition and OutputArgument mixins; keywords, strings and
     operators left to the highlighting), `decodeTokens()` (the relative
-    encoding, by line) and `applyTokenEdits()` (a delta's edits).
+    encoding, by line), `applyTokenEdits()` (a delta's edits) and
+    `refineQmlTokens()` (qmlls's coarse tokens as Qt Creator shows QML, by
+    their text and the braces around them: types green but value types
+    plain, ids in italics, a property's name starting a statement in a QML
+    object a Binding, the rest plain — Plain is a style of its own, over
+    the highlighting's).
   - `Completion` (a list model, one per `TextEditor.qml`, which draws it
     under the caret; keys before the view: ↑↓, PageUp/Down, Return/Tab,
     Escape) — asks the document's server (`requestCompletion()`, ticket,
@@ -212,6 +217,8 @@ Guidance for AI agents working in this repository.
     Settings (1–2) and a low background-index priority. Settings, bound
     from `Main.qml` to `Preferences`: `enabled`, `searchFolders` (before
     the shell's PATH), `clangdThreads`; a change restarts the servers;
+    qmlls gets the project's build folder (`-b`, the newest with a
+    CMakeCache.txt) and `--no-cmake-calls`;
     servers are looked for only in `searchFolders` then the shell's PATH
     (`shellPath`; nothing else added), `servers` lists each language
     group's server found, `detect()` reads the PATH again. `customServers`

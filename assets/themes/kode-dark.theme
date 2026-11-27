@@ -252,6 +252,16 @@
             "selected-text-color": "#4564d6",
             "italic": true
         },
+        "Binding": {
+            "text-color": "#ff6aad",
+            "selected-text-color": "#ff6aad"
+        },
+        "Keyword": {
+            "text-color": "#45c6d6",
+            "selected-text-color": "#45c6d6",
+            "italic": true
+        },
+        "Plain": {},
         "Declaration": {
             "bold": true
         },

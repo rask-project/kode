@@ -22,6 +22,8 @@ private slots:
     // The protocol's relative encoding, by line; types without a style skipped.
     void decodesRelativeTokens();
     void appliesTokenEdits();
+    // qmlls's tokens as Qt Creator shows QML: bindings, ids, JS plain.
+    void refinesQmlTokens();
     // Tokens move with an edit on their line; those it touches go; lines split.
     void semanticTokensMoveWithEdits();
     // With clangd installed: a type's name styled as a type.

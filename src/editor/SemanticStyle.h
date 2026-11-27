@@ -35,6 +35,11 @@ enum Category : quint8 {
     JsScopeVar,
     JsImportVar,
     JsGlobalVar,
+    // A QML property's name where it is bound ("width: …").
+    Binding,
+    Keyword,
+    // Plain text, over what the highlighting would style.
+    Plain,
     CategoryCount,
 };
 
@@ -67,6 +72,9 @@ inline constexpr std::array<QLatin1StringView, CategoryCount> names{
     QLatin1StringView{"JsScopeVar"},
     QLatin1StringView{"JsImportVar"},
     QLatin1StringView{"JsGlobalVar"},
+    QLatin1StringView{"Binding"},
+    QLatin1StringView{"Keyword"},
+    QLatin1StringView{"Plain"},
 };
 
 // The mixins' names, by bit from Declaration up.
@@ -89,6 +97,8 @@ inline constexpr std::array<KSyntaxHighlighting::Theme::TextStyle, CategoryCount
     KSyntaxHighlighting::Theme::Variable,     KSyntaxHighlighting::Theme::Variable,
     KSyntaxHighlighting::Theme::Variable,     KSyntaxHighlighting::Theme::Variable,
     KSyntaxHighlighting::Theme::Variable,     KSyntaxHighlighting::Theme::Variable,
+    KSyntaxHighlighting::Theme::Attribute,    KSyntaxHighlighting::Theme::Keyword,
+    KSyntaxHighlighting::Theme::Normal,
 };
 
 } // namespace kode::semantic

@@ -279,6 +279,42 @@ void TestLsp::appliesTokenEdits()
     QCOMPARE(data, (QList<quint32>{2, 3, 4, 5, 60, 70}));
 }
 
+void TestLsp::refinesQmlTokens()
+{
+    namespace semantic = kode::semantic;
+    const kode::TextBuffer buffer{u"Item {\n"
+                                  "    id: root\n"
+                                  "    property url file: x ? root.width : 0\n"
+                                  "    function f() { return g({key: 1}); }\n"
+                                  "}\n"_s};
+    // As the legend leaves them: variables Local, properties Field, types QmlTypeId.
+    const auto token{[](qint32 column, qint32 length, quint32 style) {
+        return TextDocument::SemanticToken{.column = column, .length = length, .style = style};
+    }};
+    QList<QList<TextDocument::SemanticToken>> lines{
+        {token(0, 4, semantic::QmlTypeId)},
+        {token(4, 2, semantic::Field), token(8, 4, semantic::Local)},
+        {token(13, 3, semantic::QmlTypeId),
+         token(17, 4, semantic::Field),
+         token(27, 4, semantic::Local),
+         token(32, 5, semantic::Field)},
+        {token(30, 3, semantic::Field)},
+        {},
+    };
+    kode::lsp::refineQmlTokens(lines, buffer);
+    QCOMPARE(lines.at(0).at(0).style, quint32{semantic::QmlTypeId});
+    // "id:" bound; the id in italics.
+    QCOMPARE(lines.at(1).at(0).style, quint32{semantic::Binding});
+    QCOMPARE(lines.at(1).at(1).style, quint32{semantic::QmlScopeObjectProperty});
+    // A value type plain; the property declared with a value bound; a member read plain, even before ':'.
+    QCOMPARE(lines.at(2).at(0).style, quint32{semantic::Plain});
+    QCOMPARE(lines.at(2).at(1).style, quint32{semantic::Binding});
+    QCOMPARE(lines.at(2).at(2).style, quint32{semantic::QmlScopeObjectProperty});
+    QCOMPARE(lines.at(2).at(3).style, quint32{semantic::Plain});
+    // A JavaScript object's key: plain.
+    QCOMPARE(lines.at(3).at(0).style, quint32{semantic::Plain});
+}
+
 void TestLsp::semanticTokensMoveWithEdits()
 {
     TextDocument document;

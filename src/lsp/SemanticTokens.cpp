@@ -4,6 +4,8 @@
 
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QRegularExpression>
+#include <QSet>
 
 #include <algorithm>
 #include <array>
@@ -99,17 +101,25 @@ SemanticLegend::SemanticLegend(const QStringList &types, const QStringList &modi
 {
     m_kinds.reserve(types.size());
     for (const QString &type : types) {
+        // qmlls's "list" (of list<T>): a keyword.
+        if (qml && type == u"decorator"_s) {
+            m_kinds.append(QmlCategory | (semantic::Keyword << categoryShift));
+            continue;
+        }
         const auto found{std::ranges::find(kinds, type, &Named::name)};
         if (found == kinds.cend()) {
             m_kinds.append(Other);
             continue;
         }
-        // A QML type name, as Qt Creator colors it in QML.
-        const bool qmlType{qml && found->kind == TypeLike};
-        m_kinds.append(
-            qmlType ? QmlCategory | (semantic::QmlTypeId << categoryShift)
-                    : found->kind | (found->category << categoryShift)
-        );
+        // In QML as Qt Creator shows it: types as QML types, parameters and
+        // methods plain (variables and properties refined by their text).
+        if (qml && found->kind == TypeLike) {
+            m_kinds.append(QmlCategory | (semantic::QmlTypeId << categoryShift));
+        } else if (qml && (found->kind == Parameter || found->kind == Function)) {
+            m_kinds.append(QmlCategory | (semantic::Plain << categoryShift));
+        } else {
+            m_kinds.append(found->kind | (found->category << categoryShift));
+        }
     }
 }
 
@@ -174,6 +184,152 @@ decodeTokens(const QList<quint32> &data, const SemanticLegend &legend, qsizetype
         }
     }
     return lines;
+}
+
+namespace
+{
+
+// Whether the '{' at `at` in `text` opens a QML object ("Item {", "anchors {",
+// "Behavior on x {"), not a JavaScript block or object (after "(", "=",
+// ":", ")", "=>", "else"…).
+bool opensObject(QStringView text, qsizetype at)
+{
+    const QStringView before{text.first(at).trimmed()};
+    if (before.isEmpty() || !(before.back().isLetterOrNumber() || before.back() == u'_')) {
+        return false;
+    }
+    qsizetype start{before.size()};
+    while (start > 0 && (before.at(start - 1).isLetterOrNumber() || before.at(start - 1) == u'_')) {
+        --start;
+    }
+    static constexpr std::array keywords{u"else", u"try", u"finally", u"do"};
+    return !std::ranges::contains(keywords, before.sliced(start));
+}
+
+// Follows the braces of QML text line by line (strings and comments aside),
+// telling whether a column is directly in a QML object.
+class BraceScanner
+{
+public:
+    // For each of `columns` (ascending) in `text`, the next line: whether it is in a QML object.
+    QList<bool> scan(QStringView text, const QList<qint32> &columns)
+    {
+        QList<bool> inObject;
+        inObject.reserve(columns.size());
+        qsizetype at{0};
+        for (const qint32 column : columns) {
+            while (at < column && at < text.size()) {
+                at = step(text, at);
+            }
+            // The file's top level is a QML object's.
+            inObject.append(m_objects.isEmpty() || m_objects.last());
+        }
+        while (at < text.size()) {
+            at = step(text, at);
+        }
+        return inObject;
+    }
+
+private:
+    static constexpr quint64 InComment{1U << 0U};
+
+    // Takes in what starts at `at` (a character, a quote to its end, a
+    // comment's mark); returns where the next starts.
+    qsizetype step(QStringView text, qsizetype at)
+    {
+        const QChar character{text.at(at)};
+        const QChar following{at + 1 < text.size() ? text.at(at + 1) : QChar{}};
+        if ((m_flags & InComment) != 0U) {
+            if (character == u'*' && following == u'/') {
+                m_flags &= ~InComment;
+                return at + 2;
+            }
+            return at + 1;
+        }
+        if (character == u'/' && following == u'/') {
+            return text.size();
+        }
+        if (character == u'/' && following == u'*') {
+            m_flags |= InComment;
+            return at + 2;
+        }
+        if (character == u'"' || character == u'\'' || character == u'`') {
+            // To its closing quote on this line, escapes aside.
+            qsizetype end{at + 1};
+            while (end < text.size() && text.at(end) != character) {
+                end += text.at(end) == u'\\' ? 2 : 1;
+            }
+            return std::min(end + 1, text.size());
+        }
+        if (character == u'{') {
+            m_objects.append(opensObject(text, at));
+        } else if (character == u'}' && !m_objects.isEmpty()) {
+            m_objects.removeLast();
+        }
+        return at + 1;
+    }
+
+    QList<bool> m_objects;
+    quint64 m_flags{0U};
+};
+
+// A qmlls token's style as Qt Creator shows it in QML.
+quint32 qmlStyle(const TextDocument::SemanticToken &token, const QString &text, const QSet<QString> &ids, bool inObject)
+{
+    const quint32 mixins{token.style & ~semantic::categoryMask};
+    switch (token.style & semantic::categoryMask) {
+    case semantic::Local:
+        // An id in italics, as a property of the scope; other variables plain.
+        return (ids.contains(text.mid(token.column, token.length)) ? semantic::QmlScopeObjectProperty : semantic::Plain
+               ) |
+               mixins;
+    case semantic::Field: {
+        // Bound ("name: …", "property T name: …"); a member read is plain.
+        const qsizetype end{std::min<qsizetype>(text.size(), qsizetype{token.column} + token.length)};
+        const QStringView rest{QStringView{text}.sliced(end).trimmed()};
+        // Starting the statement: alone, after "property T" or a group's
+        // name ("anchors." of anchors.fill).
+        static const QRegularExpression lead{
+            uR"(^(?:(?:(?:readonly|required|default)\s+)*property\s+[\w.<>]+|[\w.]*\.)?$)"_s
+        };
+        const QString before{text.first(std::min<qsizetype>(token.column, text.size())).trimmed()};
+        const bool bound{inObject && rest.startsWith(u':') && !rest.startsWith(u"::") && lead.match(before).hasMatch()};
+        return (bound ? semantic::Binding : semantic::Plain) | mixins;
+    }
+    case semantic::QmlTypeId: {
+        // Value types (url, bool…) plain; var as a type.
+        const QString word{text.mid(token.column, token.length)};
+        const bool valueType{!word.isEmpty() && word.front().isLower() && word != u"var"_s};
+        return valueType ? quint32{semantic::Plain} : token.style;
+    }
+    default:
+        return token.style;
+    }
+}
+
+} // namespace
+
+void refineQmlTokens(QList<QList<TextDocument::SemanticToken>> &lines, const TextBuffer &buffer)
+{
+    static const QRegularExpression idLine{uR"(^\s*id\s*:\s*([A-Za-z_]\w*))"_s};
+    QSet<QString> ids;
+    for (qsizetype line{0}; line < buffer.lineCount(); ++line) {
+        if (const QRegularExpressionMatch match{idLine.match(buffer.line(line))}; match.hasMatch()) {
+            ids.insert(match.captured(1));
+        }
+    }
+    BraceScanner braces;
+    for (qsizetype line{0}; line < lines.size(); ++line) {
+        QList<TextDocument::SemanticToken> &tokens{lines[line]};
+        const QString text{buffer.line(line)};
+        QList<qint32> columns;
+        columns.reserve(tokens.size());
+        std::ranges::transform(tokens, std::back_inserter(columns), &TextDocument::SemanticToken::column);
+        const QList<bool> inObject{braces.scan(text, columns)};
+        for (qsizetype index{0}; index < tokens.size(); ++index) {
+            tokens[index].style = qmlStyle(tokens.at(index), text, ids, inObject.at(index));
+        }
+    }
 }
 
 void applyTokenEdits(QList<quint32> &data, const QJsonArray &edits)

@@ -246,6 +246,15 @@
             "selected-text-color": "#0055af",
             "italic": true
         },
+        "Binding": {
+            "text-color": "#800000",
+            "selected-text-color": "#800000"
+        },
+        "Keyword": {
+            "text-color": "#808000",
+            "selected-text-color": "#808000"
+        },
+        "Plain": {},
         "Declaration": {
             "bold": true
         },
