@@ -6,6 +6,28 @@
     <description>Kode releases</description>
     <language>en</language>
     <item>
+      <title>Kode 1.0.2</title>
+      <link>https://github.com/rask-project/kode/releases/tag/v1.0.2</link>
+      <sparkle:version>1.0.2.1000</sparkle:version>
+      <sparkle:shortVersionString>1.0.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <pubDate>Fri, 27 Nov 2026 01:36:47 GMT</pubDate>
+      <description sparkle:format="markdown"><![CDATA[A fix release.
+
+## Fixes
+
+- **Renaming in the sidebar** ends with Return (keeping the new name) or
+  Escape (keeping the old one), names with spaces included; Return no longer
+  goes on to open the file, and clicking elsewhere in the tree ends the
+  rename.
+- **Files that are not text** (images, archives, binaries) open in the app
+  macOS uses for them instead of in the editor.
+- **Bracket matching** skips brackets in comments and strings: a `)` inside
+  a string no longer pairs with the `(` of the code around it.
+]]></description>
+      <enclosure url="https://github.com/rask-project/kode/releases/download/v1.0.2/Kode-1.0.2-arm64.zip" length="40709374" type="application/octet-stream" sparkle:edSignature="NT/2glq/UfAvb/Dxb5kBwnMQYqoVWUX5xjcYt1Tq5w/YKwe1UdI8nbMbKF1wLyafxgvQNwHqq0vBR4w81AkJDg=="/>
+    </item>
+    <item>
       <title>Kode 1.0.1</title>
       <link>https://github.com/rask-project/kode/releases/tag/v1.0.1</link>
       <sparkle:version>1.0.1.1000</sparkle:version>
