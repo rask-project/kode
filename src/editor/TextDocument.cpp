@@ -130,6 +130,7 @@ void TextDocument::setBuffer(TextBuffer buffer, bool keepPlace)
     const bool hadHistory{!m_undo.isEmpty()};
     m_buffer = std::move(buffer);
     m_highlighter->reset();
+    m_edited.clear();
     m_undo.clear();
     m_undoIndex = 0;
     m_cleanIndex = 0;
@@ -235,9 +236,6 @@ void TextDocument::replaceEach(const QList<Range> &ranges, const QString &text, 
     if (ranges.isEmpty()) {
         return;
     }
-    const bool wasModified{modified()};
-    const bool couldUndo{canUndo()};
-    const bool couldRedo{canRedo()};
     Step step{.before = before, .cursorAfter = ranges.constLast().position + text.size()};
     step.edits.reserve(ranges.size());
     qsizetype shift{0};
@@ -248,7 +246,34 @@ void TextDocument::replaceEach(const QList<Range> &ranges, const QString &text, 
         shift += text.size() - range.count;
     }
     step.cursorAfter += shift - (text.size() - ranges.constLast().count);
-    mergeable = mergeable && !text.contains(QLatin1Char('\n'));
+    commit(std::move(step), mergeable && !text.contains(QLatin1Char('\n')));
+}
+
+void TextDocument::replaceEach(const QList<Change> &changes, Caret before)
+{
+    if (changes.isEmpty()) {
+        return;
+    }
+    Step step{.before = before, .cursorAfter = before.cursor};
+    step.edits.reserve(changes.size());
+    for (const Change &change : changes) {
+        if (change.range.position < before.cursor) {
+            step.cursorAfter += change.text.size() - change.range.count;
+        }
+        step.edits.append(
+            {.position = change.range.position,
+             .removed = m_buffer.text(change.range.position, change.range.count),
+             .inserted = change.text}
+        );
+    }
+    commit(std::move(step), false);
+}
+
+void TextDocument::commit(Step step, bool mergeable)
+{
+    const bool wasModified{modified()};
+    const bool couldUndo{canUndo()};
+    const bool couldRedo{canRedo()};
     // From the last: each position is still the one before the step.
     for (const Edit &edit : step.edits | std::views::reverse) {
         apply(edit.position, edit.removed, edit.inserted);
@@ -267,7 +292,9 @@ void TextDocument::apply(qsizetype position, const QString &from, const QString 
 {
     m_buffer.remove(position, from.size());
     m_buffer.insert(position, to);
-    m_highlighter->linesReplaced(m_buffer.lineAt(position), newlines(from), newlines(to));
+    const qsizetype line{m_buffer.lineAt(position)};
+    m_highlighter->linesReplaced(line, newlines(from), newlines(to));
+    noteEdited(line, newlines(from), newlines(to));
     emit replaced(position, from, to);
     emit textChanged();
 }
@@ -319,8 +346,41 @@ std::optional<TextDocument::Caret> TextDocument::redo()
     return Caret{.cursor = step.cursorAfter, .anchor = step.cursorAfter};
 }
 
+void TextDocument::noteEdited(qsizetype line, qsizetype removedLines, qsizetype insertedLines)
+{
+    const qsizetype delta{insertedLines - removedLines};
+    // Typing on a line edited already: nothing to note.
+    const auto within{std::ranges::find_if(m_edited, [line, removedLines](const Lines &lines) {
+        return lines.first <= line && lines.last >= line + removedLines;
+    })};
+    if (delta == 0 && within != m_edited.cend()) {
+        return;
+    }
+    // The ranges it touches (or meets) join it; those after it move.
+    Lines edited{.first = line, .last = line + insertedLines};
+    QList<Lines> joined;
+    joined.reserve(m_edited.size() + 1);
+    QList<Lines> after;
+    for (const Lines &lines : std::as_const(m_edited)) {
+        if (lines.last + 1 < line) {
+            joined.append(lines);
+        } else if (lines.first > line + removedLines + 1) {
+            after.append({.first = lines.first + delta, .last = lines.last + delta});
+        } else {
+            edited.first = std::min(edited.first, lines.first);
+            if (lines.last > line + removedLines) {
+                edited.last = std::max(edited.last, lines.last + delta);
+            }
+        }
+    }
+    joined.append(edited);
+    joined.append(after);
+    m_edited = std::move(joined);
+}
+
 void TextDocument::markSaved()
 {
+    m_edited.clear();
     if (m_cleanIndex == m_undoIndex) {
         return;
     }

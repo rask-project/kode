@@ -66,6 +66,8 @@ struct Brackets {
 
 // `count` columns of indentation in `style`: tabs, then spaces for the rest.
 [[nodiscard]] QString whitespace(qsizetype count, Style style);
+// Whether `leading` is whitespace(count, style).
+[[nodiscard]] bool isWhitespace(QStringView leading, qsizetype count, Style style);
 
 // The columns a line starting with `leading` closing brackets is indented
 // by after one indented `previous` columns with `before`'s brackets: a

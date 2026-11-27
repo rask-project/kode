@@ -4,7 +4,7 @@
 //   kode-work-bench FILE
 //       size_mb read_ms decode_ms set_text_ms load_blocking_ms load_ms
 //       guess_ms highlight_all_ms search_ms search_sliced_ms replace_all_ms undo_ms
-//       reindent_all_ms save_ms
+//       reindent_ms save_ms
 //
 // read: the file's bytes; decode: detecting and decoding them, line endings
 // made '\n'; set text: the buffer and its line index, the indentation
@@ -16,8 +16,9 @@
 // state as C++, from the top; search: finding "Q_OBJECT" in one go;
 // search sliced: the same in the view's 3 ms slices from the event loop,
 // until done (the wall time, not blocking); replace all and undo: the
-// matches replaced by the view, one edit; reindent all: what saving with
-// "re-indent on save" adds, highlighting ready; save: writing it to a
+// matches replaced by the view, one edit; reindent: what saving with
+// "re-indent on save" adds after a line typed in the middle (it re-indents
+// the lines edited), highlighting ready; save: writing it to a
 // temporary file.
 #include "Document.h"
 #include "EditorView.h"
@@ -132,9 +133,13 @@ int main(int argc, char *argv[])
     const qreal undoMs{measure([&] { view.undo(); })};
     view.setSearchPattern({});
 
-    // Re-indenting's own cost: highlighting brought up to date first, off the clock.
+    // Re-indenting's own cost, after a line typed in the middle: highlighting
+    // brought up to date first, off the clock.
+    textDocument.markSaved();
+    view.setCursorPosition(textDocument.buffer().lineStart(textDocument.buffer().lineCount() / 2));
+    view.insert(QStringLiteral("x"));
     std::ignore = textDocument.highlighter().advance(lastLine, QDeadlineTimer{QDeadlineTimer::Forever});
-    const qreal reindentMs{measure([&] { view.reindentAll(); })};
+    const qreal reindentMs{measure([&] { view.reindentEdited(); })};
 
     const QTemporaryDir folder;
     const qreal saveMs{measure([&] {

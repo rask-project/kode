@@ -56,12 +56,12 @@ ApplicationWindow {
     }
 
     // Saves `document`, asking for a file when it has none, then runs `then`.
-    // With Re-indent on save, a split showing it re-indents it first (one
-    // that is shown nowhere is saved as it is).
+    // With Re-indent on save, a split showing it re-indents the lines edited
+    // since the last save first (one that is shown nowhere is saved as it is).
     function save(document: Document, then) {
         if (Preferences.reindentOnSave) {
             const view = root.activeDocument === document ? root.activeView : root.app.viewsOf(document)[0] ?? null;
-            view?.editor.reindentAll();
+            view?.editor.reindentEdited();
         }
         if (document.fileUrl.toString() === "") {
             root.saveAs(document, then);

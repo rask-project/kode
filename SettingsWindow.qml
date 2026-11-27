@@ -207,7 +207,7 @@ Window {
                 }
                 FormRow {
                     label: qsTr("Re-indent on save")
-                    detail: qsTr("By the brackets, as Edit > Re-Indent (not for Python and the like)")
+                    detail: qsTr("The lines edited since the last save, by the brackets, as Edit > Re-Indent (not for Python and the like)")
 
                     Switch {
                         checked: Preferences.reindentOnSave

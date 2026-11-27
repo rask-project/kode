@@ -200,6 +200,7 @@ void SyntaxHighlighter::setDefinition(const KSyntaxHighlighting::Definition &def
 {
     AbstractHighlighter::setDefinition(definition);
     m_charFormats.clear();
+    m_startsInNonCode.clear();
     reset();
 }
 
@@ -355,6 +356,23 @@ QList<indentation::Span> SyntaxHighlighter::nonCode(qsizetype line, QStringView 
     }
     std::ignore = formats(line, text);
     return m_nonCode;
+}
+
+bool SyntaxHighlighter::startsInNonCode(qsizetype line)
+{
+    if (!isActive() || !isReady(line)) {
+        return false;
+    }
+    KSyntaxHighlighting::State state{startState(line)};
+    const auto known{m_startsInNonCode.constFind(state)};
+    if (known != m_startsInNonCode.cend()) {
+        return *known;
+    }
+    // A space there takes the format of what it is inside.
+    std::ignore = formats(line, u" ", state);
+    const bool inside{!m_nonCode.isEmpty() && m_nonCode.constFirst().start == 0};
+    m_startsInNonCode.insert(std::move(state), inside);
+    return inside;
 }
 
 std::optional<qsizetype> SyntaxHighlighter::regionEnd(qsizetype line, const QDeadlineTimer &deadline)

@@ -205,10 +205,11 @@ Guidance for AI agents working in this repository.
   - `TextDocument` — what views share: the buffer, undo history,
     highlighter and indentation style. Every change goes through
     `replace()`/`replaceEach()` (several carets: one undo step, typing
-    extends it)/`undo()`/`redo()`/`setText()` and reaches each view with
+    extends it; or a text per range)/`undo()`/`redo()`/`setText()` and reaches each view with
     `replaced()`/`reset()`; a view moves its caret over another view's
     edit. It keeps the place (caret, scroll) the last view left, for the
-    next one.
+    next one, and the lines edited since the text was set or saved
+    (`editedLines()`, ranges moved by each edit).
   - `EditorView` (`QQuickItem`) — a view of a `TextDocument` (`document`;
     its own when none): caret, selection, scroll, wrapping and layout.
     `selectBlock()` (⌘U, as Qt Creator's Select Block Up) grows the
@@ -302,11 +303,15 @@ Guidance for AI agents working in this repository.
     syntax). Return indents so (between brackets, the closing one on a
     line of its own); a closing bracket typed on an empty line goes under
     the line of its opening one; `reindent()` (Edit > Re-Indent, ⌃I, as
-    in Xcode) and `reindentAll()` (before saving, with
-    `Preferences.reindentOnSave`: only what moves is replaced, the caret
-    stays on its text) indent lines again, comment and string lines moving
-    with the line before; not for indentation-based languages, nor when
-    highlighting cannot be ready in 2 s.
+    in Xcode) and `reindentEdited()` (before saving, with
+    `Preferences.reindentOnSave`: the lines edited since the last save,
+    each span from the line above it; only the indentation that moves is
+    replaced, one undo step, the caret stays on its text) indent lines
+    again, comment and string lines moving with the line before; only
+    lines with brackets are highlighted again to skip those in comments and
+    strings (`SyntaxHighlighter::startsInNonCode()` tells the rest, once per
+    state); not for indentation-based languages, nor when highlighting
+    cannot be ready in 2 s.
   - `Commenting` — free functions: the selected lines commented out (or
     back in when all are) with the language's line marker at their least
     indentation (column 0 where the definition asks), each line between

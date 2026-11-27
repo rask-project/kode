@@ -53,6 +53,16 @@ public:
         qsizetype position{0};
         qsizetype count{0};
     };
+    // `range` replaced by `text`.
+    struct Change {
+        Range range;
+        QString text;
+    };
+    // Lines first..last.
+    struct Lines {
+        qsizetype first{0};
+        qsizetype last{0};
+    };
     // Where a view left the document, for the next view that shows it.
     struct Place {
         qreal contentX{0.0};
@@ -96,6 +106,11 @@ public:
     // Replaces each of `ranges` (by position, apart) with `text`: several
     // carets typing. One undo step; typing extends it as with one caret.
     void replaceEach(const QList<Range> &ranges, const QString &text, bool mergeable, Caret before);
+    // Makes each of `changes` (by position, apart): one undo step, never merged.
+    void replaceEach(const QList<Change> &changes, Caret before);
+    // The lines edited since the text was set or saved, sorted and apart
+    // (undoing back counts as editing).
+    [[nodiscard]] const QList<Lines> &editedLines() const noexcept { return m_edited; }
     // Each returns the caret to show, or nothing when there is nothing to do.
     std::optional<Caret> undo();
     std::optional<Caret> redo();
@@ -142,8 +157,11 @@ private:
     static constexpr quint64 IndentWithTabs{1U << 1U};
     static constexpr quint64 DefaultIndentWithTabs{1U << 2U};
 
+    // Applies `step`'s edits and records it, merging typing into the last one.
+    void commit(Step step, bool mergeable);
     // Records `step`, merging typing into the last one.
     void record(Step step, bool mergeable);
+    void noteEdited(qsizetype line, qsizetype removedLines, qsizetype insertedLines);
     static bool merge(Step &last, const Step &next);
     void apply(qsizetype position, const QString &from, const QString &to);
     void applyDefinition(const KSyntaxHighlighting::Definition &definition);
@@ -151,6 +169,7 @@ private:
     TextBuffer m_buffer;
     std::unique_ptr<SyntaxHighlighter> m_highlighter;
     QList<Step> m_undo;
+    QList<Lines> m_edited;
     QString m_theme;
     Place m_place;
     qsizetype m_undoIndex{0};

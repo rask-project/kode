@@ -87,6 +87,9 @@ public:
     // The columns of `line` (whose text is `text`) in comments and strings;
     // none when it is not ready.
     [[nodiscard]] QList<indentation::Span> nonCode(qsizetype line, QStringView text);
+    // Whether `line` starts inside a comment or string (it must be ready):
+    // known from the state it starts in, so asked once per state.
+    [[nodiscard]] bool startsInNonCode(qsizetype line);
     // How many folding regions the line formats() last took opens and leaves open.
     [[nodiscard]] qsizetype openedRegions() const noexcept { return m_opened; }
     // The line where the first region `line` leaves open ends; none when it
@@ -108,6 +111,7 @@ private:
     // from before it, and a match at or past m_checkFrom means they are right.
     QList<KSyntaxHighlighting::State> m_states;
     QHash<qint32, QTextCharFormat> m_charFormats;
+    QHash<KSyntaxHighlighting::State, bool> m_startsInNonCode;
     QList<QTextLayout::FormatRange> m_collected;
     // The folding regions of the line highlighted last, in order: id + 1
     // where one begins, -(id + 1) where one ends.

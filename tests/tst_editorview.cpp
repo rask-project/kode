@@ -390,18 +390,55 @@ void TestEditorView::reindentsByBrackets()
     QCOMPARE(editor.cursorColumn(), 5);
 }
 
-void TestEditorView::reindentsEverythingKeepingTheCaret()
+void TestEditorView::reindentsEditedLinesKeepingTheCaret()
 {
     kode::EditorView editor;
     editor.setText(QStringLiteral("a {\nb {\nc;\n}\n}"));
+    // Nothing edited: nothing moves.
+    editor.reindentEdited();
+    QVERIFY(!editor.canUndo());
     editor.setCursorPosition(editor.text().indexOf(QLatin1Char('c')) + 1);
-    editor.reindentAll();
-    QCOMPARE(editor.text(), QStringLiteral("a {\n    b {\n        c;\n    }\n}"));
+    editor.insert(QStringLiteral("x"));
+    editor.reindentEdited();
+    // Only the edited line, under the line above it.
+    QCOMPARE(editor.text(), QStringLiteral("a {\nb {\n    cx;\n}\n}"));
     QCOMPARE(editor.cursorLine(), 2);
-    QCOMPARE(editor.cursorColumn(), 9);
+    QCOMPARE(editor.cursorColumn(), 6);
     // One undo.
     editor.undo();
-    QCOMPARE(editor.text(), QStringLiteral("a {\nb {\nc;\n}\n}"));
+    QCOMPARE(editor.text(), QStringLiteral("a {\nb {\ncx;\n}\n}"));
+}
+
+void TestEditorView::reindentsManyEditedLinesAtOnce()
+{
+    // More lines than are changed one by one: one replacement, one undo.
+    kode::EditorView editor;
+    editor.setText(QStringLiteral("{\n}"));
+    editor.setCursorPosition(2);
+    const QString pasted{QStringLiteral("x;\n").repeated(1500)};
+    editor.insert(pasted);
+    editor.reindentEdited();
+    QCOMPARE(editor.text(), QStringLiteral("{\n") + QStringLiteral("    x;\n").repeated(1500) + QStringLiteral("}"));
+    editor.undo();
+    QCOMPARE(editor.text(), QStringLiteral("{\n") + pasted + QStringLiteral("}"));
+}
+
+void TestEditorView::followsEditedLinesAcrossEdits()
+{
+    kode::EditorView editor;
+    editor.setSyntax(QStringLiteral("C++"));
+    editor.setText(QStringLiteral("a {\n  b;\n}\nd {\n  c;\n}"));
+    editor.setCursorPosition(editor.text().indexOf(QStringLiteral("c;")) + 2);
+    editor.insert(QStringLiteral("x"));
+    // A line added above moves the edited one down.
+    editor.setCursorPosition(3);
+    editor.insert(QStringLiteral("\n"));
+    editor.reindentEdited();
+    QCOMPARE(editor.text(), QStringLiteral("a {\n\n  b;\n}\nd {\n    c;x\n}"));
+    // Saved: nothing edited any more.
+    editor.document()->markSaved();
+    editor.reindentEdited();
+    QCOMPARE(editor.text(), QStringLiteral("a {\n\n  b;\n}\nd {\n    c;x\n}"));
 }
 
 void TestEditorView::colonOpensABlockInPython()

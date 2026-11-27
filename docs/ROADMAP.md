@@ -482,7 +482,12 @@ cannot be sliced well, measured first (`kode-work-bench`,
   thread-safe (they cache states while highlighting).
 - Find and Replace All over the whole text (today 3 ms slices on the GUI
   thread: never blocking, but slower in total).
-- Saving, and re-indenting before saving, large files.
+- Done: re-indenting on save — only the lines edited since the last save
+  (as VS Code's "format modifications only"), each moved line's
+  indentation replaced in one undo step: the cost follows the edits, not
+  the file (it re-indented every line before: 2.7 s at 10 MB, a minute at
+  100 MB, all blocking).
+- Saving large files.
 
 How: a snapshot of the `TextBuffer` (its original buffer is immutable and
 the added one append-only, so copying the piece list is enough) with the

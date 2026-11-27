@@ -55,6 +55,8 @@ constexpr std::chrono::milliseconds highlightSlice{3};
 constexpr qsizetype highlightLookahead{1000};
 // Find: a slice of the search.
 constexpr std::chrono::milliseconds searchSlice{3};
+// Re-indenting on save: lines changed one by one up to this many.
+constexpr qsizetype maxIndentEdits{1000};
 // How long highlighting may take for Re-Indent, to tell code from comments and strings.
 constexpr std::chrono::milliseconds reindentSearch{2000};
 // How long finding the block at the caret may take, for its indent guide.
@@ -1238,32 +1240,83 @@ indentation::Style EditorView::indentStyle() const
     };
 }
 
-void EditorView::reindentAll()
+void EditorView::reindentEdited()
 {
-    const std::optional<QString> after{reindented(0, buffer().lineCount() - 1)};
-    const QString before{buffer().toString()};
-    if (!after || *after == before) {
+    // Spans apart only by blank lines are one: a span indents from the line above it as it stands.
+    QList<TextDocument::Lines> spans;
+    for (const TextDocument::Lines &lines : m_document->editedLines()) {
+        const qsizetype last{std::min(lines.last, buffer().lineCount() - 1)};
+        if (!spans.isEmpty() &&
+            std::ranges::all_of(std::views::iota(spans.last().last + 1, lines.first), [this](qsizetype line) {
+                return buffer().line(line).trimmed().isEmpty();
+            })) {
+            spans.last().last = last;
+            continue;
+        }
+        spans.append({.first = lines.first, .last = last});
+    }
+    // The lines that move and their indentation, in order.
+    QList<std::pair<qsizetype, qint32>> moved;
+    for (const TextDocument::Lines &span : std::as_const(spans)) {
+        const std::optional<QList<qint32>> columns{reindented(span.first, span.last)};
+        if (!columns) {
+            return;
+        }
+        for (qsizetype line{span.first}; line <= span.last; ++line) {
+            if (const qint32 column{columns->at(line - span.first)}; column >= 0) {
+                moved.emplace_back(line, column);
+            }
+        }
+    }
+    if (moved.isEmpty()) {
         return;
     }
-    // Only what changed, between the text the two share at the start and the end.
-    const auto prefix{std::ranges::mismatch(before, *after).in1 - before.cbegin()};
-    const qsizetype room{std::min(before.size(), after->size()) - prefix};
-    const auto suffix{std::min<qsizetype>(
-        std::ranges::mismatch(before | std::views::reverse, *after | std::views::reverse).in1 - before.crbegin(),
-        room
-    )};
     // The caret stays on the same text (lines only change their indentation).
     const qsizetype line{buffer().lineAt(m_cursor)};
     const qsizetype column{
         m_cursor - buffer().lineStart(line) - indentation::leadingWhitespace(buffer().line(line)).size()
     };
-    replace(prefix, before.size() - prefix - suffix, after->sliced(prefix, after->size() - prefix - suffix), false);
+    m_others.clear();
+    m_flags |= Editing;
+    applyIndentation(moved);
+    m_flags &= ~Editing;
     const QString text{buffer().line(line)};
     const qsizetype leading{indentation::leadingWhitespace(text).size()};
     moveCaret(
         buffer().lineStart(line) + std::min(leading + std::max(column, qsizetype{0}), text.size()),
         Select::Collapse
     );
+}
+
+void EditorView::applyIndentation(const QList<std::pair<qsizetype, qint32>> &moved)
+{
+    const TextDocument::Caret before{.cursor = m_cursor, .anchor = m_anchor};
+    // Each edit to the piece table costs more as they add up: many lines go
+    // as one replacement, from the first to the last.
+    if (moved.size() > maxIndentEdits) {
+        const qsizetype firstLine{moved.constFirst().first};
+        const qsizetype lastLine{moved.constLast().first};
+        QList<qint32> columns(lastLine - firstLine + 1, -1);
+        for (const auto &[line, column] : moved) {
+            columns[line - firstLine] = column;
+        }
+        const qsizetype start{buffer().lineStart(firstLine)};
+        const qsizetype end{buffer().lineStart(lastLine) + buffer().lineLength(lastLine)};
+        m_document->replace(start, end - start, reindentedText(firstLine, lastLine, columns, firstLine), false, before);
+        return;
+    }
+    const indentation::Style style{indentStyle()};
+    QList<TextDocument::Change> changes;
+    changes.reserve(moved.size());
+    for (const auto &[line, column] : moved) {
+        changes.append(
+            {.range =
+                 {.position = buffer().lineStart(line),
+                  .count = indentation::leadingWhitespace(buffer().line(line)).size()},
+             .text = indentation::whitespace(column, style)}
+        );
+    }
+    m_document->replaceEach(changes, before);
 }
 
 bool EditorView::colonBlocks() const
@@ -1335,7 +1388,7 @@ void EditorView::alignClosing()
     moveCaret(lineStart + wanted.size() + 1, Select::Collapse);
 }
 
-std::optional<QString> EditorView::reindented(qsizetype firstLine, qsizetype lastLine)
+std::optional<QList<qint32>> EditorView::reindented(qsizetype firstLine, qsizetype lastLine)
 {
     // Not knowing what is a comment or string would move lines wrongly.
     if (colonBlocks() || !highlighter().advance(lastLine, QDeadlineTimer{reindentSearch})) {
@@ -1353,31 +1406,58 @@ std::optional<QString> EditorView::reindented(qsizetype firstLine, qsizetype las
             break;
         }
     }
-    QStringList lines;
+    QList<qint32> columns(lastLine - firstLine + 1, -1);
     // What the last line indented moved by, for the comment or string lines after it.
     qsizetype moved{0};
     for (qsizetype line{firstLine}; line <= lastLine; ++line) {
         const QString text{buffer().line(line)};
-        const QStringView content{QStringView{text}.sliced(indentation::leadingWhitespace(text).size())};
-        const QList<indentation::Span> ignored{nonCode(line, text)};
-        // Blank: no spaces left. Inside a comment or string from above: as it is.
-        const bool continued{std::ranges::any_of(ignored, [&text, &content](const indentation::Span &span) {
-            const qsizetype column{text.size() - content.size()};
-            return span.start < column && span.end > column;
-        })};
-        const qsizetype was{indentation::columns(indentation::leadingWhitespace(text), style.width)};
-        if (content.isEmpty() || continued) {
-            const qsizetype shifted{std::max(qsizetype{0}, was + moved)};
-            lines.append(content.isEmpty() ? QString{} : indentation::whitespace(shifted, style) + content);
+        const QStringView leading{indentation::leadingWhitespace(text)};
+        const QStringView content{QStringView{text}.sliced(leading.size())};
+        const qsizetype was{indentation::columns(leading, style.width)};
+        // Blank: no spaces left. Inside a comment or string from above: moved as the line before.
+        qsizetype wanted{0};
+        if (!content.isEmpty() && !leading.isEmpty() && highlighter().startsInNonCode(line)) {
+            wanted = std::max(qsizetype{0}, was + moved);
+        } else if (!content.isEmpty()) {
+            // Comments and strings only matter where there are brackets to skip.
+            const bool bracketed{std::ranges::any_of(content, [](QChar character) {
+                return QStringView{u"()[]{}"}.contains(character);
+            })};
+            const indentation::Brackets own{
+                indentation::brackets(text, bracketed ? nonCode(line, text) : QList<indentation::Span>{})
+            };
+            previous = indentation::indentAfter(previous, above, own.leading, style, false);
+            moved = previous - was;
+            above = own;
+            wanted = previous;
+        }
+        if (!indentation::isWhitespace(leading, wanted, style)) {
+            columns[line - firstLine] = static_cast<qint32>(wanted);
+        }
+    }
+    return columns;
+}
+
+QString
+EditorView::reindentedText(qsizetype firstLine, qsizetype lastLine, const QList<qint32> &columns, qsizetype base) const
+{
+    const indentation::Style style{indentStyle()};
+    QString result;
+    result.reserve(buffer().lineStart(lastLine) + buffer().lineLength(lastLine) - buffer().lineStart(firstLine));
+    for (qsizetype line{firstLine}; line <= lastLine; ++line) {
+        if (line > firstLine) {
+            result += QLatin1Char('\n');
+        }
+        const QString text{buffer().line(line)};
+        const qint32 column{columns.at(line - base)};
+        if (column < 0) {
+            result += text;
             continue;
         }
-        const indentation::Brackets own{indentation::brackets(text, ignored)};
-        previous = indentation::indentAfter(previous, above, own.leading, style, false);
-        moved = previous - was;
-        above = own;
-        lines.append(indentation::whitespace(previous, style) + content);
+        result += indentation::whitespace(column, style);
+        result += QStringView{text}.sliced(indentation::leadingWhitespace(text).size());
     }
-    return lines.join(QLatin1Char('\n'));
+    return result;
 }
 
 void EditorView::reindent()
@@ -1387,13 +1467,13 @@ void EditorView::reindent()
     if (hasSelection() && lastLine > firstLine && selectionEnd() == buffer().lineStart(lastLine)) {
         --lastLine;
     }
-    const std::optional<QString> reindentedLines{reindented(firstLine, lastLine)};
-    const qsizetype start{buffer().lineStart(firstLine)};
-    const qsizetype end{buffer().lineStart(lastLine) + buffer().lineLength(lastLine)};
-    if (!reindentedLines || *reindentedLines == buffer().text(start, end - start)) {
+    const std::optional<QList<qint32>> columns{reindented(firstLine, lastLine)};
+    if (!columns || std::ranges::all_of(*columns, [](qint32 column) { return column < 0; })) {
         return;
     }
-    const QString &after{*reindentedLines};
+    const qsizetype start{buffer().lineStart(firstLine)};
+    const qsizetype end{buffer().lineStart(lastLine) + buffer().lineLength(lastLine)};
+    const QString after{reindentedText(firstLine, lastLine, *columns, firstLine)};
     const bool selected{hasSelection()};
     // One line: the caret stays on the same text (or after the indentation).
     const qsizetype caretColumn{m_cursor - start - indentation::leadingWhitespace(buffer().line(firstLine)).size()};

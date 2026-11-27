@@ -22,7 +22,7 @@ for mb in 1 10 100; do
     while (($(stat -f %z "$file") < mb * 1024 * 1024)); do cat "$seed" >>"$file"; done
 done
 
-echo "| Size (MB) | Read (ms) | Decode (ms) | Set text (ms) | Open, blocking (ms) | Open, until shown (ms) | Guess at the end (ms) | Highlight all (ms) | Search (ms) | Search, sliced (ms) | Replace All (ms) | Undo (ms) | Re-indent all (ms) | Save (ms) |"
+echo "| Size (MB) | Read (ms) | Decode (ms) | Set text (ms) | Open, blocking (ms) | Open, until shown (ms) | Guess at the end (ms) | Highlight all (ms) | Search (ms) | Search, sliced (ms) | Replace All (ms) | Undo (ms) | Re-indent, a line edited (ms) | Save (ms) |"
 echo "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
 for mb in 1 10 100; do
     read -r size read decode set loadblocking load guess highlight search sliced replace undo reindent save <<<"$(QT_QPA_PLATFORM=offscreen "$BENCH" "$DIR/code-${mb}mb.txt")"

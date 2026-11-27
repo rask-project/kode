@@ -246,8 +246,9 @@ public:
     // out of them; the caret's line without a selection. Line comments for a
     // language without block ones (Python).
     Q_INVOKABLE void toggleBlockComment();
-    // The same for the whole text, changing only what moves (as before saving).
-    Q_INVOKABLE void reindentAll();
+    // The same for the lines edited since the text was set or saved
+    // (before saving), changing only what moves: one undo step.
+    Q_INVOKABLE void reindentEdited();
     // Takes the indentation style from the text (see indentation::detect()).
     Q_INVOKABLE void detectIndentation() { m_document->detectIndentation(); }
     // Moves the caret to "line" or "line:column" (from 1, clamped); false
@@ -506,9 +507,15 @@ private:
     // After a closing bracket typed where only indentation was: the line
     // indented as the one the bracket it closes is on.
     void alignClosing();
-    // Lines firstLine..lastLine indented again (see reindent()); none when
-    // that cannot be told.
-    [[nodiscard]] std::optional<QString> reindented(qsizetype firstLine, qsizetype lastLine);
+    // The indentation lines firstLine..lastLine get indented again (see
+    // reindent()), in columns, -1 where it stays as it is; none when that
+    // cannot be told.
+    [[nodiscard]] std::optional<QList<qint32>> reindented(qsizetype firstLine, qsizetype lastLine);
+    // Lines firstLine..lastLine with that indentation (`columns` from line `base` on).
+    // Gives `moved`'s lines (in order) their indentation, as one undo step.
+    void applyIndentation(const QList<std::pair<qsizetype, qint32>> &moved);
+    [[nodiscard]] QString
+    reindentedText(qsizetype firstLine, qsizetype lastLine, const QList<qint32> &columns, qsizetype base) const;
     // The comments and strings of `line` (whose text is `text`), where brackets don't count.
     [[nodiscard]] QList<indentation::Span> nonCode(qsizetype line, QStringView text);
     // A ':' ending a line opens a block (indentation-based languages).

@@ -125,6 +125,15 @@ QString whitespace(qsizetype count, Style style)
     return QString(count / style.width, QLatin1Char('\t')) + QString(count % style.width, QLatin1Char(' '));
 }
 
+bool isWhitespace(QStringView leading, qsizetype count, Style style)
+{
+    const qsizetype tabs{style.kind == Kind::Spaces ? 0 : count / style.width};
+    const qsizetype spaces{count - (tabs * style.width)};
+    return leading.size() == tabs + spaces &&
+           std::ranges::all_of(leading.first(tabs), [](QChar character) { return character == QLatin1Char('\t'); }) &&
+           std::ranges::all_of(leading.sliced(tabs), [](QChar character) { return character == QLatin1Char(' '); });
+}
+
 qsizetype indentAfter(qsizetype previous, const Brackets &before, qint32 leading, Style style, bool colonBlocks)
 {
     qsizetype levels{0};

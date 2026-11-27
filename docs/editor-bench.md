@@ -148,6 +148,17 @@ thread would not bring the colors sooner: each line's state comes from the
 one before, and KSyntaxHighlighting's definitions cache states as they
 highlight (`DefinitionData::unify`), so two threads cannot share one.
 
+Re-indenting on save now re-indents only the lines edited since the last
+save (`TextDocument::editedLines()`), changing only the indentation that
+moves: after a line typed in the middle (the "Re-indent, a line edited"
+column), 0.1 ms at 1 MB, 11 ms at 10 MB and 19 ms at 100 MB, against
+0.3 s, 2.7 s and a minute when it re-indented every line; the save after
+it takes 0.2 s at 100 MB again (14 s before). Re-indenting a line still
+highlights it again when it has brackets (77% of the code lines here),
+to skip those in comments and strings. Past 1 000 lines moved (a large
+paste or Replace All), they go as one replacement from the first to the
+last: the piece table slows with each edit.
+
 ## Memory in the app, against Xcode and VS Code
 
 The prototype's memory column above is resident size, which macOS memory

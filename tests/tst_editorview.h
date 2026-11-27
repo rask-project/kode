@@ -30,7 +30,9 @@ private slots:
     void returnKeepsIndentation();
     void closingBracketGoesUnderItsOpening();
     void reindentsByBrackets();
-    void reindentsEverythingKeepingTheCaret();
+    void reindentsEditedLinesKeepingTheCaret();
+    void reindentsManyEditedLinesAtOnce();
+    void followsEditedLinesAcrossEdits();
     void colonOpensABlockInPython();
     void tabIndentsSelectedLines();
     void wrappedLinesAddRowsAndMoveByRow();
