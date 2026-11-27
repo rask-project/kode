@@ -264,6 +264,7 @@ bool SyntaxHighlighter::advance(qsizetype line, const QDeadlineTimer &deadline)
                 return false;
             }
         }
+        m_regions.clear();
         KSyntaxHighlighting::State state{highlightLine(m_buffer->line(m_valid), startState(m_valid))};
         if (m_valid < m_states.size()) {
             // Ends as it did before the edit: the rest was right already.
@@ -291,6 +292,12 @@ KSyntaxHighlighting::State SyntaxHighlighter::startState(qsizetype line) const
 
 QList<QTextLayout::FormatRange> SyntaxHighlighter::formats(qsizetype line, QStringView text)
 {
+    return isActive() ? formats(line, text, startState(line)) : QList<QTextLayout::FormatRange>{};
+}
+
+QList<QTextLayout::FormatRange>
+SyntaxHighlighter::formats(qsizetype line, QStringView text, const KSyntaxHighlighting::State &start)
+{
     if (!isActive()) {
         return {};
     }
@@ -299,10 +306,46 @@ QList<QTextLayout::FormatRange> SyntaxHighlighter::formats(qsizetype line, QStri
     m_nonCode.clear();
     m_collecting = line;
     // The end state is known already.
-    std::ignore = highlightLine(text, startState(line));
+    std::ignore = highlightLine(text, start);
     m_collecting = -1;
     m_opened = openRegions(m_regions).size();
     return m_collected;
+}
+
+void SyntaxHighlighter::guess(Guess &guess, qsizetype first, qsizetype end, const QDeadlineTimer &deadline)
+{
+    if (!isActive()) {
+        return;
+    }
+    end = std::min(end, m_buffer->lineCount());
+    const qsizetype from{std::max(first - guessLead, qsizetype{0})};
+    if (guess.states.isEmpty() || first < guess.first || from > guess.first + guess.states.size()) {
+        guess.first = std::clamp(m_valid, from, first);
+        guess.states = {isReady(guess.first) ? startState(guess.first) : KSyntaxHighlighting::State{}};
+    }
+    qsizetype sinceCheck{0};
+    while (guess.first + guess.states.size() < end) {
+        if (++sinceCheck == linesPerCheck) {
+            sinceCheck = 0;
+            if (deadline.hasExpired()) {
+                return;
+            }
+        }
+        const qsizetype line{guess.first + guess.states.size() - 1};
+        m_regions.clear();
+        KSyntaxHighlighting::State next{highlightLine(m_buffer->line(line), guess.states.constLast())};
+        guess.states.append(std::move(next));
+    }
+}
+
+void SyntaxHighlighter::guessEdited(Guess &guess, qsizetype line)
+{
+    if (line < guess.first) {
+        guess.states.clear();
+        return;
+    }
+    // The edited line still starts as guessed.
+    guess.states.resize(std::min(guess.states.size(), line - guess.first + 1));
 }
 
 QList<indentation::Span> SyntaxHighlighter::nonCode(qsizetype line, QStringView text)

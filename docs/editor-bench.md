@@ -138,6 +138,16 @@ index on a worker): `Document::load()` now blocks for 0.1 ms at 10 and
 read in place (1.2 MB: 11 ms, most of it loading the syntax definitions the
 first time).
 
+Highlighting far ahead of the slices: the lines in view are highlighted
+from a guessed state, starting with no state 200 lines above them (from
+the last line highlighted when closer), until the exact highlighting gets
+there (`SyntaxHighlighter::guess()`). A view at the end of the file takes
+7 ms that way at 10 and 100 MB (the "Guess at the end" column of
+`run-work.sh`), against the 22 s the slices need at 100 MB. A worker
+thread would not bring the colors sooner: each line's state comes from the
+one before, and KSyntaxHighlighting's definitions cache states as they
+highlight (`DefinitionData::unify`), so two threads cannot share one.
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal

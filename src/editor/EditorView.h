@@ -2,6 +2,7 @@
 
 #include "Commenting.h"
 #include "Folding.h"
+#include "SyntaxHighlighter.h"
 #include "TextBuffer.h"
 #include "TextDocument.h"
 #include "WrapIndex.h"
@@ -39,7 +40,6 @@ namespace indentation
 struct Style;
 struct Span;
 } // namespace indentation
-class SyntaxHighlighter;
 class TextSearch;
 
 // The editing surface: a TextDocument drawn by laying out and rendering only
@@ -326,8 +326,8 @@ private:
     struct Row {
         quint64 id{0};
         qsizetype line{-1};
-        // Plain, Highlighted, or the preedit generation for the line
-        // showing a composition.
+        // Plain, Highlighted, Guessed (from a guessed state), or the preedit
+        // generation for the line showing a composition.
         quint64 variant{0};
         QString text;
         std::unique_ptr<QTextLayout> layout;
@@ -341,6 +341,7 @@ private:
     };
     static constexpr quint64 Plain{0U};
     static constexpr quint64 Highlighted{1U};
+    static constexpr quint64 Guessed{2U};
 
     // A laid out line number in view, found again by its line; its scene
     // graph node is matched by `id` (a new layout, e.g. in another font,
@@ -478,6 +479,8 @@ private:
     layoutText(const QString &text, qsizetype preeditColumn, const QList<QTextLayout::FormatRange> &formats = {}) const;
     void layoutRows();
     [[nodiscard]] Row takeRow(qsizetype line, qsizetype cursorLine);
+    // The variant of a row for `line` (not composing) and the state it starts in.
+    [[nodiscard]] std::pair<quint64, KSyntaxHighlighting::State> rowStart(qsizetype line) const;
     [[nodiscard]] Number takeNumber(qsizetype line);
     void layoutDecorations();
     void layoutMarks();
@@ -579,6 +582,8 @@ private:
     // Move-only rows: std::vector (QList needs copyable elements).
     std::vector<Row> m_rows;
     std::vector<Number> m_numbers;
+    // Highlighting in view where the highlighter has not reached yet.
+    SyntaxHighlighter::Guess m_guess;
     // Set by updatePolish() for updatePaintNode(), relative to m_baseLine's
     // top (so coordinates stay small in huge files): the selection, one
     // rectangle per line, and the caret.
@@ -633,8 +638,8 @@ private:
     qsizetype m_dropPosition{-1};
     quint64 m_nextRowId{1};
     // Bumped when the composition changes, so its line is laid out again
-    // (above Plain and Highlighted).
-    quint64 m_preeditGeneration{2};
+    // (above Plain, Highlighted and Guessed).
+    quint64 m_preeditGeneration{3};
     quint64 m_flags{0U};
     Colors m_colors;
 };

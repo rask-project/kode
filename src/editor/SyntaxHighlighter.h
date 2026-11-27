@@ -26,6 +26,19 @@ class TextBuffer;
 class SyntaxHighlighter final : public KSyntaxHighlighting::AbstractHighlighter
 {
 public:
+    // The states lines start in from `first` on, guessed where highlighting
+    // has not reached yet (a view far ahead of it): highlighted from a few
+    // lines above with no state.
+    struct Guess {
+        QList<KSyntaxHighlighting::State> states;
+        qsizetype first{0};
+
+        [[nodiscard]] bool covers(qsizetype from, qsizetype end) const noexcept
+        {
+            return from >= first && end <= first + states.size();
+        }
+    };
+
     // Borrows `buffer`, which must outlive the highlighter.
     explicit SyntaxHighlighter(const TextBuffer *buffer);
 
@@ -61,6 +74,16 @@ public:
     [[nodiscard]] KSyntaxHighlighting::State startState(qsizetype line) const;
     // The formats of `line`, whose text is `text` (it must be ready).
     [[nodiscard]] QList<QTextLayout::FormatRange> formats(qsizetype line, QStringView text);
+    // The same from the state it starts in, as guessed.
+    [[nodiscard]] QList<QTextLayout::FormatRange>
+    formats(qsizetype line, QStringView text, const KSyntaxHighlighting::State &start);
+    // Extends `guess` to lines [first, end), until `deadline` passes. One too
+    // far from them starts over guessLead lines above `first` (from the
+    // last line ready, when closer: its state is known).
+    void guess(Guess &guess, qsizetype first, qsizetype end, const QDeadlineTimer &deadline);
+    // Lines from `line` on were edited: their guessed states are dropped.
+    static void guessEdited(Guess &guess, qsizetype line);
+    static constexpr qsizetype guessLead{200};
     // The columns of `line` (whose text is `text`) in comments and strings;
     // none when it is not ready.
     [[nodiscard]] QList<indentation::Span> nonCode(qsizetype line, QStringView text);

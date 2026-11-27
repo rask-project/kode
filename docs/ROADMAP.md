@@ -296,7 +296,7 @@ highlighting if large files need it (Stage 10).
   QtCore/QtGui only) through `AbstractHighlighter`, line by line: each line
   keeps the state it ends in; an edit re-highlights from its line until the
   state matches what was stored, so a keystroke costs a line or two. Runs
-  ahead of the visible lines, off the GUI thread for large files.
+  ahead of the visible lines in slices; far ahead of it, the view guesses.
 - Formats applied to the visible lines' `QTextLayout`s.
 - Language detection by extension/shebang, selector in the status bar.
 - Done: highlighting themes — chosen in View > Theme or Settings among the
@@ -472,7 +472,12 @@ cannot be sliced well, measured first (`kode-work-bench`,
 - Done: opening — from 2 MB on, reading, decoding (`TextCodec`) and the
   `TextBuffer`'s line index on a worker; the view shows "Opening…" and
   then the text (100 MB: 0.1 ms blocking instead of ~230 ms).
-- Highlighting ahead of the view (a jump far down a large file).
+- Done: highlighting a jump far down a large file — the lines in view
+  from a guessed state (no state, 200 lines above them) until the exact
+  highlighting, still in 3 ms slices, gets there (100 MB: colors in 7 ms
+  instead of after 22 s). Not on a worker: the states form a chain, so a
+  thread would not be sooner, and KSyntaxHighlighting's definitions are not
+  thread-safe (they cache states while highlighting).
 - Find and Replace All over the whole text (today 3 ms slices on the GUI
   thread: never blocking, but slower in total).
 - Saving, and re-indenting before saving, large files.

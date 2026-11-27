@@ -396,6 +396,7 @@ void EditorView::startOver(const TextDocument::Place &place)
     m_widestLine = 0.0;
     m_rows.clear();
     m_numbers.clear();
+    m_guess = {};
     m_contentX = place.contentX;
     m_contentY = place.contentY;
     emit contentXChanged();
@@ -431,6 +432,7 @@ void EditorView::documentReplaced(qsizetype position, const QString &removed, co
         m_wrapIndex.linesReplaced(buffer(), line, removedLines, insertedLines);
     }
     m_folds.linesReplaced(line, removedLines, insertedLines);
+    SyntaxHighlighter::guessEdited(m_guess, line);
     // Another view's edit: the caret stays on the same text.
     if ((m_flags & Editing) == 0U) {
         m_cursor = shifted(m_cursor, position, removed.size(), inserted.size());
@@ -466,6 +468,7 @@ void EditorView::documentIndentationChanged()
 
 void EditorView::documentHighlightingChanged()
 {
+    m_guess = {};
     m_rows.clear();
     polish();
 }
@@ -1773,9 +1776,8 @@ EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
     // A row already laid out with the same text, variant and starting state
     // (wherever its line was), else a new one.
     const bool composing{!m_preedit.isEmpty() && line == cursorLine};
-    const bool highlighted{!composing && highlighter().isActive() && highlighter().isReady(line)};
-    const quint64 variant{composing ? m_preeditGeneration : (highlighted ? Highlighted : Plain)};
-    KSyntaxHighlighting::State state{highlighted ? highlighter().startState(line) : KSyntaxHighlighting::State{}};
+    auto [variant, state]{composing ? std::pair{m_preeditGeneration, KSyntaxHighlighting::State{}} : rowStart(line)};
+    const bool highlighted{variant == Highlighted || variant == Guessed};
     QString text{displayText(line)};
     const auto reusable{std::ranges::find_if(m_rows, [&text, &state, variant](const Row &row) {
         return row.layout != nullptr && row.variant == variant && row.text == text && row.state == state;
@@ -1789,13 +1791,28 @@ EditorView::Row EditorView::takeRow(qsizetype line, qsizetype cursorLine)
     row.layout = layoutText(
         text,
         composing ? m_cursor - buffer().lineStart(line) : -1,
-        highlighted ? highlighter().formats(line, text) : QList<QTextLayout::FormatRange>{}
+        highlighted ? highlighter().formats(line, text, row.state) : QList<QTextLayout::FormatRange>{}
     );
     row.opens = highlighted ? highlighter().openedRegions() : 0;
     row.width = row.layout->lineAt(0).naturalTextWidth();
     row.text = std::move(text);
     m_widestLine = std::max(m_widestLine, row.width);
     return row;
+}
+
+std::pair<quint64, KSyntaxHighlighting::State> EditorView::rowStart(qsizetype line) const
+{
+    if (!highlighter().isActive()) {
+        return {Plain, {}};
+    }
+    if (highlighter().isReady(line)) {
+        return {Highlighted, highlighter().startState(line)};
+    }
+    const qsizetype guessed{line - m_guess.first};
+    if (guessed >= 0 && guessed < m_guess.states.size()) {
+        return {Guessed, m_guess.states.at(guessed)};
+    }
+    return {Plain, {}};
 }
 
 EditorView::Number EditorView::takeNumber(qsizetype line)
@@ -1832,6 +1849,10 @@ void EditorView::layoutRows()
         !highlighter().isReady(std::min(first + count + highlightLookahead, buffer().lineCount()))) {
         m_highlightTimer.start();
     }
+    // Far ahead of it: highlighted from a guessed state meanwhile.
+    if (!highlighter().isReady(first + count)) {
+        highlighter().guess(m_guess, first, first + count, QDeadlineTimer{highlightInLayout});
+    }
     std::vector<Row> rows;
     std::vector<Number> numbers;
     const auto shown{static_cast<std::size_t>(std::min(count, visibleLineCount()))};
@@ -1861,10 +1882,18 @@ void EditorView::highlightAhead()
 {
     const qsizetype last{lastVisibleLine()};
     const bool wasReady{highlighter().isReady(last)};
+    // The guess in view first: the layout may have left it short.
+    if (const qsizetype first{firstVisibleLine()}; !wasReady && !m_guess.covers(first, last)) {
+        highlighter().guess(m_guess, first, last, QDeadlineTimer{highlightSlice});
+        polish();
+        m_highlightTimer.start();
+        return;
+    }
     const bool done{
         highlighter().advance(std::min(last + highlightLookahead, buffer().lineCount()), QDeadlineTimer{highlightSlice})
     };
     if (!wasReady && highlighter().isReady(last)) {
+        m_guess = {};
         polish();
     }
     if (!done) {

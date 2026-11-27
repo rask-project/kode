@@ -3,14 +3,16 @@
 //
 //   kode-work-bench FILE
 //       size_mb read_ms decode_ms set_text_ms load_blocking_ms load_ms
-//       highlight_all_ms search_ms search_sliced_ms replace_all_ms undo_ms
+//       guess_ms highlight_all_ms search_ms search_sliced_ms replace_all_ms undo_ms
 //       reindent_all_ms save_ms
 //
 // read: the file's bytes; decode: detecting and decoding them, line endings
 // made '\n'; set text: the buffer and its line index, the indentation
 // detected (Document::load() is the three); load blocking: what
 // Document::load() blocks the GUI thread for (a large file is read on a
-// worker); load: until its text is there; highlight all: every line's
+// worker); load: until its text is there; guess: highlighting a view's
+// lines at the end from a guessed state (what a jump there waits for, the
+// exact highlighting not there yet); highlight all: every line's
 // state as C++, from the top; search: finding "Q_OBJECT" in one go;
 // search sliced: the same in the view's 3 ms slices from the event loop,
 // until done (the wall time, not blocking); replace all and undo: the
@@ -32,12 +34,15 @@
 #include <QTemporaryDir>
 #include <QUrl>
 
+#include <algorithm>
 #include <cstdio>
 
 namespace
 {
 
 const QString pattern{QStringLiteral("Q_OBJECT")};
+// Lines in a view.
+constexpr qsizetype viewLines{60};
 
 qreal measure(const auto &work)
 {
@@ -97,6 +102,15 @@ int main(int argc, char *argv[])
     kode::TextDocument &textDocument{*document.textDocument()};
     textDocument.setSyntax(QStringLiteral("C++"));
     const qsizetype lastLine{textDocument.buffer().lineCount() - 1};
+    const qreal guessMs{measure([&] {
+        kode::SyntaxHighlighter::Guess guess;
+        const qsizetype first{std::max(lastLine - viewLines, qsizetype{0})};
+        textDocument.highlighter().guess(guess, first, lastLine, QDeadlineTimer{QDeadlineTimer::Forever});
+        for (qsizetype line{first}; line < lastLine; ++line) {
+            std::ignore = textDocument.highlighter()
+                              .formats(line, textDocument.buffer().line(line), guess.states.at(line - guess.first));
+        }
+    })};
     const qreal highlightMs{measure([&] {
         std::ignore = textDocument.highlighter().advance(lastLine, QDeadlineTimer{QDeadlineTimer::Forever});
     })};
@@ -129,13 +143,14 @@ int main(int argc, char *argv[])
     })};
 
     std::printf(
-        "%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n",
+        "%.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n",
         sizeMegabytes,
         readMs,
         decodeMs,
         setTextMs,
         loadBlockingMs,
         loadMs,
+        guessMs,
         highlightMs,
         searchMs,
         searchSlicedMs,

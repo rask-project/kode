@@ -13,6 +13,9 @@ private slots:
     void formatsALine();
     void incrementalMatchesFull();
     void stopsAtTheDeadline();
+    void guessesFarAhead();
+    void guessesFromTheLastReadyLine();
+    void dropsGuessesAfterAnEdit();
     void loadsKodeThemes();
     void offersOnlyLightAndDarkPairs();
     void kodeDarkColorsKeywords();

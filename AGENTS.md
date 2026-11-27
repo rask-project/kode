@@ -245,7 +245,12 @@ Guidance for AI agents working in this repository.
     `advance()` (bounded by a deadline: 4 ms in a layout, 3 ms slices
     from a zero timer ahead of the view); `linesReplaced()` after an edit
     keeps the old states aligned so highlighting stops at the first line
-    that ends as before. `EditorView` rows are reused only with the same
+    that ends as before. Where the view is far past the highlighted lines,
+    `guess()` highlights its lines from a guessed state (none, `guessLead`
+    lines above; `EditorView::m_guess`, dropped from an edited line on),
+    shown as `Guessed` rows until the exact states get there; not on a
+    worker: KSyntaxHighlighting's definitions cache states while
+    highlighting (`DefinitionData::unify`). `EditorView` rows are reused only with the same
     start state; `syntax`/`detectSyntax()`/`syntaxTheme` drive it. Only themes
     with a light and a dark version ("X Light"/"X Dark") are offered, by
     family (`themeFamilies()`); the appearance picks the version (`themeName()`).

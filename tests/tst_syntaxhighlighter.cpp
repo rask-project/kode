@@ -111,6 +111,53 @@ void TestSyntaxHighlighter::stopsAtTheDeadline()
     QVERIFY(highlighter->isReady(0));
 }
 
+void TestSyntaxHighlighter::guessesFarAhead()
+{
+    // The sample is 8 lines and leaves no state open: guessing from the start
+    // of one gets it right.
+    const kode::TextBuffer buffer{sample.repeated(1000)};
+    const std::unique_ptr<kode::SyntaxHighlighter> exact{cppHighlighter(buffer)};
+    highlightAll(*exact, buffer);
+    const std::unique_ptr<kode::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    kode::SyntaxHighlighter::Guess guess;
+    highlighter->guess(guess, 5000, 5040, QDeadlineTimer{QDeadlineTimer::Forever});
+    QVERIFY(!highlighter->isReady(5000));
+    QCOMPARE(guess.first, 5000 - kode::SyntaxHighlighter::guessLead);
+    QCOMPARE(guess.first + guess.states.size(), 5040);
+    for (qsizetype line{5000}; line < 5040; ++line) {
+        const QList<QTextLayout::FormatRange> guessed{
+            highlighter->formats(line, buffer.line(line), guess.states.at(line - guess.first))
+        };
+        QCOMPARE(guessed, exact->formats(line, buffer.line(line)));
+    }
+}
+
+void TestSyntaxHighlighter::guessesFromTheLastReadyLine()
+{
+    const kode::TextBuffer buffer{sample.repeated(1000)};
+    const std::unique_ptr<kode::SyntaxHighlighter> highlighter{cppHighlighter(buffer)};
+    QVERIFY(highlighter->advance(4902, QDeadlineTimer{QDeadlineTimer::Forever}));
+    kode::SyntaxHighlighter::Guess guess;
+    highlighter->guess(guess, 5000, 5040, QDeadlineTimer{QDeadlineTimer::Forever});
+    QCOMPARE(guess.first, 4902);
+    QCOMPARE(guess.states.constFirst(), highlighter->startState(4902));
+    // Further down by less than the lead: extended, not started over.
+    highlighter->guess(guess, 5100, 5140, QDeadlineTimer{QDeadlineTimer::Forever});
+    QCOMPARE(guess.first, 4902);
+    QCOMPARE(guess.first + guess.states.size(), 5140);
+    QVERIFY(guess.covers(5100, 5140));
+    QVERIFY(!guess.covers(4900, 5140));
+}
+
+void TestSyntaxHighlighter::dropsGuessesAfterAnEdit()
+{
+    kode::SyntaxHighlighter::Guess guess{.states = QList<KSyntaxHighlighting::State>(40), .first = 100};
+    kode::SyntaxHighlighter::guessEdited(guess, 120);
+    QCOMPARE(guess.states.size(), 21);
+    kode::SyntaxHighlighter::guessEdited(guess, 99);
+    QVERIFY(guess.states.isEmpty());
+}
+
 void TestSyntaxHighlighter::loadsKodeThemes()
 {
     QCOMPARE(kode::SyntaxHighlighter::themeNamed(QStringLiteral("Kode Dark")).name(), QStringLiteral("Kode Dark"));
