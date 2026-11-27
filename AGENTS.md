@@ -75,7 +75,11 @@ Guidance for AI agents working in this repository.
   `StatusBar`. Shows one `Document` (`document`); other splits may show the
   same one, each with its own caret and scroll. Its `DocumentHistory` feeds
   Back and Forward and the Ctrl+Tab switcher; when its document closes it goes back to the previous
-  one. Icons are SF Symbols by name (`icon.name`, `IconImage`): Qt asks
+  one. Go to Definition (F2, the editor's ⌘click: `definitionRequested`)
+  and Switch Header/Source (F4) ask `OpenDocuments` and wait for their
+  ticket's `locationsFound`: one place opens in the split (the caret there
+  once the document has loaded), several in a native menu. Icons are SF
+  Symbols by name (`icon.name`, `IconImage`): Qt asks
   the system for them, nothing is drawn or bundled.
 - `BarButton.qml` — the flat SF Symbol button of the bars in the title bar.
   `TitleBarButtons.qml` (singleton) counts those under the pointer; the
@@ -152,6 +156,48 @@ Guidance for AI agents working in this repository.
   (post-order, no recursion). Views are `Kode.EditorPane`, made from the
   module in the engine's root context (an inline `Component` is bound to
   its file's context under `ComponentBehavior: Bound`).
+- `src/lsp/` — the Language Server Protocol client (`kode::lsp`):
+  - `Protocol` — `frame()` and `MessageReader` (Content-Length framing over
+    a stream that arrives in pieces).
+  - `LanguageServer` — one server's process (`QProcess`, stderr dropped,
+    PATH given): `initialize` (UTF-16 positions, versioned diagnostics),
+    messages held until it answers, requests with handlers, requests from
+    the server answered empty, `shutdown`/`exit` on the way out (300 ms,
+    then killed); `diagnosticsPublished()`; its `activity()` ("Starting"
+    until initialized, then the latest `$/progress`: clangd's indexing)
+    and clangd's per-file status (`textDocument/clangd.fileStatus`).
+  - `LanguageServers` (owned by `OpenDocuments`, which adds and removes
+    each document) — a table of syntaxes (KSyntaxHighlighting's names) to
+    language ids and servers (clangd, pyright, pylsp,
+    rust-analyzer, gopls, typescript-language-server, qmlls,
+    sourcekit-lsp, bash-language-server, lua-language-server,
+    jdtls, kotlin-lsp (then kotlin-language-server), yaml-language-server,
+    vscode-json/html/css-language-server, marksman,
+    neocmakelsp, docker-langserver, terraform-ls, taplo; each group with
+    its install command, copied from Settings), found on
+    the login shell's PATH (`$SHELL -ilc`, read once at start); one server per program and root (the
+    nearest folder with a .git); a document is opened on it once its
+    loading, name and syntax settle (a zero timer), each edit sent as a
+    range (`didChange`, else the whole text), closed when it goes; files
+    over 8 MB are not sent. Published diagnostics of an older version are
+    dropped; the rest go to `TextDocument::setDiagnostics()`. Each document
+    learns its server and what it is busy with ("Analyzing" while clangd
+    works on that file, else the server's activity:
+    `TextDocument::setLanguageServer()`). clangd gets the compilation
+    database it would miss (a build folder per configuration under the root
+    or `build/`, the newest: `compilationDatabasePath`), `-j` from
+    Settings (1–2) and a low background-index priority. Settings, bound
+    from `Main.qml` to `Preferences`: `enabled`, `searchFolders` (before
+    the shell's PATH), `clangdThreads`; a change restarts the servers;
+    servers are looked for only in `searchFolders` then the shell's PATH
+    (`shellPath`; nothing else added), `servers` lists each language
+    group's server found, `detect()` reads the PATH again. `customServers`
+    (the user's: a syntax, a command split as a shell would, a language
+    id) come before the table; `custom` tells each one's program found.
+    `findDefinition()` (`textDocument/definition`) and
+    `switchHeaderSource()` (the file beside it, else clangd's
+    `textDocument/switchSourceHeader`) answer with `locationsFound(ticket)`,
+    through `OpenDocuments` (which exposes `languageServers`).
 - `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
   in QSettings `session/folders` (JSON by canonical folder URL:
   `OpenDocuments::cleanFolder()` resolves links, as the Finder does).
@@ -179,6 +225,11 @@ Guidance for AI agents working in this repository.
   icons in `assets/settings/`. Files also has Make Default
   (`DefaultApplication`, the "Code" document type: macOS confirms each type another app opens, so it stays short) and Install for the
   `kode` command (`CommandLineTool`), read again when the window shows.
+  Language Servers: on/off, clangd's threads, the search path in order
+  (your folders: Add Folder…, a typed path, Remove; then the shell's PATH,
+  a disclosure group), custom servers (a syntax from `Syntaxes.all`, a
+  command, a language id; Remove), each language's server found or its
+  install command (press and hold to copy; Detect Again).
 - `bin/kode` — the `kode` command, as VS Code's `code` (bundled in
   `Contents/Resources/bin`, linked into `/usr/local/bin` from Settings):
   `open -a` for existing paths (the running Kode, no second instance), a
@@ -191,7 +242,11 @@ Guidance for AI agents working in this repository.
   translucent either way).
 - `StatusBar.qml` — line and column, and the syntax with a native menu
   (`Popup.Native`) of `Syntaxes` (C++ singleton, `src/Syntaxes.*`: the
-  definitions by section).
+  definitions by section); the document's errors and warnings when it has
+  any: a help tag, and a click lists them (`diagnosticList()`,
+  native menu, the first 100) to go to one. The language server itself
+  shows once per window, in `Sidebar.qml`'s footer (`currentText`: a
+  spinner and what it is doing while busy, a help tag).
 - `TextEditor.qml` — the editing area: a `Flickable` around the
   `EditorView`, scroll bars, colors from `SystemColors`. It scrolls to the
   caret on `caretMoved` (navigation, edits) and to `scrollRequested` after a
@@ -208,7 +263,9 @@ Guidance for AI agents working in this repository.
     `replaced()`/`reset()`; a view moves its caret over another view's
     edit. It keeps the place (caret, scroll) the last view left, for the
     next one, and the lines edited since the text was set or saved
-    (`editedLines()`, ranges moved by each edit).
+    (`editedLines()`, ranges moved by each edit). Its diagnostics (from a
+    language server: positions moved by each edit, cleared by new text;
+    `errorCount`/`warningCount` for the status bar).
   - `EditorView` (`QQuickItem`) — a view of a `TextDocument` (`document`;
     its own when none): caret, selection, scroll, wrapping and layout.
     `selectBlock()` (⌘U, as Qt Creator's Select Block Up) grows the
@@ -283,6 +340,13 @@ Guidance for AI agents working in this repository.
     placeholder after a folded line (click to unfold). A caret never sits
     in hidden lines: moving there (go to line, find, undo) unfolds, ←/→
     go past them.
+  - ⌘ over a word (with a language server): a link — the pointing hand
+    and an underline (in the diagnostics' node); ⌘click asks for its
+    definition (`definitionRequested`).
+  - Diagnostics: a wave under each one's range on the rows laid out (one
+    vertex-colored geometry node, `errorColor`… by severity), and
+    `diagnosticAreas` (content coordinates) for `TextEditor.qml`'s help
+    tags with the message.
   - Indent guides (`showIndentGuides`, as Neovim's indent-blankline): a
     1 px line per indentation level of each row in view (a blank line takes
     its neighbours' lesser indentation), the one of the indented block at
@@ -342,7 +406,8 @@ Guidance for AI agents working in this repository.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
   randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_commenting`, `tst_wrapindex`, `tst_folding`,
-  `tst_preferences`, `tst_filetree`, `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  `tst_preferences`, `tst_filetree`, `tst_lsp` (framing, diagnostics
+  following edits, and with clangd installed a real round trip), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
   — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both

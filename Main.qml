@@ -280,6 +280,28 @@ Item {
         }
     }
 
+    // The language servers follow Settings.
+    Binding {
+        target: OpenDocuments.languageServers
+        property: "enabled"
+        value: Preferences.languageServers
+    }
+    Binding {
+        target: OpenDocuments.languageServers
+        property: "searchFolders"
+        value: Preferences.languageServerFolders
+    }
+    Binding {
+        target: OpenDocuments.languageServers
+        property: "clangdThreads"
+        value: Preferences.clangdThreads
+    }
+    Binding {
+        target: OpenDocuments.languageServers
+        property: "customServers"
+        value: Preferences.customLanguageServers
+    }
+
     Connections {
         target: FileOpenHandler
 

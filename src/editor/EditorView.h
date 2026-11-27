@@ -16,6 +16,7 @@
 #include <QString>
 #include <QTextLayout>
 #include <QTimer>
+#include <QVariantList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 #include <KSyntaxHighlighting/State>
@@ -23,6 +24,8 @@
 #include <memory>
 #include <optional>
 #include <vector>
+
+class QSGGeometryNode;
 
 namespace KSyntaxHighlighting
 {
@@ -70,6 +73,14 @@ class EditorView : public QQuickItem
     // The indent guides, and the one of the caret's block.
     Q_PROPERTY(QColor guideColor READ guideColor WRITE setGuideColor NOTIFY colorsChanged)
     Q_PROPERTY(QColor scopeColor READ scopeColor WRITE setScopeColor NOTIFY colorsChanged)
+    // The underlines of the document's diagnostics, by severity.
+    Q_PROPERTY(QColor errorColor READ errorColor WRITE setErrorColor NOTIFY colorsChanged)
+    Q_PROPERTY(QColor warningColor READ warningColor WRITE setWarningColor NOTIFY colorsChanged)
+    Q_PROPERTY(QColor informationColor READ informationColor WRITE setInformationColor NOTIFY colorsChanged)
+    Q_PROPERTY(QColor hintColor READ hintColor WRITE setHintColor NOTIFY colorsChanged)
+    // The diagnostics in view, for their help tags: {x, y, width, height,
+    // message} in content coordinates, one per line each covers.
+    Q_PROPERTY(QVariantList diagnosticAreas READ diagnosticAreas NOTIFY diagnosticAreasChanged)
     Q_PROPERTY(qreal contentX READ contentX WRITE setContentX NOTIFY contentXChanged)
     Q_PROPERTY(qreal contentY READ contentY WRITE setContentY NOTIFY contentYChanged)
     Q_PROPERTY(qreal contentWidth READ contentWidth NOTIFY contentSizeChanged)
@@ -153,6 +164,15 @@ public:
     void setGuideColor(const QColor &color);
     [[nodiscard]] QColor scopeColor() const { return QColor::fromRgba(m_colors.scope); }
     void setScopeColor(const QColor &color);
+    [[nodiscard]] QColor errorColor() const { return QColor::fromRgba(m_colors.error); }
+    void setErrorColor(const QColor &color) { setColor(m_colors.error, color); }
+    [[nodiscard]] QColor warningColor() const { return QColor::fromRgba(m_colors.warning); }
+    void setWarningColor(const QColor &color) { setColor(m_colors.warning, color); }
+    [[nodiscard]] QColor informationColor() const { return QColor::fromRgba(m_colors.information); }
+    void setInformationColor(const QColor &color) { setColor(m_colors.information, color); }
+    [[nodiscard]] QColor hintColor() const { return QColor::fromRgba(m_colors.hint); }
+    void setHintColor(const QColor &color) { setColor(m_colors.hint, color); }
+    [[nodiscard]] QVariantList diagnosticAreas() const { return m_diagnosticAreas; }
     [[nodiscard]] QString searchPattern() const;
     void setSearchPattern(const QString &pattern);
     [[nodiscard]] bool searchCaseSensitive() const;
@@ -298,6 +318,9 @@ signals:
     void layoutOptionsChanged();
     // A right click (or ⌃click), the caret moved there unless on the selection.
     void contextMenuRequested();
+    // A ⌘click: the caret moved to `position`, whose definition is wanted.
+    void definitionRequested(qint64 position);
+    void diagnosticAreasChanged();
     // Highlighting went further down the text (a slice ahead of the view).
     void highlightingAdvanced();
 
@@ -306,6 +329,9 @@ protected:
     QSGNode *updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData *data) override;
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
+    void hoverMoveEvent(QHoverEvent *event) override;
+    void hoverLeaveEvent(QHoverEvent *event) override;
     void inputMethodEvent(QInputMethodEvent *event) override;
     [[nodiscard]] QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -364,6 +390,13 @@ private:
         qreal top{0.0};
     };
 
+    // A diagnostic's underline on one visual line (relative to m_baseLine).
+    struct Squiggle {
+        QRectF rect;
+        qint64 severity{0};
+        friend bool operator==(const Squiggle &, const Squiggle &) = default;
+    };
+
     // What follows a folded line (relative to m_baseLine), unfolding it when clicked.
     struct Placeholder {
         QRectF rect;
@@ -387,6 +420,10 @@ private:
         QRgb match{0x66ffd60aU};
         QRgb guide{0x1f000000U};
         QRgb scope{0xb33d8bffU};
+        QRgb error{0xffff3b30U};
+        QRgb warning{0xffff9500U};
+        QRgb information{0xff007affU};
+        QRgb hint{0x66000000U};
     };
 
     // This view is editing: replaced() is its own change.
@@ -408,6 +445,8 @@ private:
     static constexpr quint64 GuidesChanged{1U << 10U};
     // The blinking caret is in its hidden half.
     static constexpr quint64 CaretOff{1U << 11U};
+    // m_squiggles changed since the scene last took them.
+    static constexpr quint64 DiagnosticsChanged{1U << 12U};
 
     [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
     [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
@@ -467,6 +506,10 @@ private:
     void foldsChanged();
     // The line whose fold marker or placeholder is at `point`.
     [[nodiscard]] std::optional<qsizetype> foldTargetAt(const QPointF &point) const;
+    // ⌘ over a word whose definition can be asked for: a link (pointing hand, underline).
+    void updateLink(Qt::KeyboardModifiers modifiers);
+    void setLink(qsizetype start, qsizetype end);
+    void layoutLink();
     // A move by one character into folded lines goes past them.
     [[nodiscard]] qsizetype skipFolded(qsizetype position, bool forward) const;
     [[nodiscard]] qreal foldColumnWidth() const;
@@ -491,6 +534,12 @@ private:
     void layoutMatches();
     void layoutInvisibles();
     void layoutGuides();
+    void layoutDiagnostics();
+    // The underlines of `diagnostic` on the rows laid out, and their areas.
+    void
+    appendDiagnostic(const TextDocument::Diagnostic &diagnostic, QList<Squiggle> &squiggles, QVariantList &areas) const;
+    [[nodiscard]] QRgb severityColor(qint64 severity) const noexcept;
+    void fillSquiggles(QSGGeometryNode *node) const;
     // The columns `row`'s line is indented by; a blank line's, as its
     // neighbours (the lesser), so guides go through it.
     [[nodiscard]] qsizetype guideIndent(const Row &row) const;
@@ -615,6 +664,10 @@ private:
     // Indent guides: 1 px wide, a rectangle per row and level.
     QList<QRectF> m_guideRects;
     QList<QRectF> m_scopeGuideRects;
+    QList<Squiggle> m_squiggles;
+    // The link's underline, a rectangle per row.
+    QList<QRectF> m_linkRects;
+    QVariantList m_diagnosticAreas;
     QList<FoldMark> m_foldMarks;
     QList<Placeholder> m_placeholders;
     QRectF m_caretRect;
@@ -649,6 +702,9 @@ private:
     qsizetype m_baseLine{0};
     // Where dragged text would be dropped (shown as the caret); -1: no drag.
     qsizetype m_dropPosition{-1};
+    // The word shown as a link while ⌘ is held over it; -1: none.
+    qsizetype m_linkStart{-1};
+    qsizetype m_linkEnd{-1};
     quint64 m_nextRowId{1};
     // Bumped when the composition changes, so its line is laid out again
     // (above Plain, Highlighted and Guessed).

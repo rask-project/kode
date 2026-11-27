@@ -202,6 +202,13 @@ ApplicationWindow {
         popupType: Popup.Native
 
         MenuItem {
+            action: goToDefinitionAction
+        }
+        MenuItem {
+            action: switchHeaderSourceAction
+        }
+        MenuSeparator {}
+        MenuItem {
             action: cutAction
         }
         MenuItem {
@@ -796,6 +803,29 @@ ApplicationWindow {
 
             MenuItem {
                 action: Action {
+                    id: goToDefinitionAction
+
+                    text: qsTr("Go to Definition")
+                    // F2 renames in the sidebar while it has the focus.
+                    enabled: (root.editor?.document?.languageServer ?? "") !== "" && !sidebar.treeFocused
+                    shortcut: "F2"
+                    onTriggered: root.activeView.goToDefinition(root.editor.cursorPosition)
+                }
+            }
+            MenuItem {
+                action: Action {
+                    id: switchHeaderSourceAction
+
+                    text: qsTr("Switch Header/Source")
+                    enabled: (root.activeDocument?.fileUrl.toString() ?? "") !== "" && ["C", "C++", "ISO C++", "Objective-C", "Objective-C++"].includes(root.editor?.syntax ?? "")
+                    shortcut: "F4"
+                    onTriggered: root.activeView.switchHeaderSource()
+                }
+            }
+            MenuSeparator {}
+
+            MenuItem {
+                action: Action {
                     text: qsTr("Go Back")
                     enabled: root.activeView?.history.canGoBack ?? false
                     shortcut: "Meta+Ctrl+Left"
@@ -964,6 +994,7 @@ ApplicationWindow {
             SplitView.maximumWidth: 480
             folder: root.folder
             currentFile: root.activeDocument ? root.activeDocument.fileUrl : ""
+            currentText: root.activeDocument ? root.activeDocument.textDocument : null
             topInset: content.titleBarHeight
             nativeWindow: windowStyle
             cutAction: cutAction

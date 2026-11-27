@@ -11,6 +11,7 @@
 #include <KSyntaxHighlighting/Theme>
 
 #include <QClipboard>
+#include <QCursor>
 #include <QDeadlineTimer>
 #include <QDrag>
 #include <QFontMetricsF>
@@ -25,15 +26,18 @@
 #include <QSGGeometryNode>
 #include <QSGRectangleNode>
 #include <QSGTextNode>
+#include <QSGVertexColorMaterial>
 #include <QStringList>
 #include <QStyleHints>
 #include <QTextLayout>
 #include <QTextOption>
+#include <QVariantMap>
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <ranges>
+#include <span>
 
 namespace kode
 {
@@ -117,6 +121,7 @@ public:
     QSGGeometryNode *invisibles{nullptr};
     QSGGeometryNode *guides{nullptr};
     QSGGeometryNode *scopeGuides{nullptr};
+    QSGGeometryNode *squiggles{nullptr};
     QSGNode *selectionLayer{nullptr};
     QSGNode *textLayer{nullptr};
     QSGRectangleNode *caret{nullptr};
@@ -236,6 +241,20 @@ std::unique_ptr<QSGGeometryNode> makeRectanglesNode()
     return node;
 }
 
+// A geometry node drawing triangles colored by their vertices.
+std::unique_ptr<QSGGeometryNode> makeColoredNode()
+{
+    auto node{std::make_unique<QSGGeometryNode>()};
+    auto geometry{std::make_unique<QSGGeometry>(QSGGeometry::defaultAttributes_ColoredPoint2D(), 0)};
+    geometry->setDrawingMode(QSGGeometry::DrawTriangles);
+    node->setGeometry(geometry.release());
+    node->setFlag(QSGNode::OwnsGeometry);
+    auto material{std::make_unique<QSGVertexColorMaterial>()};
+    node->setMaterial(material.release());
+    node->setFlag(QSGNode::OwnsMaterial);
+    return node;
+}
+
 // Two triangles per rectangle.
 void setRectangles(QSGGeometryNode *node, const QList<QRectF> &rects, const QColor &color)
 {
@@ -306,6 +325,8 @@ EditorView::EditorView(QQuickItem *parent)
     setFlag(ItemAcceptsDrops);
     setActiveFocusOnTab(true);
     setCursor(Qt::IBeamCursor);
+    // For ⌘ over a word (a link to its definition).
+    setAcceptHoverEvents(true);
     EditorAccessible::installFactory();
     updateMetrics();
     connect(QGuiApplication::clipboard(), &QClipboard::dataChanged, this, &EditorView::canPasteChanged);
@@ -369,6 +390,7 @@ void EditorView::attach(TextDocument *document)
     connect(document, &TextDocument::highlightingChanged, this, &EditorView::documentHighlightingChanged);
     connect(document, &TextDocument::indentationChanged, this, &EditorView::documentIndentationChanged);
     connect(document, &TextDocument::defaultIndentationChanged, this, &EditorView::defaultIndentationChanged);
+    connect(document, &TextDocument::diagnosticsChanged, this, &QQuickItem::polish);
     // A document deleted under the view (its file closed): back to its own.
     if (document != m_ownDocument.get()) {
         connect(document, &QObject::destroyed, this, [this] { setDocument(nullptr); });
@@ -491,8 +513,8 @@ void EditorView::setColor(QRgb &field, const QColor &color)
         return;
     }
     field = color.rgba();
-    // The invisibles and guides take their color with their geometry.
-    m_flags |= InvisiblesChanged | GuidesChanged;
+    // The invisibles, guides and underlines take their color with their geometry.
+    m_flags |= InvisiblesChanged | GuidesChanged | DiagnosticsChanged;
     emit colorsChanged();
     update();
 }
@@ -2115,6 +2137,216 @@ void EditorView::layoutMatches()
     }
 }
 
+void EditorView::layoutDiagnostics()
+{
+    QList<Squiggle> squiggles;
+    QVariantList areas;
+    const QList<TextDocument::Diagnostic> &diagnostics{m_document->diagnostics()};
+    if (!m_rows.empty() && !diagnostics.isEmpty()) {
+        const qsizetype first{buffer().lineStart(m_rows.front().line)};
+        const qsizetype last{buffer().lineStart(m_rows.back().line) + buffer().lineLength(m_rows.back().line)};
+        // Sorted by start: those starting past the rows end it.
+        for (const TextDocument::Diagnostic &diagnostic : diagnostics) {
+            if (diagnostic.start > last) {
+                break;
+            }
+            if (diagnostic.end >= first) {
+                appendDiagnostic(diagnostic, squiggles, areas);
+            }
+        }
+    }
+    if (squiggles != m_squiggles) {
+        m_squiggles = std::move(squiggles);
+        m_flags |= DiagnosticsChanged;
+    }
+    if (areas != m_diagnosticAreas) {
+        m_diagnosticAreas = std::move(areas);
+        emit diagnosticAreasChanged();
+    }
+}
+
+void EditorView::appendDiagnostic(
+    const TextDocument::Diagnostic &diagnostic,
+    QList<Squiggle> &squiggles,
+    QVariantList &areas
+) const
+{
+    const qsizetype startLine{buffer().lineAt(diagnostic.start)};
+    const qsizetype endLine{buffer().lineAt(diagnostic.end)};
+    const auto firstRow{std::ranges::lower_bound(m_rows, startLine, {}, &Row::line)};
+    for (auto row{firstRow}; row != m_rows.end() && row->line <= endLine; ++row) {
+        const qsizetype lineStart{buffer().lineStart(row->line)};
+        qsizetype from{row->line == startLine ? diagnostic.start - lineStart : 0};
+        qsizetype to{row->line == endLine ? diagnostic.end - lineStart : row->text.size()};
+        // An empty range marks the character at it (or before it, at a line's end).
+        if (from >= to) {
+            to = std::min(from + 1, row->text.size());
+            from = std::max(qsizetype{0}, to - 1);
+        }
+        QList<QRectF> rects;
+        appendRangeRects(rects, *row, from, to);
+        if (rects.isEmpty()) {
+            // An empty line: one character's width.
+            rects.append({0.0, row->top, m_charWidth, m_lineHeight});
+        }
+        for (const QRectF &rect : std::as_const(rects)) {
+            squiggles.append({.rect = rect, .severity = diagnostic.severity});
+            areas.append(QVariantMap{
+                {QStringLiteral("x"), textLeft() + rect.x()},
+                {QStringLiteral("y"), m_baseTop + rect.y()},
+                {QStringLiteral("width"), rect.width()},
+                {QStringLiteral("height"), rect.height()},
+                {QStringLiteral("message"), diagnostic.message},
+            });
+        }
+    }
+}
+
+QRgb EditorView::severityColor(qint64 severity) const noexcept
+{
+    switch (severity) {
+    case TextDocument::Diagnostic::Error:
+        return m_colors.error;
+    case TextDocument::Diagnostic::Warning:
+        return m_colors.warning;
+    case TextDocument::Diagnostic::Information:
+        return m_colors.information;
+    default:
+        return m_colors.hint;
+    }
+}
+
+void EditorView::keyReleaseEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Control) {
+        updateLink(event->modifiers());
+    }
+    QQuickItem::keyReleaseEvent(event);
+}
+
+void EditorView::hoverMoveEvent(QHoverEvent *event)
+{
+    updateLink(event->modifiers());
+}
+
+void EditorView::hoverLeaveEvent(QHoverEvent *event)
+{
+    setLink(-1, -1);
+    QQuickItem::hoverLeaveEvent(event);
+}
+
+void EditorView::updateLink(Qt::KeyboardModifiers modifiers)
+{
+    // Where the pointer is now: the text may have scrolled under it since it moved.
+    const QPointF point{mapFromGlobal(QCursor::pos())};
+    if (modifiers != Qt::ControlModifier || m_document->languageServer().isEmpty() || !isUnderMouse() ||
+        point.x() < textLeft()) {
+        setLink(-1, -1);
+        return;
+    }
+    const qsizetype position{positionAt(point)};
+    const qsizetype line{buffer().lineAt(position)};
+    const qsizetype lineStart{buffer().lineStart(line)};
+    const QString text{buffer().text(lineStart, buffer().lineLength(line))};
+    const matching::Range word{matching::wordAt(text, position - lineStart)};
+    if (word.end <= word.start) {
+        setLink(-1, -1);
+        return;
+    }
+    setLink(lineStart + word.start, lineStart + word.end);
+}
+
+void EditorView::setLink(qsizetype start, qsizetype end)
+{
+    if (start == m_linkStart && end == m_linkEnd) {
+        return;
+    }
+    m_linkStart = start;
+    m_linkEnd = end;
+    setCursor(start >= 0 ? Qt::PointingHandCursor : Qt::IBeamCursor);
+    polish();
+}
+
+void EditorView::layoutLink()
+{
+    QList<QRectF> rects;
+    // An edit may have moved the text under it: the next move finds it again.
+    if (m_linkStart >= 0 && m_linkEnd <= buffer().length()) {
+        const qsizetype line{buffer().lineAt(m_linkStart)};
+        const qsizetype lineStart{buffer().lineStart(line)};
+        const auto first{std::ranges::lower_bound(m_rows, line, {}, &Row::line)};
+        for (auto row{first}; row != m_rows.end() && row->line == line; ++row) {
+            appendRangeRects(rects, *row, m_linkStart - lineStart, m_linkEnd - lineStart);
+        }
+    }
+    if (rects != m_linkRects) {
+        m_linkRects = std::move(rects);
+        m_flags |= DiagnosticsChanged;
+    }
+}
+
+void EditorView::fillSquiggles(QSGGeometryNode *node) const
+{
+    // A wave under the text: 2 px up, 2 px down, each stroke a 1 px band.
+    constexpr qreal step{2.0};
+    constexpr qreal amplitude{2.0};
+    constexpr qreal half{0.6};
+    const auto strokes{[](const Squiggle &squiggle) {
+        return static_cast<qsizetype>(std::ceil(squiggle.rect.width() / step));
+    }};
+    qsizetype count{0};
+    for (const Squiggle &squiggle : m_squiggles) {
+        count += strokes(squiggle);
+    }
+    // The link's underline: one band per rectangle, in the text's color.
+    count += m_linkRects.size();
+    QSGGeometry *const geometry{node->geometry()};
+    geometry->allocate(static_cast<int>(count * 6));
+    const std::span vertices{geometry->vertexDataAsColoredPoint2D(), static_cast<std::size_t>(count * 6)};
+    std::size_t vertex{0};
+    for (const QRectF &rect : m_linkRects) {
+        const QRgb color{m_colors.text};
+        const qint32 alpha{qAlpha(color)};
+        const auto red{static_cast<uchar>(qRed(color) * alpha / 255)};
+        const auto green{static_cast<uchar>(qGreen(color) * alpha / 255)};
+        const auto blue{static_cast<uchar>(qBlue(color) * alpha / 255)};
+        const auto left{static_cast<float>(rect.left())};
+        const auto right{static_cast<float>(rect.right())};
+        const auto top{static_cast<float>(rect.bottom() - 2.0)};
+        const auto bottom{static_cast<float>(rect.bottom() - 1.0)};
+        for (const auto &[x, y] :
+             {std::pair{left, top}, {right, top}, {left, bottom}, {right, top}, {right, bottom}, {left, bottom}}) {
+            vertices[vertex++].set(x, y, red, green, blue, static_cast<uchar>(alpha));
+        }
+    }
+    for (const Squiggle &squiggle : m_squiggles) {
+        const QRgb color{severityColor(squiggle.severity)};
+        const qint32 alpha{qAlpha(color)};
+        const auto red{static_cast<uchar>(qRed(color) * alpha / 255)};
+        const auto green{static_cast<uchar>(qGreen(color) * alpha / 255)};
+        const auto blue{static_cast<uchar>(qBlue(color) * alpha / 255)};
+        const qreal bottom{squiggle.rect.bottom() - 1.0};
+        for (qsizetype stroke{0}; stroke < strokes(squiggle); ++stroke) {
+            const qreal x0{squiggle.rect.left() + (static_cast<qreal>(stroke) * step)};
+            const auto left{static_cast<float>(x0)};
+            const auto right{static_cast<float>(std::min(x0 + step, squiggle.rect.right()))};
+            const auto from{static_cast<float>(stroke % 2 == 0 ? bottom : bottom - amplitude)};
+            const auto to{static_cast<float>(stroke % 2 == 0 ? bottom - amplitude : bottom)};
+            const auto band{static_cast<float>(half)};
+            for (const auto &[x, y] :
+                 {std::pair{left, from - band},
+                  {right, to - band},
+                  {left, from + band},
+                  {right, to - band},
+                  {right, to + band},
+                  {left, from + band}}) {
+                vertices[vertex++].set(x, y, red, green, blue, static_cast<uchar>(alpha));
+            }
+        }
+    }
+    node->markDirty(QSGNode::DirtyGeometry);
+}
+
 void EditorView::layoutInvisibles()
 {
     // Rows keep their place while the view scrolls: only a layout changes them.
@@ -2256,6 +2488,8 @@ void EditorView::updatePolish()
     layoutMatches();
     layoutInvisibles();
     layoutGuides();
+    layoutDiagnostics();
+    layoutLink();
     layoutMarks();
     layoutFoldMarks();
     if (m_widestLine > widestBefore) {
@@ -2289,6 +2523,8 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->guides = guides.get();
         auto scopeGuides{makeRectanglesNode()};
         created->scopeGuides = scopeGuides.get();
+        auto squiggles{makeColoredNode()};
+        created->squiggles = squiggles.get();
         created->selectionLayer = selectionLayer.get();
         created->textLayer = textLayer.get();
         created->caret = caret.get();
@@ -2300,6 +2536,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         content->appendChildNode(guides.release());
         content->appendChildNode(scopeGuides.release());
         content->appendChildNode(textLayer.release());
+        content->appendChildNode(squiggles.release());
         content->appendChildNode(caretLayer.release());
         content->appendChildNode(caret.release());
         clip->appendChildNode(content.release());
@@ -2308,7 +2545,7 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         created->appendChildNode(gutter.release());
         node = created.release();
         // A new window (the view moved to another one) starts without nodes.
-        m_flags |= InvisiblesChanged | GuidesChanged;
+        m_flags |= InvisiblesChanged | GuidesChanged | DiagnosticsChanged;
     }
 
     // Scrolling moves the two transforms; the nodes inside move only when
@@ -2358,6 +2595,10 @@ QSGNode *EditorView::updatePaintNode(QSGNode *oldNode, UpdatePaintNodeData * /*d
         setRectangles(node->guides, m_guideRects, guideColor());
         setRectangles(node->scopeGuides, m_scopeGuideRects, scopeColor());
         m_flags &= ~GuidesChanged;
+    }
+    if ((m_flags & DiagnosticsChanged) != 0U) {
+        fillSquiggles(node->squiggles);
+        m_flags &= ~DiagnosticsChanged;
     }
     syncRectangles(window, node->marksLayer, node->matches, m_matchRects, matchColor());
     syncRectangles(window, node->marksLayer, node->words, m_wordRects, wordColor());
@@ -2752,6 +2993,10 @@ bool EditorView::handleMoveEach(const QKeyEvent *event)
 
 void EditorView::keyPressEvent(QKeyEvent *event)
 {
+    // ⌘ (Qt's Control on macOS) pressed over a word: it becomes a link.
+    if (event->key() == Qt::Key_Control) {
+        updateLink(event->modifiers());
+    }
     if (handleMoveEach(event) || handleNavigation(event) || handleDeletion(event)) {
         return;
     }
@@ -2873,6 +3118,13 @@ void EditorView::mousePressEvent(QMouseEvent *event)
         const qsizetype line{buffer().lineAt(position)};
         const qsizetype next{line + 1 < buffer().lineCount() ? buffer().lineStart(line + 1) : buffer().length()};
         select(buffer().lineStart(line), next);
+        event->accept();
+        return;
+    }
+    // ⌘ (Qt's Control on macOS): go to the definition, as in Xcode and VS Code.
+    if (event->modifiers() == Qt::ControlModifier) {
+        moveCaret(position, Select::Collapse);
+        emit definitionRequested(position);
         event->accept();
         return;
     }

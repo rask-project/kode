@@ -2,6 +2,8 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
+import QtQuick.Dialogs
 import QtQuick.Layouts
 
 import Rask.Application
@@ -52,6 +54,10 @@ Window {
             {
                 title: qsTr("Files"),
                 iconSource: Qt.resolvedUrl("assets/settings/files.svg")
+            },
+            {
+                title: qsTr("Language Servers"),
+                iconSource: Qt.resolvedUrl("assets/settings/languageservers.svg")
             },
             {
                 title: qsTr("Updates"),
@@ -315,6 +321,310 @@ Window {
                         onClicked: integration.commandInstalled = CommandLineTool.install("kode")
                     }
                 }
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+        }
+        // Language Servers: on or off, where to find them, clangd's threads,
+        // and what was found for each language.
+        ColumnLayout {
+            spacing: 6
+
+            FormGroup {
+                FormRow {
+                    label: qsTr("Use language servers")
+                    detail: qsTr("Problems as you type, Go to Definition (F2 or ⌘-click)")
+                    showSeparator: false
+
+                    Switch {
+                        checked: Preferences.languageServers
+                        onToggled: Preferences.languageServers = checked
+                    }
+                }
+                FormRow {
+                    label: qsTr("clangd threads")
+                    detail: qsTr("For analyzing and indexing C and C++; fewer use less CPU")
+                    enabled: Preferences.languageServers
+
+                    SpinBox {
+                        from: 1
+                        to: 2
+                        value: Preferences.clangdThreads
+                        onValueModified: Preferences.clangdThreads = value
+                    }
+                }
+            }
+
+            FormGroup {
+                enabled: Preferences.languageServers
+
+                FormRow {
+                    label: qsTr("Search path")
+                    detail: qsTr("In order: your folders, then the shell's PATH")
+                    showSeparator: false
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Add Folder…")
+                        onClicked: serverFolderDialog.open()
+                    }
+                }
+
+                // Typing a path (the file dialog hides /opt and the like: ⇧⌘G there).
+                FormRow {
+                    id: pathRow
+
+                    property bool invalid: false
+
+                    label: qsTr("Add a path")
+                    detail: invalid ? qsTr("Not a folder") : qsTr("Type a folder, e.g. /opt/Qt/6.12.0/macos/bin")
+
+                    TextField {
+                        id: pathField
+
+                        Layout.preferredWidth: 220
+                        placeholderText: "/opt/…/bin"
+                        onTextEdited: pathRow.invalid = false
+                        onAccepted: pathRow.add()
+                    }
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Add")
+                        enabled: pathField.text.trim() !== ""
+                        onClicked: pathRow.add()
+                    }
+
+                    function add() {
+                        pathRow.invalid = !Preferences.addLanguageServerPath(pathField.text);
+                        if (!pathRow.invalid)
+                            pathField.clear();
+                    }
+                }
+
+                Repeater {
+                    model: Preferences.languageServerFolders
+
+                    delegate: FormRow {
+                        id: folderRow
+
+                        required property string modelData
+                        required property int index
+
+                        label: modelData
+                        detail: qsTr("Your folder")
+
+                        Button {
+                            focusPolicy: Qt.TabFocus
+                            text: qsTr("Remove")
+                            onClicked: Preferences.removeLanguageServerFolder(folderRow.index)
+                        }
+                    }
+                }
+
+                // The shell's PATH, folded as a disclosure group of System Settings.
+                FormRow {
+                    id: shellPathRow
+
+                    property bool expanded: false
+
+                    label: qsTr("The shell's PATH")
+                    detail: qsTr("%1 folders").arg(OpenDocuments.languageServers.shellPath.length)
+                    selectable: true
+                    onClicked: expanded = !expanded
+                    leading: IconImage {
+                        name: "chevron.right"
+                        sourceSize.width: 10
+                        sourceSize.height: 10
+                        color: SystemColors.secondaryLabel
+                        rotation: shellPathRow.expanded ? 90 : 0
+
+                        Behavior on rotation {
+                            NumberAnimation {
+                                duration: 150
+                            }
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: shellPathRow.expanded ? OpenDocuments.languageServers.shellPath : []
+
+                    delegate: FormRow {
+                        required property string modelData
+
+                        label: modelData
+                        // Under the group's title, past its chevron.
+                        leading: Item {
+                            implicitWidth: 10
+                        }
+                    }
+                }
+            }
+
+            // Any server for any syntax, before the built-in one.
+            FormGroup {
+                enabled: Preferences.languageServers
+
+                FormRow {
+                    label: qsTr("Custom servers")
+                    detail: qsTr("Your own server for a language, used instead of the built-in one")
+                    showSeparator: false
+                }
+
+                Repeater {
+                    model: OpenDocuments.languageServers.custom
+
+                    delegate: FormRow {
+                        id: customRow
+
+                        required property var modelData
+                        required property int index
+                        readonly property bool found: modelData.path !== ""
+
+                        label: qsTr("%1: %2").arg(modelData.syntax).arg(modelData.command)
+                        detail: found ? modelData.path : qsTr("Not found in the search path")
+                        monospaceDetail: found
+                        leading: IconImage {
+                            name: customRow.found ? "checkmark.circle.fill" : "xmark.circle"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            color: customRow.found ? (Appearance.dark ? "#30d158" : "#28cd41") : SystemColors.tertiaryLabel
+                        }
+
+                        Button {
+                            focusPolicy: Qt.TabFocus
+                            text: qsTr("Remove")
+                            onClicked: Preferences.removeCustomLanguageServer(customRow.index)
+                        }
+                    }
+                }
+
+                FormRow {
+                    label: qsTr("Language")
+                    detail: qsTr("Its files as Kode highlights them; language id for the server")
+
+                    ComboBox {
+                        id: customSyntax
+
+                        focusPolicy: Qt.TabFocus
+                        Layout.preferredWidth: 160
+                        model: Syntaxes.all
+                    }
+                    TextField {
+                        id: customLanguageId
+
+                        Layout.preferredWidth: 90
+                        placeholderText: customSyntax.currentText.toLowerCase()
+                    }
+                }
+                FormRow {
+                    id: customCommandRow
+
+                    label: qsTr("Command")
+                    detail: qsTr("The program and its arguments, e.g. jdtls -data ~/.cache/jdtls")
+
+                    TextField {
+                        id: customCommand
+
+                        Layout.preferredWidth: 220
+                        placeholderText: "server --stdio"
+                        onAccepted: customCommandRow.add()
+                    }
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Add")
+                        enabled: customCommand.text.trim() !== ""
+                        onClicked: customCommandRow.add()
+                    }
+
+                    function add() {
+                        if (Preferences.addCustomLanguageServer(customSyntax.currentText, customCommand.text, customLanguageId.text)) {
+                            customCommand.clear();
+                            customLanguageId.clear();
+                        }
+                    }
+                }
+            }
+
+            FormGroup {
+                enabled: Preferences.languageServers
+
+                FormRow {
+                    label: qsTr("Servers")
+                    detail: qsTr("Each language's first one found in the search path")
+                    showSeparator: false
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Detect Again")
+                        onClicked: OpenDocuments.languageServers.detect()
+                    }
+                }
+
+                Repeater {
+                    model: OpenDocuments.languageServers.servers
+
+                    // A FormRow's children go to its controls: the handlers sit over it instead.
+                    delegate: Item {
+                        id: serverRow
+
+                        required property var modelData
+                        required property int index
+                        readonly property bool found: modelData.path !== ""
+                        // Just copied: the row says so for a moment.
+                        property bool copied: false
+
+                        Layout.fillWidth: true
+                        implicitHeight: serverForm.implicitHeight
+
+                        FormRow {
+                            id: serverForm
+
+                            anchors.fill: parent
+                            label: serverRow.modelData.languages
+                            detail: serverRow.found ? serverRow.modelData.path : serverRow.copied ? qsTr("Copied: paste it in a terminal and run it") : qsTr("Not found. To install: %1").arg(serverRow.modelData.install)
+                            monospaceDetail: serverRow.found
+                            highlighted: serverRow.copied
+                            leading: IconImage {
+                                name: serverRow.copied ? "doc.on.clipboard" : serverRow.found ? "checkmark.circle.fill" : "xmark.circle"
+                                sourceSize.width: 14
+                                sourceSize.height: 14
+                                color: serverRow.found ? (Appearance.dark ? "#30d158" : "#28cd41") : SystemColors.tertiaryLabel
+                            }
+                        }
+
+                        // Press and hold a missing one: its install command on the clipboard.
+                        TapHandler {
+                            enabled: !serverRow.found
+                            onLongPressed: {
+                                OpenDocuments.languageServers.copyInstallCommand(serverRow.index);
+                                serverRow.copied = true;
+                                copiedTimer.restart();
+                            }
+                        }
+
+                        Timer {
+                            id: copiedTimer
+
+                            interval: 2500
+                            onTriggered: serverRow.copied = false
+                        }
+
+                        HelpTag {
+                            text: serverRow.found ? "" : qsTr("Press and hold to copy “%1”").arg(serverRow.modelData.install)
+                            delay: 500
+                        }
+                    }
+                }
+            }
+
+            FolderDialog {
+                id: serverFolderDialog
+
+                title: qsTr("Search Folder for Language Servers")
+                onAccepted: Preferences.addLanguageServerFolder(selectedFolder)
             }
 
             Item {

@@ -489,6 +489,24 @@ nothing. What moved is the work that grows with the file, measured first
 
 ### Stage 11 — Minimap and LSP
 
+Done: the minimap (`Minimap`, beside the view; View > Show Minimap), its
+cost measured (`docs/editor-bench.md`). LSP started: the client
+(`src/lsp/`: framing, a server's process and handshake, a server per
+program and root found on the login shell's PATH, edits sent as ranges)
+and diagnostics — a wave under each, the message in a help tag, errors
+and warnings counted in the status bar (a click lists them); what the
+server is doing (starting, analyzing the file, indexing) in the sidebar's
+footer, once per window; clangd given the compilation database of a build
+folder. Go to Definition (F2 — Rename while the sidebar has the focus —,
+⌘click; several: a menu) and Switch Header/Source (F4, as Qt Creator's:
+beside it, else clangd's). Settings > Language Servers: on/off, folders
+searched before the shell's PATH, clangd's threads (1–2), what was found
+for each language (Detect Again; a missing one's install command copied
+by a long press), custom servers (any command for any syntax, before the
+built-in ones). Built in: clangd, Python, Rust, Go, JS/TS, QML, Swift,
+Bash, Lua, Java, Kotlin, YAML, JSON, HTML, CSS, Markdown, CMake,
+Dockerfile, Terraform, TOML. Next: completion, then semantic highlighting.
+
 - **Minimap** on top of `EditorView`: the document at a reduced scale
   beside the text, the part in view marked, click and drag to scroll. Bound
   by what is visible like the rest of the view: nothing per frame scales
@@ -496,7 +514,8 @@ nothing. What moved is the work that grows with the file, measured first
 - **LSP** (Language Server Protocol): a client talking to the language
   server of each language over stdio (JSON-RPC), the documents' changes
   sent incrementally; completion, diagnostics in the text and the gutter,
-  and semantic highlighting (the colors Qt Creator gets from
+  Go to Definition (F2, ⌘click), Switch Header/Source (F4), a Settings
+  section to find and configure the servers, and semantic highlighting (the colors Qt Creator gets from
   clangd/QmlJS: fields, parameters, locals) over KSyntaxHighlighting's.
 
 ---

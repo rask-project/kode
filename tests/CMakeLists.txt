@@ -29,6 +29,15 @@ set(editor_sources
     ../src/editor/WrapIndex.cpp
 )
 
+set(lsp_sources
+    ../src/lsp/LanguageServer.h
+    ../src/lsp/LanguageServer.cpp
+    ../src/lsp/LanguageServers.h
+    ../src/lsp/LanguageServers.cpp
+    ../src/lsp/Protocol.h
+    ../src/lsp/Protocol.cpp
+)
+
 qt_add_executable(tst_document
     tst_document.h
     tst_document.cpp
@@ -158,8 +167,9 @@ qt_add_executable(tst_splits
     ../src/TextCodec.h
     ../src/TextCodec.cpp
     ${editor_sources}
+    ${lsp_sources}
 )
-target_include_directories(tst_splits PRIVATE ../src ../src/editor)
+target_include_directories(tst_splits PRIVATE ../src ../src/editor ../src/lsp)
 target_link_libraries(tst_splits PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation" "-framework Foundation" "-framework UniformTypeIdentifiers")
 set_source_files_properties(../src/FileTypes.mm TARGET_DIRECTORY tst_splits PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 add_test(NAME tst_splits COMMAND tst_splits)
@@ -205,3 +215,18 @@ qt_add_executable(tst_commenting
 target_include_directories(tst_commenting PRIVATE ../src/editor)
 target_link_libraries(tst_commenting PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME tst_commenting COMMAND tst_commenting)
+
+qt_add_executable(tst_lsp
+    tst_lsp.h
+    tst_lsp.cpp
+    ../src/Document.h
+    ../src/Document.cpp
+    ../src/TextCodec.h
+    ../src/TextCodec.cpp
+    ${editor_sources}
+    ${lsp_sources}
+)
+target_include_directories(tst_lsp PRIVATE ../src ../src/lsp ../src/editor)
+target_link_libraries(tst_lsp PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+add_test(NAME tst_lsp COMMAND tst_lsp)
+set_tests_properties(tst_lsp PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

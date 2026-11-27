@@ -87,9 +87,33 @@ Flickable {
         scopeColor: Qt.alpha(SystemColors.controlAccent, 0.75)
         wordColor: Qt.alpha(SystemColors.text, 0.1)
         matchColor: Qt.alpha(SystemColors.findHighlight, 0.45)
+        // The system's red, orange and blue.
+        errorColor: Appearance.dark ? "#ff453a" : "#ff3b30"
+        warningColor: Appearance.dark ? "#ff9f0a" : "#ff9500"
+        informationColor: Appearance.dark ? "#0a84ff" : "#007aff"
+        hintColor: SystemColors.tertiaryLabel
 
         onCaretMoved: root.ensureVisible(editorView.cursorRectangle)
         onScrollRequested: contentY => root.contentY = Math.max(0, Math.min(contentY, root.contentHeight - root.height))
+    }
+
+    // A diagnostic's message where the pointer rests on it.
+    Repeater {
+        model: editorView.diagnosticAreas
+
+        delegate: Item {
+            required property var modelData
+
+            x: modelData.x
+            y: modelData.y
+            width: modelData.width
+            height: modelData.height
+
+            HelpTag {
+                text: parent.modelData.message
+                delay: 500
+            }
+        }
     }
 
     Minimap {

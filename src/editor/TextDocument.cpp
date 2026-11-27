@@ -6,12 +6,16 @@
 #include <KSyntaxHighlighting/Definition>
 #include <KSyntaxHighlighting/Theme>
 
+#include <QVariantMap>
+
 #include <algorithm>
 #include <ranges>
 #include <utility>
 
 namespace kode
 {
+
+using namespace Qt::StringLiterals;
 
 namespace
 {
@@ -119,6 +123,56 @@ void TextDocument::detectIndentation()
     setIndentWidth(style.width);
 }
 
+void TextDocument::setDiagnostics(QList<Diagnostic> diagnostics)
+{
+    std::ranges::sort(diagnostics, {}, &Diagnostic::start);
+    m_diagnostics = std::move(diagnostics);
+    emit diagnosticsChanged();
+}
+
+qint32 TextDocument::errorCount() const
+{
+    return static_cast<qint32>(std::ranges::count(m_diagnostics, Diagnostic::Error, &Diagnostic::severity));
+}
+
+qint32 TextDocument::warningCount() const
+{
+    return static_cast<qint32>(std::ranges::count(m_diagnostics, Diagnostic::Warning, &Diagnostic::severity));
+}
+
+QVariantList TextDocument::diagnosticList(qint32 limit) const
+{
+    // A menu item's text: the first line, cut short.
+    constexpr qsizetype maxMessage{120};
+    QVariantList list;
+    list.reserve(std::min<qsizetype>(limit, m_diagnostics.size()));
+    for (const Diagnostic &diagnostic : m_diagnostics | std::views::take(limit)) {
+        const qsizetype line{m_buffer.lineAt(diagnostic.start)};
+        QString message{diagnostic.message.section(u'\n', 0, 0)};
+        if (message.size() > maxMessage) {
+            message = message.first(maxMessage - 1) + u'…';
+        }
+        list.append(QVariantMap{
+            {u"position"_s, diagnostic.start},
+            {u"line"_s, line},
+            {u"column"_s, diagnostic.start - m_buffer.lineStart(line)},
+            {u"message"_s, message},
+            {u"severity"_s, diagnostic.severity},
+        });
+    }
+    return list;
+}
+
+void TextDocument::setLanguageServer(const QString &name, const QString &activity)
+{
+    if (name == m_languageServer && activity == m_languageServerActivity) {
+        return;
+    }
+    m_languageServer = name;
+    m_languageServerActivity = activity;
+    emit languageServerChanged();
+}
+
 void TextDocument::setText(const QString &text, bool keepPlace)
 {
     setBuffer(TextBuffer{text}, keepPlace);
@@ -131,6 +185,10 @@ void TextDocument::setBuffer(TextBuffer buffer, bool keepPlace)
     m_buffer = std::move(buffer);
     m_highlighter->reset();
     m_edited.clear();
+    if (!m_diagnostics.isEmpty()) {
+        m_diagnostics.clear();
+        emit diagnosticsChanged();
+    }
     m_undo.clear();
     m_undoIndex = 0;
     m_cleanIndex = 0;
@@ -295,6 +353,17 @@ void TextDocument::apply(qsizetype position, const QString &from, const QString 
     const qsizetype line{m_buffer.lineAt(position)};
     m_highlighter->linesReplaced(line, newlines(from), newlines(to));
     noteEdited(line, newlines(from), newlines(to));
+    // A diagnostic's ends move with the text after them; inside the edit, to its end.
+    const auto moved{[position, &from, &to](qsizetype at) {
+        if (at <= position) {
+            return at;
+        }
+        return at >= position + from.size() ? at + to.size() - from.size() : position + to.size();
+    }};
+    for (Diagnostic &diagnostic : m_diagnostics) {
+        diagnostic.start = moved(diagnostic.start);
+        diagnostic.end = moved(diagnostic.end);
+    }
     emit replaced(position, from, to);
     emit textChanged();
 }

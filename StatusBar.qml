@@ -2,7 +2,9 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 
+import Rask.Controls
 import Rask.Platform
 
 import Kode
@@ -17,6 +19,8 @@ Item {
 
     // Reading the file again as `encoding` (the window asks about unsaved changes).
     signal reopenRequested(string encoding)
+    // A problem chosen from the list: the caret goes to `position`.
+    signal diagnosticChosen(int position)
 
     implicitHeight: 26
 
@@ -41,6 +45,112 @@ Item {
         }
         color: SystemColors.secondaryLabel
         font.pixelSize: 11
+    }
+
+    // The document's errors and warnings, from its language server (which
+    // shows once per window, in the sidebar's footer).
+    Row {
+        anchors.right: encodingLabel.left
+        anchors.rightMargin: 20
+        anchors.verticalCenter: parent.verticalCenter
+
+        Item {
+            id: issues
+
+            readonly property int errors: root.editor.document?.errorCount ?? 0
+            readonly property int warnings: root.editor.document?.warningCount ?? 0
+
+            anchors.verticalCenter: parent.verticalCenter
+            implicitWidth: issuesRow.implicitWidth
+            implicitHeight: issuesRow.implicitHeight
+            visible: errors + warnings > 0
+
+            Row {
+                id: issuesRow
+
+                spacing: 10
+
+                Repeater {
+                    model: [
+                        {
+                            icon: "xmark.circle.fill",
+                            count: issues.errors
+                        },
+                        {
+                            icon: "exclamationmark.triangle.fill",
+                            count: issues.warnings
+                        }
+                    ]
+
+                    delegate: Row {
+                        required property var modelData
+
+                        spacing: 3
+
+                        IconImage {
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: parent.modelData.icon
+                            sourceSize.width: 11
+                            sourceSize.height: 11
+                            color: issuesArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
+                        }
+
+                        Label {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: parent.modelData.count
+                            color: issuesArea.containsMouse ? SystemColors.label : SystemColors.secondaryLabel
+                            font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+
+            MouseArea {
+                id: issuesArea
+
+                anchors.fill: parent
+                anchors.margins: -6
+                hoverEnabled: true
+                onClicked: {
+                    issuesMenu.issues = root.editor.document.diagnosticList(issuesMenu.limit);
+                    issuesMenu.popup(issues, 0, issues.height);
+                }
+
+                HelpTag {
+                    text: {
+                        const errors = issues.errors === 1 ? qsTr("1 error") : qsTr("%1 errors").arg(issues.errors);
+                        const warnings = issues.warnings === 1 ? qsTr("1 warning") : qsTr("%1 warnings").arg(issues.warnings);
+                        return qsTr("%1 and %2 in this file. Click to list them.").arg(errors).arg(warnings);
+                    }
+                    delay: 500
+                }
+            }
+        }
+    }
+
+    // The document's problems by line; choosing one goes there.
+    Menu {
+        id: issuesMenu
+
+        readonly property int limit: 100
+        property var issues: []
+
+        popupType: Popup.Native
+
+        Instantiator {
+            model: issuesMenu.issues
+
+            delegate: MenuItem {
+                required property var modelData
+
+                // A native menu shows no SF Symbols: the severity in words.
+                text: qsTr("%1, line %2: %3").arg([qsTr("Error"), qsTr("Warning"), qsTr("Note"), qsTr("Hint")][Math.min(Math.max(modelData.severity, 1), 4) - 1]).arg(modelData.line + 1).arg(modelData.message)
+                onTriggered: root.diagnosticChosen(modelData.position)
+            }
+
+            onObjectAdded: (index, object) => issuesMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => issuesMenu.removeItem(object)
+        }
     }
 
     Label {

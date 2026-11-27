@@ -26,6 +26,8 @@ Item {
     property url folder
     // The file of the document in view, marked in the tree.
     property url currentFile
+    // The active split's text: its language server shows in the footer.
+    property TextDocument currentText: null
     // The title bar's height: the tree starts below it.
     property real topInset: 0
     property NativeWindow nativeWindow: null
@@ -504,6 +506,63 @@ Item {
         }
     }
 
+    // Once per window, level with the splits' status bars: the language
+    // server of the document in view, and what it is busy with.
+    Item {
+        id: footer
+
+        readonly property string server: sidebar.currentText?.languageServer ?? ""
+        readonly property string activity: sidebar.currentText?.languageServerActivity ?? ""
+
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 26
+
+        Rectangle {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 1
+            color: Qt.alpha(SystemColors.label, 0.1)
+        }
+
+        Row {
+            id: footerRow
+
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.right: parent.right
+            anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 5
+            visible: footer.server !== ""
+
+            BusyIndicator {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 12
+                height: 12
+                padding: 0
+                running: visible
+                visible: footer.activity !== ""
+            }
+
+            Label {
+                anchors.verticalCenter: parent.verticalCenter
+                width: footerRow.width - (footer.activity !== "" ? 17 : 0)
+                elide: Text.ElideRight
+                text: footer.activity === "" ? footer.server : qsTr("%1: %2").arg(footer.server).arg(footer.activity)
+                color: SystemColors.secondaryLabel
+                font.pixelSize: 11
+            }
+        }
+
+        HelpTag {
+            text: footer.server === "" ? "" : footer.activity === "" ? qsTr("%1 checks this file for problems as you type.").arg(footer.server) : qsTr("%1 is busy: %2. Problems show when it is done.").arg(footer.server).arg(footer.activity)
+            delay: 500
+        }
+    }
+
     TreeView {
         id: tree
 
@@ -511,7 +570,7 @@ Item {
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.bottom: footer.top
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: fileTree

@@ -54,7 +54,20 @@ QVariantList toList(const std::vector<Document *> &documents)
 
 } // namespace
 
-OpenDocuments::OpenDocuments(QObject *parent) : QObject(parent) {}
+OpenDocuments::OpenDocuments(QObject *parent) : QObject(parent)
+{
+    connect(&m_languageServers, &lsp::LanguageServers::locationsFound, this, &OpenDocuments::locationsFound);
+}
+
+qint32 OpenDocuments::findDefinition(Document *document, qint64 position)
+{
+    return m_languageServers.findDefinition(document, position);
+}
+
+qint32 OpenDocuments::switchHeaderSource(Document *document)
+{
+    return m_languageServers.switchHeaderSource(document);
+}
 
 OpenDocuments::~OpenDocuments() = default;
 
@@ -166,6 +179,7 @@ Document *OpenDocuments::adopt(Pointer document)
         emit documentsChanged();
     });
     m_documents.insert(m_documents.begin(), std::move(document));
+    m_languageServers.add(adopted);
     numberUntitled();
     emit documentsChanged();
     return adopted;
@@ -189,6 +203,7 @@ void OpenDocuments::close(Document *document)
         return;
     }
     emit documentClosing(document);
+    m_languageServers.remove(document);
     const Pointer closed{std::move(*found)};
     m_documents.erase(found);
     disconnect(closed.get(), nullptr, this, nullptr);

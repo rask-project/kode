@@ -89,6 +89,45 @@ Item {
             pane.documentChosen(document);
     }
 
+    // The language server's answer awaited (0: none).
+    property int locationTicket: 0
+    // A place to show once the document has loaded: {line, column}.
+    property var pendingPosition: null
+
+    // F2, ⌘click: where the symbol at `position` is defined.
+    function goToDefinition(position: int) {
+        pane.locationTicket = pane.document ? OpenDocuments.findDefinition(pane.document, position) : 0;
+    }
+
+    // F4: the header of a source file, or its source.
+    function switchHeaderSource() {
+        pane.locationTicket = pane.document ? OpenDocuments.switchHeaderSource(pane.document) : 0;
+    }
+
+    function goToLocation(location: var) {
+        const document = OpenDocuments.open(location.file);
+        if (!document)
+            return;
+        if (document !== pane.document)
+            pane.documentChosen(document);
+        if (location.line < 0)
+            return;
+        pane.pendingPosition = {
+            line: location.line,
+            column: location.column
+        };
+        pane.showPendingPosition();
+    }
+
+    function showPendingPosition() {
+        if (!pane.pendingPosition || !pane.document || pane.document.loading)
+            return;
+        textEditor.editor.goToLine(`${pane.pendingPosition.line + 1}:${pane.pendingPosition.column + 1}`);
+        textEditor.center(textEditor.editor.cursorRectangle);
+        pane.pendingPosition = null;
+        pane.focusEditor();
+    }
+
     function goForward() {
         const document = documentHistory.forward();
         if (document)
@@ -112,6 +151,53 @@ Item {
         y: bar.height + 40
         onChosen: document => pane.documentChosen(document)
         onClosed: pane.focusEditor()
+    }
+
+    Connections {
+        target: OpenDocuments
+
+        function onLocationsFound(ticket: int, locations: var) {
+            if (ticket !== pane.locationTicket)
+                return;
+            pane.locationTicket = 0;
+            if (locations.length === 1) {
+                pane.goToLocation(locations[0]);
+            } else if (locations.length > 1) {
+                locationsMenu.locations = locations;
+                locationsMenu.popup(textEditor, textEditor.editor.cursorRectangle.x - textEditor.contentX, textEditor.editor.cursorRectangle.y + textEditor.editor.cursorRectangle.height - textEditor.contentY);
+            }
+        }
+    }
+
+    Connections {
+        target: pane.document
+
+        function onLoadingChanged() {
+            pane.showPendingPosition();
+        }
+    }
+
+    // Several definitions (declaration and definition, overloads): which one.
+    Menu {
+        id: locationsMenu
+
+        property var locations: []
+
+        popupType: Popup.Native
+
+        Instantiator {
+            model: locationsMenu.locations
+
+            delegate: MenuItem {
+                required property var modelData
+
+                text: modelData.label
+                onTriggered: pane.goToLocation(modelData)
+            }
+
+            onObjectAdded: (index, object) => locationsMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => locationsMenu.removeItem(object)
+        }
     }
 
     Connections {
@@ -411,6 +497,7 @@ Item {
                 pane.activated();
         }
         editor.onContextMenuRequested: pane.contextMenuRequested()
+        editor.onDefinitionRequested: position => pane.goToDefinition(position)
     }
 
     Label {
@@ -433,6 +520,11 @@ Item {
             editor: textEditor.editor
             document: pane.document
             onReopenRequested: encoding => pane.reviewRequested(() => pane.document.reopen(encoding))
+            onDiagnosticChosen: position => {
+                textEditor.editor.select(position, position);
+                textEditor.center(textEditor.editor.cursorRectangle);
+                pane.focusEditor();
+            }
         }
     }
 }

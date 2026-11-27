@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Document.h"
+#include "LanguageServers.h"
 
 #include <QObject>
 #include <QUrl>
@@ -26,6 +27,8 @@ class OpenDocuments : public QObject
     // By name, for the documents menu.
     Q_PROPERTY(QVariantList sortedDocuments READ sortedDocuments NOTIFY documentsChanged)
     Q_PROPERTY(qint32 count READ count NOTIFY documentsChanged)
+    // Their language servers: the settings and what was found.
+    Q_PROPERTY(kode::lsp::LanguageServers *languageServers READ languageServers CONSTANT)
 public:
     explicit OpenDocuments(QObject *parent = nullptr);
     ~OpenDocuments() override;
@@ -58,6 +61,12 @@ public:
     Q_INVOKABLE void fileMoved(const QUrl &from, const QUrl &to);
     // `url` is a folder on disk (a window's folder, not a document).
     Q_INVOKABLE [[nodiscard]] static bool isFolder(const QUrl &url);
+    [[nodiscard]] lsp::LanguageServers *languageServers() noexcept { return &m_languageServers; }
+    // Where the symbol at `position` of `document` is defined: the language
+    // server answers with locationsFound(ticket); 0: none to ask.
+    Q_INVOKABLE qint32 findDefinition(kode::Document *document, qint64 position);
+    // The header of a source file or its source: locationsFound(ticket).
+    Q_INVOKABLE qint32 switchHeaderSource(kode::Document *document);
     // `folder` without a trailing slash, links resolved, to compare, name and key it.
     Q_INVOKABLE [[nodiscard]] static QUrl cleanFolder(const QUrl &folder);
 
@@ -68,6 +77,8 @@ signals:
     void errorOccurred(const QString &message);
     // Another program changed `document`'s file while it has unsaved changes.
     void changedOnDisk(kode::Document *document);
+    // Each {file, line, column, label}; line -1: the file only.
+    void locationsFound(qint32 ticket, const QVariantList &locations);
 
 private:
     struct DeleteLater {
@@ -80,6 +91,7 @@ private:
 
     // Most recently shown first. std::vector: QList needs copyable elements.
     std::vector<Pointer> m_documents;
+    lsp::LanguageServers m_languageServers;
 };
 
 } // namespace kode

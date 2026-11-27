@@ -5,6 +5,7 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 #include <memory>
@@ -42,6 +43,13 @@ class TextDocument : public QObject
                    defaultIndentationChanged)
     Q_PROPERTY(qint32 defaultIndentWidth READ defaultIndentWidth WRITE setDefaultIndentWidth NOTIFY
                    defaultIndentationChanged)
+    // The diagnostics that are errors, and warnings.
+    Q_PROPERTY(qint32 errorCount READ errorCount NOTIFY diagnosticsChanged)
+    Q_PROPERTY(qint32 warningCount READ warningCount NOTIFY diagnosticsChanged)
+    // The language server that checks it ("clangd"; empty: none), and what it
+    // is busy with ("Analyzing", "Indexing 12/120 (10%)"; empty: idle).
+    Q_PROPERTY(QString languageServer READ languageServer NOTIFY languageServerChanged)
+    Q_PROPERTY(QString languageServerActivity READ languageServerActivity NOTIFY languageServerChanged)
 public:
     // A caret and the selection's other end.
     struct Caret {
@@ -62,6 +70,19 @@ public:
     struct Lines {
         qsizetype first{0};
         qsizetype last{0};
+    };
+    // A problem a language server found in characters [start, end); edits move it.
+    struct Diagnostic {
+        // The protocol's severities.
+        static constexpr qint64 Error{1};
+        static constexpr qint64 Warning{2};
+        static constexpr qint64 Information{3};
+        static constexpr qint64 Hint{4};
+
+        QString message;
+        qsizetype start{0};
+        qsizetype end{0};
+        qint64 severity{Error};
     };
     // Where a view left the document, for the next view that shows it.
     struct Place {
@@ -90,6 +111,16 @@ public:
     void setDefaultIndentWithTabs(bool tabs);
     [[nodiscard]] qint32 defaultIndentWidth() const noexcept { return static_cast<qint32>(m_defaultIndentWidth); }
     void setDefaultIndentWidth(qint32 width);
+    [[nodiscard]] const QList<Diagnostic> &diagnostics() const noexcept { return m_diagnostics; }
+    // Sorted by start.
+    void setDiagnostics(QList<Diagnostic> diagnostics);
+    [[nodiscard]] qint32 errorCount() const;
+    [[nodiscard]] qint32 warningCount() const;
+    // The first `limit` diagnostics, for a menu: {position, line, column, message, severity}.
+    Q_INVOKABLE [[nodiscard]] QVariantList diagnosticList(qint32 limit) const;
+    [[nodiscard]] QString languageServer() const { return m_languageServer; }
+    [[nodiscard]] QString languageServerActivity() const { return m_languageServerActivity; }
+    void setLanguageServer(const QString &name, const QString &activity);
     [[nodiscard]] Place place() const noexcept { return m_place; }
     void setPlace(const Place &place) noexcept { m_place = place; }
 
@@ -137,6 +168,9 @@ signals:
     void highlightingChanged();
     void indentationChanged();
     void defaultIndentationChanged();
+    // New diagnostics (not those an edit moved).
+    void diagnosticsChanged();
+    void languageServerChanged();
 
 private:
     // At `position`, `removed` was replaced by `inserted`.
@@ -170,7 +204,10 @@ private:
     std::unique_ptr<SyntaxHighlighter> m_highlighter;
     QList<Step> m_undo;
     QList<Lines> m_edited;
+    QList<Diagnostic> m_diagnostics;
     QString m_theme;
+    QString m_languageServer;
+    QString m_languageServerActivity;
     Place m_place;
     qsizetype m_undoIndex{0};
     // The undo index of the saved text; -1 when no longer reachable.

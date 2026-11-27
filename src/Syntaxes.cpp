@@ -23,6 +23,16 @@ QStringList Syntaxes::sections() const
     return sections;
 }
 
+QStringList Syntaxes::all()
+{
+    QStringList names;
+    for (const KSyntaxHighlighting::Definition &definition : SyntaxHighlighter::definitions()) {
+        names.append(definition.name());
+    }
+    std::ranges::sort(names, [](const QString &a, const QString &b) { return a.localeAwareCompare(b) < 0; });
+    return names;
+}
+
 QStringList Syntaxes::names(const QString &section) const
 {
     QStringList names;

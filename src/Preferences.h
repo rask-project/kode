@@ -3,6 +3,8 @@
 #include <QFont>
 #include <QObject>
 #include <QStringList>
+#include <QUrl>
+#include <QVariantList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace kode
@@ -47,6 +49,12 @@ class Preferences : public QObject
     Q_PROPERTY(qint32 sidebarSize READ sidebarSize WRITE setSidebarSize NOTIFY changed)
     // The installed monospaced font families, sorted.
     Q_PROPERTY(QStringList monospacedFamilies READ monospacedFamilies CONSTANT)
+    // Language servers: on, the folders searched before the shell's PATH, clangd's threads (1–2).
+    Q_PROPERTY(bool languageServers READ languageServers WRITE setLanguageServers NOTIFY changed)
+    Q_PROPERTY(QStringList languageServerFolders READ languageServerFolders NOTIFY changed)
+    Q_PROPERTY(qint32 clangdThreads READ clangdThreads WRITE setClangdThreads NOTIFY changed)
+    // The user's own language servers: each {syntax, command, languageId}.
+    Q_PROPERTY(QVariantList customLanguageServers READ customLanguageServers NOTIFY changed)
 public:
     explicit Preferences(QObject *parent = nullptr);
 
@@ -87,6 +95,19 @@ public:
     [[nodiscard]] static qint32 sidebarSize();
     void setSidebarSize(qint32 size);
     [[nodiscard]] static QStringList monospacedFamilies();
+    [[nodiscard]] static bool languageServers();
+    void setLanguageServers(bool on);
+    [[nodiscard]] static QStringList languageServerFolders();
+    Q_INVOKABLE void addLanguageServerFolder(const QUrl &folder);
+    // A folder typed as a path ('~' for the home folder); false when it is not one.
+    Q_INVOKABLE bool addLanguageServerPath(const QString &path);
+    Q_INVOKABLE void removeLanguageServerFolder(qint32 index);
+    [[nodiscard]] static QVariantList customLanguageServers();
+    // One per syntax: replaces the one it had. False without a syntax or a command.
+    Q_INVOKABLE bool addCustomLanguageServer(const QString &syntax, const QString &command, const QString &languageId);
+    Q_INVOKABLE void removeCustomLanguageServer(qint32 index);
+    [[nodiscard]] static qint32 clangdThreads();
+    void setClangdThreads(qint32 threads);
 
 signals:
     void changed();
