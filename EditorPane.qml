@@ -83,11 +83,35 @@ Item {
         goToLine.open();
     }
 
+    // Back (forward) to the place before (after) the caret's in the navigation history.
     function goBack() {
-        const document = documentHistory.back();
-        if (document)
-            pane.documentChosen(document);
+        pane.goToPlace(documentHistory.back(pane.document, textEditor.editor.cursorLine, textEditor.editor.cursorColumn));
     }
+
+    function goForward() {
+        pane.goToPlace(documentHistory.forward(pane.document, textEditor.editor.cursorLine, textEditor.editor.cursorColumn));
+    }
+
+    // Shows a place of the history, recording nothing.
+    function goToPlace(place: var) {
+        if (!place.document)
+            return;
+        pane.navigating = true;
+        if (place.document !== pane.document)
+            pane.documentChosen(place.document);
+        pane.navigating = false;
+        pane.pendingPosition = {
+            line: place.line,
+            column: place.column,
+            restore: true
+        };
+        pane.showPendingPosition();
+    }
+
+    // Changing documents for the history (going back or forward): the one left is not recorded.
+    property bool navigating: false
+    // The document shown, until the next one: where the split left it joins the history.
+    property Document shownDocument: null
 
     // The language server's answer awaited (0: none).
     property int locationTicket: 0
@@ -117,17 +141,23 @@ Item {
         pane.locationTicket = pane.document ? OpenDocuments.switchHeaderSource(pane.document) : 0;
     }
 
+    // A jump (a definition, the header's source): where it leaves from joins the history.
     function goToLocation(location: var) {
         const document = OpenDocuments.open(location.file);
         if (!document)
             return;
+        if (pane.document)
+            documentHistory.add(pane.document, textEditor.editor.cursorLine, textEditor.editor.cursorColumn);
+        pane.navigating = true;
         if (document !== pane.document)
             pane.documentChosen(document);
+        pane.navigating = false;
         if (location.line < 0)
             return;
         pane.pendingPosition = {
             line: location.line,
-            column: location.column
+            column: location.column,
+            restore: false
         };
         pane.showPendingPosition();
     }
@@ -135,19 +165,19 @@ Item {
     function showPendingPosition() {
         if (!pane.pendingPosition || !pane.document || pane.document.loading)
             return;
-        textEditor.editor.goToLine(`${pane.pendingPosition.line + 1}:${pane.pendingPosition.column + 1}`);
+        if (pane.pendingPosition.restore)
+            textEditor.editor.restorePlace(pane.pendingPosition.line, pane.pendingPosition.column);
+        else
+            textEditor.editor.jumpTo(pane.pendingPosition.line, pane.pendingPosition.column);
         textEditor.center(textEditor.editor.cursorRectangle);
         pane.pendingPosition = null;
         pane.focusEditor();
     }
 
-    function goForward() {
-        const document = documentHistory.forward();
-        if (document)
-            pane.documentChosen(document);
-    }
-
     onDocumentChanged: {
+        if (!pane.navigating && pane.shownDocument)
+            documentHistory.addLeft(pane.shownDocument);
+        pane.shownDocument = pane.document;
         documentHistory.visit(pane.document);
         if (!pane.document)
             searchBar.visible = false;
@@ -258,6 +288,8 @@ Item {
         // Showing it, the split goes back to the one before (none: another one).
         function onDocumentClosing(document: Document) {
             documentHistory.forget(document);
+            if (pane.shownDocument === document)
+                pane.shownDocument = null;
             if (pane.document === document)
                 pane.document = documentHistory.current() ?? OpenDocuments.other(document);
         }
@@ -551,6 +583,7 @@ Item {
         }
         editor.onContextMenuRequested: pane.contextMenuRequested()
         editor.onDefinitionRequested: position => pane.goToDefinition(position)
+        editor.onNavigationPoint: (line, column) => documentHistory.add(pane.document, line, column)
     }
 
     Label {

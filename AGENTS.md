@@ -74,8 +74,11 @@ Guidance for AI agents working in this repository.
   the pointer is on a button), then `SearchBar`, `GoToLine`, `TextEditor` and
   `StatusBar`. Shows one `Document` (`document`); other splits may show the
   same one, each with its own caret and scroll. Its `DocumentHistory` feeds
-  Back and Forward and the Ctrl+Tab switcher; when its document closes it goes back to the previous
-  one. Quick Fix (⌥Return, Edit > Quick Fix…, the editor's right-click
+  Back and Forward (through places, not only documents: where it edited,
+  where a click on another line or a jump (⌘click, F2, ⌘L) left from, the
+  document left — `EditorView::navigationPoint`,
+  `addLeft()` from the place the document keeps) and the Ctrl+Tab switcher;
+  when its document closes it goes back to the previous one. Quick Fix (⌥Return, Edit > Quick Fix…, the editor's right-click
   menu): the server's fixes and refactorings at the caret or selection in
   a native menu ("No Quick Fixes" when none). Go to Definition (F2, the editor's ⌘click: `definitionRequested`)
   and Switch Header/Source (F4) ask `OpenDocuments` and wait for their
@@ -162,9 +165,14 @@ Guidance for AI agents working in this repository.
   `kode:///path` URL (from the `kode` command, for a file that does not
   exist yet: `open` refuses those) opens empty (`Document::startFile()`;
   saving writes it, making its folders).
-- `src/DocumentHistory.{h,cpp}` — `DocumentHistory`: the documents a
-  split showed, back and forward as in a browser, and by recent use
-  (`recent`; `recentAmong()` orders the open documents for Ctrl+Tab); closed documents are forgotten.
+- `src/DocumentHistory.{h,cpp}` — `DocumentHistory`: a split's navigation
+  history, as Qt Creator's (`EditorView::addCurrentPositionToNavigationHistory`):
+  places (a document, line, column), at most 100, inserted at the current
+  position (a repeat of the one before it, same line, skipped); `back()`
+  and `forward()` store the caret's place first (forward comes back to
+  it) and skip closed documents. Also the documents by recent use
+  (`recent`; `recentAmong()` orders the open documents for Ctrl+Tab);
+  closed documents are forgotten.
 - `src/Splits.{h,cpp}` — `Splits` (one per window) and `SplitNode`: the
   binary split tree; leaves own their view (`deleteLater`: a view may go
   from its own signal); split, remove a split (the last view stays),

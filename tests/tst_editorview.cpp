@@ -405,6 +405,39 @@ void TestEditorView::returnAfterAnOpenBraceAddsItsClosing()
     QCOMPARE(editor.text(), QStringLiteral("Item {\n    \n    width: 1\n}"));
 }
 
+void TestEditorView::recordsNavigationPlaces()
+{
+    kode::EditorView editor;
+    editor.setText(QStringLiteral("one\ntwo\nthree\nfour"));
+    QSignalSpy places{&editor, &kode::EditorView::navigationPoint};
+    // Moving around without editing records nothing.
+    editor.setCursorPosition(5);
+    editor.setCursorPosition(10);
+    QVERIFY(places.isEmpty());
+    // An edit on line 1, then moves on it: still pending; leaving it: recorded.
+    editor.setCursorPosition(5);
+    type(editor, QStringLiteral("x"));
+    press(editor, Qt::Key_Left, Qt::NoModifier, QString{});
+    QVERIFY(places.isEmpty());
+    press(editor, Qt::Key_Down, Qt::NoModifier, QString{});
+    QCOMPARE(places.size(), 1);
+    QCOMPARE(places.first().at(0).toLongLong(), 1);
+    QCOMPARE(places.first().at(1).toLongLong(), 2);
+    // Go to Line: where it left from, then its line once the caret leaves it.
+    places.clear();
+    QVERIFY(editor.goToLine(QStringLiteral("4")));
+    QCOMPARE(places.size(), 1);
+    QCOMPARE(places.first().at(0).toLongLong(), 2);
+    press(editor, Qt::Key_Up, Qt::NoModifier, QString{});
+    QCOMPARE(places.size(), 2);
+    QCOMPARE(places.at(1).at(0).toLongLong(), 3);
+    // Back at a place (the history's own move): nothing recorded.
+    places.clear();
+    editor.restorePlace(0, 0);
+    press(editor, Qt::Key_Down, Qt::NoModifier, QString{});
+    QVERIFY(places.isEmpty());
+}
+
 void TestEditorView::closingBracketGoesUnderItsOpening()
 {
     kode::EditorView editor;

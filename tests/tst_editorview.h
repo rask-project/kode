@@ -33,6 +33,9 @@ private slots:
     // Return after "Rectangle {" with nothing under it: the closing brace two lines down.
     void returnAfterAnOpenBraceAddsItsClosing();
     void closingBracketGoesUnderItsOpening();
+    // The navigation history's places, as Qt Creator's: where it edited, once
+    // the caret leaves that line; where Go to Line left from; not a restore.
+    void recordsNavigationPlaces();
     void reindentsByBrackets();
     void reindentsEditedLinesKeepingTheCaret();
     void reindentsManyEditedLinesAtOnce();

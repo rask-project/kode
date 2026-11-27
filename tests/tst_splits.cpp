@@ -33,6 +33,8 @@ QUrl createFile(const QTemporaryDir &dir, const QString &name, const QByteArray 
 
 } // namespace
 
+using namespace Qt::StringLiterals;
+
 void TestSplits::initTestCase()
 {
     QVERIFY(m_files.isValid());
@@ -179,18 +181,22 @@ void TestSplits::goesBackAndForward()
     kode::Document *const b{documents.create()};
     kode::Document *const c{documents.create()};
     kode::DocumentHistory history;
-    history.visit(a);
-    history.visit(b);
-    history.visit(b);
-    history.visit(c);
+    history.add(a, 1, 0);
+    history.add(b, 2, 3);
     QVERIFY(history.canGoBack());
     QVERIFY(!history.canGoForward());
-    QCOMPARE(history.back(), b);
-    QCOMPARE(history.back(), a);
-    QCOMPARE(history.back(), nullptr);
-    QCOMPARE(history.forward(), b);
-    QCOMPARE(history.forward(), c);
-    QCOMPARE(history.forward(), nullptr);
+    // From the caret in c: back to b, then a; forward comes back to the caret.
+    QVariantMap place{history.back(c, 5, 1)};
+    QCOMPARE(place.value(u"document"_s).value<kode::Document *>(), b);
+    QCOMPARE(place.value(u"line"_s).toLongLong(), 2);
+    QCOMPARE(place.value(u"column"_s).toLongLong(), 3);
+    QCOMPARE(history.back(b, 2, 3).value(u"document"_s).value<kode::Document *>(), a);
+    QVERIFY(history.back(a, 1, 0).isEmpty());
+    QCOMPARE(history.forward(a, 1, 0).value(u"document"_s).value<kode::Document *>(), b);
+    place = history.forward(b, 2, 3);
+    QCOMPARE(place.value(u"document"_s).value<kode::Document *>(), c);
+    QCOMPARE(place.value(u"line"_s).toLongLong(), 5);
+    QVERIFY(history.forward(c, 5, 1).isEmpty());
 }
 
 void TestSplits::visitingDropsWhatWasAhead()
@@ -198,16 +204,13 @@ void TestSplits::visitingDropsWhatWasAhead()
     kode::OpenDocuments documents;
     kode::Document *const a{documents.create()};
     kode::Document *const b{documents.create()};
-    kode::Document *const c{documents.create()};
     kode::DocumentHistory history;
-    history.visit(a);
-    history.visit(b);
-    history.visit(c);
-    QCOMPARE(history.back(), b);
-    history.visit(a);
-    QVERIFY(!history.canGoForward());
-    QCOMPARE(history.back(), b);
-    QCOMPARE(history.back(), a);
+    // The same line as the place before: nothing new to come back to.
+    history.add(a, 1, 0);
+    history.add(a, 1, 7);
+    history.add(b, 4, 0);
+    QCOMPARE(history.back(b, 9, 0).value(u"document"_s).value<kode::Document *>(), b);
+    QCOMPARE(history.back(b, 4, 0).value(u"line"_s).toLongLong(), 1);
     QVERIFY(!history.canGoBack());
 }
 
@@ -220,20 +223,20 @@ void TestSplits::forgetsClosedDocuments()
     kode::DocumentHistory history;
     history.visit(a);
     history.visit(b);
-    history.visit(a);
     history.visit(c);
+    history.add(a, 1, 0);
+    history.add(b, 2, 0);
+    history.add(a, 3, 0);
     history.forget(a);
-    // b, c: the two a's went, and c is still current.
+    // Only b's place is left; the most recent document is still c.
     QCOMPARE(history.current(), c);
-    QCOMPARE(history.back(), b);
+    QCOMPARE(history.back(c, 0, 0).value(u"document"_s).value<kode::Document *>(), b);
     QVERIFY(!history.canGoBack());
-    QCOMPARE(history.forward(), c);
-    // A deleted document leaves no entry behind.
+    // A deleted document leaves no place behind: c's is the only one, the current.
     documents.close(b);
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
-    QVERIFY(!history.canGoForward());
-    QCOMPARE(history.back(), nullptr);
-    QCOMPARE(history.current(), c);
+    QVERIFY(history.forward(nullptr, 0, 0).isEmpty());
+    QVERIFY(history.back(nullptr, 0, 0).isEmpty());
 }
 
 void TestSplits::keepsTheSplitsRecentDocuments()
@@ -248,8 +251,7 @@ void TestSplits::keepsTheSplitsRecentDocuments()
     history.visit(c);
     history.visit(a);
     QCOMPARE(history.recent(), (QVariantList{QVariant::fromValue(a), QVariant::fromValue(c), QVariant::fromValue(b)}));
-    // Going back is a use too.
-    QCOMPARE(history.back(), c);
+    // Showing it again is a use too.
     history.visit(c);
     QCOMPARE(history.recent().constFirst(), QVariant::fromValue(c));
     history.forget(c);

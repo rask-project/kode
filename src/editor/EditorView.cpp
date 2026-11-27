@@ -366,6 +366,8 @@ void EditorView::setDocument(TextDocument *document)
         );
     }
     attach(shown);
+    // A place pending was in the document left.
+    m_flags &= ~NavigationPending;
     startOver(shown->place());
     emit documentChanged();
     emit textChanged();
@@ -851,6 +853,10 @@ void EditorView::editedTo(TextDocument::Caret caret)
     m_anchor = caret.anchor;
     m_preferredX = -1.0;
     m_preferredAnchorX = -1.0;
+    // Where it edited: recorded once the caret leaves for another line.
+    m_navigationLine = buffer().lineAt(m_cursor);
+    m_navigationColumn = m_cursor - buffer().lineStart(m_navigationLine);
+    m_flags |= NavigationPending;
     emit cursorChanged();
     emit caretMoved();
     emit selectionChanged();
@@ -1230,6 +1236,11 @@ void EditorView::moveCaret(qsizetype position, Select select)
     const bool selectionWasVisible{hasSelection()};
     m_cursor = position;
     m_anchor = anchor;
+    // Leaving the line it edited (or jumped to): that place joins the history.
+    if ((m_flags & NavigationPending) != 0U && buffer().lineAt(position) != m_navigationLine) {
+        m_flags &= ~NavigationPending;
+        emit navigationPoint(m_navigationLine, m_navigationColumn);
+    }
     emit cursorChanged();
     emit caretMoved();
     if (selectionWasVisible || hasSelection()) {
@@ -1713,10 +1724,27 @@ bool EditorView::goToLine(const QString &target)
     if (!lineOk || !columnOk) {
         return false;
     }
-    const qsizetype clampedLine{std::clamp(line - 1, qsizetype{0}, buffer().lineCount() - 1)};
-    const qsizetype clampedColumn{std::clamp(column - 1, qsizetype{0}, buffer().lineLength(clampedLine))};
-    moveCaret(buffer().lineStart(clampedLine) + clampedColumn, Select::Collapse);
+    // Where it leaves from joins the history, as Qt Creator's Go to Line.
+    const qsizetype from{buffer().lineAt(m_cursor)};
+    emit navigationPoint(from, m_cursor - buffer().lineStart(from));
+    jumpTo(line - 1, column - 1);
     return true;
+}
+
+void EditorView::jumpTo(qint64 line, qint64 column)
+{
+    restorePlace(line, column);
+    m_navigationLine = buffer().lineAt(m_cursor);
+    m_navigationColumn = m_cursor - buffer().lineStart(m_navigationLine);
+    m_flags |= NavigationPending;
+}
+
+void EditorView::restorePlace(qint64 line, qint64 column)
+{
+    m_flags &= ~NavigationPending;
+    const qsizetype clampedLine{std::clamp(line, qsizetype{0}, buffer().lineCount() - 1)};
+    const qsizetype clampedColumn{std::clamp(column, qsizetype{0}, buffer().lineLength(clampedLine))};
+    moveCaret(buffer().lineStart(clampedLine) + clampedColumn, Select::Collapse);
 }
 
 // --- find ---------------------------------------------------------------------
@@ -3280,6 +3308,14 @@ void EditorView::mousePressEvent(QMouseEvent *event)
         select(buffer().lineStart(line), next);
         event->accept();
         return;
+    }
+    // A click on another line: where the caret was joins the split's
+    // navigation history (the click's own place joins at the next one).
+    const bool extending{event->modifiers().testFlag(Qt::ShiftModifier)};
+    if (!extending && buffer().lineAt(position) != buffer().lineAt(m_cursor)) {
+        m_flags &= ~NavigationPending;
+        const qsizetype line{buffer().lineAt(m_cursor)};
+        emit navigationPoint(line, m_cursor - buffer().lineStart(line));
     }
     // ⌘ (Qt's Control on macOS): go to the definition, as in Xcode and VS Code.
     if (event->modifiers() == Qt::ControlModifier) {

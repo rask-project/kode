@@ -277,6 +277,11 @@ public:
     // Moves the caret to "line" or "line:column" (from 1, clamped); false
     // when `target` is neither.
     Q_INVOKABLE bool goToLine(const QString &target);
+    // A jump to `line`, `column` (from 0) whose origin the caller recorded
+    // (Go to Definition): the place it lands on is the one to come back to.
+    Q_INVOKABLE void jumpTo(qint64 line, qint64 column);
+    // Back at `line`, `column` (navigation history): nothing recorded.
+    Q_INVOKABLE void restorePlace(qint64 line, qint64 column);
     // Select the next (previous) match after (before) the caret, wrapping;
     // false when there is none.
     Q_INVOKABLE bool findNext();
@@ -323,6 +328,9 @@ signals:
     void contextMenuRequested();
     // Text typed at the caret (a key, an input method's commit).
     void textTyped(const QString &text);
+    // A place for the split's navigation history (as Qt Creator's): where it
+    // edited, once the caret leaves for another line; where a jump left from.
+    void navigationPoint(qint64 line, qint64 column);
     // A ⌘click: the caret moved to `position`, whose definition is wanted.
     void definitionRequested(qint64 position);
     void diagnosticAreasChanged();
@@ -454,6 +462,8 @@ private:
     static constexpr quint64 CaretOff{1U << 11U};
     // m_squiggles changed since the scene last took them.
     static constexpr quint64 DiagnosticsChanged{1U << 12U};
+    // A place to record once the caret leaves its line (m_navigationLine/Column).
+    static constexpr quint64 NavigationPending{1U << 13U};
 
     [[nodiscard]] const TextBuffer &buffer() const noexcept { return m_document->buffer(); }
     [[nodiscard]] SyntaxHighlighter &highlighter() const noexcept { return m_document->highlighter(); }
@@ -716,6 +726,9 @@ private:
     qsizetype m_baseLine{0};
     // Where dragged text would be dropped (shown as the caret); -1: no drag.
     qsizetype m_dropPosition{-1};
+    // The place NavigationPending holds: where the last edit (or jump) left the caret.
+    qsizetype m_navigationLine{0};
+    qsizetype m_navigationColumn{0};
     // The word shown as a link while ⌘ is held over it; -1: none.
     qsizetype m_linkStart{-1};
     qsizetype m_linkEnd{-1};
