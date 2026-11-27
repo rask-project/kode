@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Kode</title>
+    <link>https://github.com/rask-project/kode/releases</link>
+    <description>Kode releases</description>
+    <language>en</language>
+    <item>
+      <title>Kode 1.0.1</title>
+      <link>https://github.com/rask-project/kode/releases/tag/v1.0.1</link>
+      <sparkle:version>1.0.1.1000</sparkle:version>
+      <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <pubDate>Fri, 27 Nov 2026 00:56:03 GMT</pubDate>
+      <description sparkle:format="markdown"><![CDATA[A fix release, and the first one that updates itself.
+
+## New
+
+- **Updates.** Kode looks for a new release once a day, downloads it in the
+  background and installs it when you quit. **Kode ▸ Check for Updates…**
+  checks right away; **Settings ▸ Updates** turns the automatic checks off
+  and picks the channel (stable, or stable and beta). 1.0.0 had no updater:
+  install this release by hand once, later ones arrive on their own.
+
+## Fixes
+
+- **Each folder has its own session.** The files a folder's window had open
+  are saved when it closes (and on quit) and reopen with that folder only; a
+  folder opened for the first time starts empty, and Kode launched without a
+  folder opens one empty window instead of every file from last time.
+- **Make Default** asks macOS for the common code types only, and skips those
+  Kode already opens, so it no longer asks for a hundred extensions one by
+  one.
+]]></description>
+      <enclosure url="https://github.com/rask-project/kode/releases/download/v1.0.1/Kode-1.0.1-arm64.zip" length="40706190" type="application/octet-stream" sparkle:edSignature="zQzSZBzoJ1BTNpi5xWBx3lOMCcq/lHE2aP/FLcI8dwgnTde7ydDQHRW10SKWUxaSl0FnTKrtjqxWaRVwxJKACg=="/>
+    </item>
+  </channel>
+</rss>
