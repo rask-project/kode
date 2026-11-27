@@ -99,6 +99,14 @@ Item {
         pane.locationTicket = pane.document ? OpenDocuments.findDefinition(pane.document, position) : 0;
     }
 
+    // The code actions asked for (0: none).
+    property int fixesTicket: 0
+
+    // ⌥Return: the language server's fixes and refactorings at the caret (or the selection).
+    function quickFix() {
+        pane.fixesTicket = pane.document ? OpenDocuments.requestCodeActions(pane.document, textEditor.editor.selectionStart, textEditor.editor.selectionEnd) : 0;
+    }
+
     // ⌃Space: the language server's completions at the caret.
     function showCompletions() {
         textEditor.completion.trigger();
@@ -161,6 +169,14 @@ Item {
     Connections {
         target: OpenDocuments
 
+        function onCodeActionsFound(ticket: int, titles: list<string>) {
+            if (ticket !== pane.fixesTicket)
+                return;
+            fixesMenu.ticket = ticket;
+            fixesMenu.titles = titles;
+            fixesMenu.popup(textEditor, textEditor.editor.cursorRectangle.x - textEditor.contentX, textEditor.editor.cursorRectangle.y + textEditor.editor.cursorRectangle.height - textEditor.contentY);
+        }
+
         function onLocationsFound(ticket: int, locations: var) {
             if (ticket !== pane.locationTicket)
                 return;
@@ -179,6 +195,37 @@ Item {
 
         function onLoadingChanged() {
             pane.showPendingPosition();
+        }
+    }
+
+    // The fixes and refactorings found; choosing one makes it.
+    Menu {
+        id: fixesMenu
+
+        property int ticket: 0
+        property list<string> titles
+
+        popupType: Popup.Native
+
+        MenuItem {
+            text: qsTr("No Quick Fixes")
+            enabled: false
+            visible: fixesMenu.titles.length === 0
+        }
+
+        Instantiator {
+            model: fixesMenu.titles
+
+            delegate: MenuItem {
+                required property string modelData
+                required property int index
+
+                text: modelData
+                onTriggered: OpenDocuments.applyCodeAction(fixesMenu.ticket, index)
+            }
+
+            onObjectAdded: (index, object) => fixesMenu.insertItem(index + 1, object)
+            onObjectRemoved: (index, object) => fixesMenu.removeItem(object)
         }
     }
 

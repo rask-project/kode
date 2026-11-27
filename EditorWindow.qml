@@ -207,6 +207,9 @@ ApplicationWindow {
         MenuItem {
             action: switchHeaderSourceAction
         }
+        MenuItem {
+            action: quickFixAction
+        }
         MenuSeparator {}
         MenuItem {
             action: cutAction
@@ -604,6 +607,17 @@ ApplicationWindow {
                     // ⌃Space, as in Xcode and VS Code.
                     shortcut: "Meta+Space"
                     onTriggered: root.activeView.showCompletions()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    id: quickFixAction
+
+                    text: qsTr("Quick Fix…")
+                    enabled: (root.editor?.document?.languageServer ?? "") !== ""
+                    // ⌥Return, as Qt Creator's Alt+Return.
+                    shortcut: "Alt+Return"
+                    onTriggered: root.activeView.quickFix()
                 }
             }
             MenuSeparator {}

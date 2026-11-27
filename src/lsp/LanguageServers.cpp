@@ -553,6 +553,128 @@ qint32 LanguageServers::requestCompletion(const Document *document, qsizetype po
     return ticket;
 }
 
+qint32 LanguageServers::requestCodeActions(const Document *document, qsizetype start, qsizetype end)
+{
+    const auto found{m_entries.constFind(document)};
+    if (found == m_entries.cend() || found->server == nullptr || found->document == nullptr) {
+        return 0;
+    }
+    LanguageServer *const server{find(found->server)};
+    if (server == nullptr) {
+        return 0;
+    }
+    const TextBuffer &buffer{found->document->textDocument()->buffer()};
+    const qsizetype startLine{buffer.lineAt(start)};
+    const qsizetype endLine{buffer.lineAt(end)};
+    // The problems on those lines: the server's fixes are for them.
+    QJsonArray diagnostics;
+    std::ranges::copy_if(
+        found->diagnostics,
+        std::back_inserter(diagnostics),
+        [startLine, endLine](const QJsonValue &item) {
+            const QJsonValue range{item[u"range"_s]};
+            return range[u"start"_s][u"line"_s].toInteger() <= endLine &&
+                   range[u"end"_s][u"line"_s].toInteger() >= startLine;
+        }
+    );
+    const qint32 ticket{++m_lastTicket};
+    server->request(
+        u"textDocument/codeAction"_s,
+        QJsonObject{
+            {u"textDocument"_s, QJsonObject{{u"uri"_s, found->uri.toString()}}},
+            {u"range"_s,
+             QJsonObject{
+                 {u"start"_s, protocolPosition(startLine, start - buffer.lineStart(startLine))},
+                 {u"end"_s, protocolPosition(endLine, end - buffer.lineStart(endLine))},
+             }},
+            {u"context"_s, QJsonObject{{u"diagnostics"_s, diagnostics}}},
+        },
+        [this, wide = qint64{ticket}, key = found->server](const QJsonValue &result) {
+            m_actions = result.toArray();
+            m_actionsServer = key;
+            m_actionsTicket = wide;
+            QStringList titles;
+            std::ranges::transform(m_actions, std::back_inserter(titles), [](const QJsonValue &action) {
+                return action[u"title"_s].toString();
+            });
+            emit codeActionsFound(static_cast<qint32>(wide), titles);
+        }
+    );
+    return ticket;
+}
+
+void LanguageServers::applyCodeAction(qint32 ticket, qint32 index)
+{
+    if (ticket != m_actionsTicket || index < 0 || index >= m_actions.size()) {
+        return;
+    }
+    const QJsonValue action{m_actions.at(index)};
+    // A CodeAction's edit, then its command; or a bare Command.
+    if (action[u"edit"_s].isObject()) {
+        applyEdit(action[u"edit"_s].toObject());
+    }
+    const QJsonValue command{action[u"command"_s].isObject() ? action[u"command"_s] : action};
+    LanguageServer *const server{find(m_actionsServer)};
+    if (server != nullptr && command[u"command"_s].isString()) {
+        server->request(
+            u"workspace/executeCommand"_s,
+            QJsonObject{
+                {u"command"_s, command[u"command"_s]},
+                {u"arguments"_s, command[u"arguments"_s].toArray()},
+            },
+            [](const QJsonValue &) {}
+        );
+    }
+}
+
+void LanguageServers::applyEdit(const QJsonObject &edit)
+{
+    // By file: a TextDocumentEdit's edits (creating, renaming and deleting files aside), or "changes".
+    QList<std::pair<QUrl, QJsonArray>> files;
+    const QJsonArray documentChanges(edit.value(u"documentChanges"_s).toArray());
+    for (const QJsonValue change : documentChanges) {
+        if (change[u"textDocument"_s].isObject()) {
+            files.append({QUrl{change[u"textDocument"_s][u"uri"_s].toString()}, change[u"edits"_s].toArray()});
+        }
+    }
+    const QJsonObject changes{edit.value(u"changes"_s).toObject()};
+    for (auto file{changes.begin()}; file != changes.end(); ++file) {
+        files.append({QUrl{file.key()}, file.value().toArray()});
+    }
+    for (const auto &[uri, edits] : std::as_const(files)) {
+        const auto open{std::ranges::find_if(m_entries, [&uri](const Entry &entry) { return entry.uri == uri; })};
+        Document *const document{
+            open != m_entries.end() && open->document != nullptr ? open->document.data()
+            : m_opener                                           ? m_opener(uri)
+                                                                 : nullptr
+        };
+        if (document == nullptr || document->loading()) {
+            continue;
+        }
+        TextDocument *const text{document->textDocument()};
+        const TextBuffer &buffer{text->buffer()};
+        QList<TextDocument::Change> made;
+        made.reserve(edits.size());
+        std::ranges::transform(edits, std::back_inserter(made), [&buffer](const QJsonValue &textEdit) {
+            const qsizetype from{positionIn(buffer, textEdit[u"range"_s][u"start"_s])};
+            const qsizetype to{positionIn(buffer, textEdit[u"range"_s][u"end"_s])};
+            return TextDocument::Change{
+                .range = {.position = from, .count = std::max(qsizetype{0}, to - from)},
+                .text = textEdit[u"newText"_s].toString(),
+            };
+        });
+        std::ranges::stable_sort(made, {}, [](const TextDocument::Change &change) { return change.range.position; });
+        // Apart: one overlapping the one before it is dropped.
+        QList<TextDocument::Change> apart;
+        for (const TextDocument::Change &change : std::as_const(made)) {
+            if (apart.isEmpty() || change.range.position >= apart.last().range.position + apart.last().range.count) {
+                apart.append(change);
+            }
+        }
+        text->replaceEach(apart, text->place().caret);
+    }
+}
+
 QStringList LanguageServers::completionTriggers(const Document *document) const
 {
     const auto found{m_entries.constFind(document)};
@@ -899,14 +1021,20 @@ void LanguageServers::diagnosticsPublished(
     if (found == m_entries.end() || found->document == nullptr || (version >= 0 && version != found->version)) {
         return;
     }
+    found->diagnostics = list;
     TextDocument *const text{found->document->textDocument()};
     const TextBuffer &buffer{text->buffer()};
     QList<TextDocument::Diagnostic> diagnostics;
     diagnostics.reserve(list.size());
     std::ranges::transform(list, std::back_inserter(diagnostics), [&buffer](const QJsonValue &item) {
         const QJsonValue range{item[u"range"_s]};
+        // clangd says a fix exists: how to make it.
+        QString message{item[u"message"_s].toString()};
+        if (message.endsWith(u" (fix available)"_s)) {
+            message.insert(message.size() - 1, u": ⌥↩"_s);
+        }
         return TextDocument::Diagnostic{
-            .message = item[u"message"_s].toString(),
+            .message = message,
             .start = positionIn(buffer, range[u"start"_s]),
             .end = positionIn(buffer, range[u"end"_s]),
             .severity = item[u"severity"_s].toInteger(TextDocument::Diagnostic::Error),
@@ -964,6 +1092,7 @@ LanguageServer *LanguageServers::server(
         [this, key](const QUrl &uri, const QString &state) { fileStatusChanged(key, uri, state); }
     );
     connect(started.get(), &LanguageServer::activityChanged, this, [this, key] { activityChanged(key); });
+    connect(started.get(), &LanguageServer::editRequested, this, &LanguageServers::applyEdit);
     connect(started.get(), &LanguageServer::semanticTokensRefresh, this, [this, key] {
         for (const Entry &entry : std::as_const(m_entries)) {
             if (entry.server == key) {

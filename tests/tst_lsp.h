@@ -26,4 +26,6 @@ private slots:
     void semanticTokensMoveWithEdits();
     // With clangd installed: a type's name styled as a type.
     void clangdStylesAType();
+    // With clangd installed: a missing ';' fixed by its quick fix.
+    void clangdFixesAnError();
 };

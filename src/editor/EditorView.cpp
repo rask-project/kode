@@ -2007,6 +2007,8 @@ QList<QTextLayout::FormatRange> withSemanticTokens(
         result.append({.start = token.column, .length = token.length, .format = highlighter.semanticFormat(token.style)}
         );
     }
+    // In order: the text node takes each range's color assuming so.
+    std::ranges::stable_sort(result, {}, &QTextLayout::FormatRange::start);
     return result;
 }
 

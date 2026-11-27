@@ -289,8 +289,6 @@ QTextCharFormat SyntaxHighlighter::semanticFormat(quint32 style)
             mixin.setFontWeight(QFont::Bold);
         } else if (name == QLatin1StringView{"OutputArgument"}) {
             mixin.setFontItalic(true);
-        } else if (name == QLatin1StringView{"Function"}) {
-            mixin = textStyleFormat(theme(), KSyntaxHighlighting::Theme::Function);
         }
         if (mixin.hasProperty(QTextFormat::ForegroundBrush)) {
             format.setForeground(mixin.foreground());

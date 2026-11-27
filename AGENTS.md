@@ -75,7 +75,9 @@ Guidance for AI agents working in this repository.
   `StatusBar`. Shows one `Document` (`document`); other splits may show the
   same one, each with its own caret and scroll. Its `DocumentHistory` feeds
   Back and Forward and the Ctrl+Tab switcher; when its document closes it goes back to the previous
-  one. Go to Definition (F2, the editor's ⌘click: `definitionRequested`)
+  one. Quick Fix (⌥Return, Edit > Quick Fix…, the editor's right-click
+  menu): the server's fixes and refactorings at the caret or selection in
+  a native menu ("No Quick Fixes" when none). Go to Definition (F2, the editor's ⌘click: `definitionRequested`)
   and Switch Header/Source (F4) ask `OpenDocuments` and wait for their
   ticket's `locationsFound`: one place opens in the split (the caret there
   once the document has loaded), several in a native menu. Icons are SF
@@ -162,7 +164,9 @@ Guidance for AI agents working in this repository.
     into a buffer's characters).
   - `SemanticTokens` — `SemanticLegend` (a server's token types and
     modifiers into Kode's styles, as Qt Creator maps clangd's and qmlls's:
-    a variable by its scope, virtual, static, a constructor; Declaration,
+    a variable by its scope, virtual, a static field, a constructor; as
+    Qt Creator shows them, static functions plain and enumerators as
+    static members; Declaration,
     FunctionDefinition and OutputArgument mixins; keywords, strings and
     operators left to the highlighting), `decodeTokens()` (the relative
     encoding, by line) and `applyTokenEdits()` (a delta's edits).
@@ -216,7 +220,13 @@ Guidance for AI agents working in this repository.
     `findDefinition()` (`textDocument/definition`) and
     `switchHeaderSource()` (the file beside it, else clangd's
     `textDocument/switchSourceHeader`) answer with `locationsFound(ticket)`,
-    `requestCompletion()` with `completionsFound(ticket)`; semantic tokens
+    `requestCompletion()` with `completionsFound(ticket)`,
+    `requestCodeActions()` (the problems on those lines sent along) with
+    `codeActionsFound(ticket)` and `applyCodeAction()` (its edit, then its
+    command: `workspace/executeCommand`; a server's `workspace/applyEdit`
+    is made too: `applyEdit()`, each file's edits as one undo step, a file
+    not open opened through `OpenDocuments`); clangd's "(fix available)"
+    gains ": ⌥↩"; semantic tokens
     asked 200 ms after the last edit (and on the server's refresh), only
     what changed when it offers deltas (the raw data and result id kept per
     document), dropped when the document was edited meanwhile, then decoded
@@ -450,7 +460,7 @@ Guidance for AI agents working in this repository.
   `tst_preferences`, `tst_filetree`, `tst_lsp` (framing, diagnostics
   following edits, semantic tokens (clangd's legend, decoding, deltas,
   moving with edits), and with clangd installed real round trips: an
-  error, a member completed, a type styled), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  error, a member completed, a type styled, a missing ';' fixed), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
   — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both

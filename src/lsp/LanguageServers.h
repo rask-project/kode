@@ -14,6 +14,7 @@
 #include <QVariantList>
 #include <QtQmlIntegration/qqmlintegration.h>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -91,6 +92,14 @@ public:
     // Completions at `position` (after typing `trigger`, if any):
     // completionsFound() with the ticket returned (0: no server offers them).
     qint32 requestCompletion(const Document *document, qsizetype position, const QString &trigger);
+    // The code actions (quick fixes, refactorings) for characters
+    // [start, end) of `document`: codeActionsFound() with the ticket
+    // returned (0: no server to ask).
+    qint32 requestCodeActions(const Document *document, qsizetype start, qsizetype end);
+    // Makes the `index`th action of the last ones found (`ticket`'s).
+    void applyCodeAction(qint32 ticket, qint32 index);
+    // How a document is opened for an edit to a file not open yet.
+    void setOpener(std::function<Document *(const QUrl &)> opener) { m_opener = std::move(opener); }
     // What typed asks `document`'s server for completions besides a word.
     [[nodiscard]] QStringList completionTriggers(const Document *document) const;
 
@@ -99,6 +108,8 @@ signals:
     void serversChanged();
     // Each {file, line, column (-1, 0: no place), label}.
     void locationsFound(qint32 ticket, const QVariantList &locations);
+    // The actions' titles, in order.
+    void codeActionsFound(qint32 ticket, const QStringList &titles);
     // The protocol's CompletionItems; `incomplete`: typing more needs asking again.
     void completionsFound(qint32 ticket, const QJsonArray &items, bool incomplete);
 
@@ -116,6 +127,8 @@ private:
         // (for asking only what changed since).
         QList<quint32> semanticData;
         QString semanticResultId;
+        // The diagnostics as the server published them, for asking its fixes.
+        QJsonArray diagnostics;
         const LanguageServer *server{nullptr};
         qint64 version{0};
     };
@@ -152,6 +165,9 @@ private:
         QString languageId;
     };
     [[nodiscard]] std::optional<Choice> serverFor(const QString &syntax) const;
+    // Makes a WorkspaceEdit's text edits (files not open are opened), each
+    // document's as one undo step.
+    void applyEdit(const QJsonObject &edit);
     // Stops the servers and opens the documents again with the settings.
     void restart();
     // Where servers are looked for, in order: searchFolders, then the shell's PATH.
@@ -171,6 +187,11 @@ private:
     QVariantList m_customFound;
     // The login shell's PATH; empty until it is known.
     QString m_shellPath;
+    std::function<Document *(const QUrl &)> m_opener;
+    // The code actions found last, and the server that offered them.
+    QJsonArray m_actions;
+    const LanguageServer *m_actionsServer{nullptr};
+    qint64 m_actionsTicket{0};
     quint64 m_flags{Enabled};
     qint32 m_clangdThreads{1};
     qint32 m_lastTicket{0};

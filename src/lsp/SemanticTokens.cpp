@@ -58,7 +58,8 @@ constexpr std::array kinds{
     Named{.name = "concept"_L1, .kind = TypeLike, .category = semantic::Type},
     Named{.name = "typeParameter"_L1, .kind = TypeParameter, .category = semantic::Type},
     Named{.name = "namespace"_L1, .kind = Namespace, .category = semantic::Namespace},
-    Named{.name = "enumMember"_L1, .kind = EnumMember, .category = semantic::Enumeration},
+    // Enumerators as Qt Creator shows them: as static members.
+    Named{.name = "enumMember"_L1, .kind = EnumMember, .category = semantic::StaticMember},
     Named{.name = "macro"_L1, .kind = Macro, .category = semantic::Macro},
     Named{.name = "label"_L1, .kind = Label, .category = semantic::Label},
     Named{.name = "qmlLocalId"_L1, .kind = QmlCategory, .category = semantic::QmlLocalId},
@@ -145,10 +146,9 @@ std::optional<quint32> SemanticLegend::style(quint32 type, quint32 modifiers) co
     }
     mixins |= has(m_declaration) ? semantic::Declaration : 0U;
     mixins |= has(m_mutable) ? semantic::OutputArgument : 0U;
-    if (has(m_static) && category == semantic::Function) {
-        category = semantic::StaticMember;
-        mixins |= semantic::FunctionMixin;
-    } else if (has(m_static) && category == semantic::Field) {
+    // A static field as Qt Creator's code has it; a static function as it
+    // shows one (plain, not as a static member).
+    if (has(m_static) && category == semantic::Field) {
         category = semantic::StaticMember;
     }
     return category | mixins;

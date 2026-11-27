@@ -57,6 +57,19 @@ QVariantList toList(const std::vector<Document *> &documents)
 OpenDocuments::OpenDocuments(QObject *parent) : QObject(parent)
 {
     connect(&m_languageServers, &lsp::LanguageServers::locationsFound, this, &OpenDocuments::locationsFound);
+    connect(&m_languageServers, &lsp::LanguageServers::codeActionsFound, this, &OpenDocuments::codeActionsFound);
+    // An edit to a file not open (a fix across files): opened for it.
+    m_languageServers.setOpener([this](const QUrl &file) { return open(file); });
+}
+
+qint32 OpenDocuments::requestCodeActions(Document *document, qint64 start, qint64 end)
+{
+    return m_languageServers.requestCodeActions(document, std::min(start, end), std::max(start, end));
+}
+
+void OpenDocuments::applyCodeAction(qint32 ticket, qint32 index)
+{
+    m_languageServers.applyCodeAction(ticket, index);
 }
 
 qint32 OpenDocuments::findDefinition(Document *document, qint64 position)

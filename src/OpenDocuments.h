@@ -67,6 +67,10 @@ public:
     Q_INVOKABLE qint32 findDefinition(kode::Document *document, qint64 position);
     // The header of a source file or its source: locationsFound(ticket).
     Q_INVOKABLE qint32 switchHeaderSource(kode::Document *document);
+    // The quick fixes and refactorings for [start, end) of `document`:
+    // codeActionsFound(ticket) with their titles; applyCodeAction() makes one.
+    Q_INVOKABLE qint32 requestCodeActions(kode::Document *document, qint64 start, qint64 end);
+    Q_INVOKABLE void applyCodeAction(qint32 ticket, qint32 index);
     // `folder` without a trailing slash, links resolved, to compare, name and key it.
     Q_INVOKABLE [[nodiscard]] static QUrl cleanFolder(const QUrl &folder);
 
@@ -79,6 +83,7 @@ signals:
     void changedOnDisk(kode::Document *document);
     // Each {file, line, column, label}; line -1: the file only.
     void locationsFound(qint32 ticket, const QVariantList &locations);
+    void codeActionsFound(qint32 ticket, const QStringList &titles);
 
 private:
     struct DeleteLater {

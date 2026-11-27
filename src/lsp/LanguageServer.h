@@ -65,6 +65,8 @@ signals:
     // clangd's textDocument/clangd.fileStatus: what it is doing with `uri` ("idle" when done).
     void fileStatusChanged(const QUrl &uri, const QString &state);
     void activityChanged();
+    // workspace/applyEdit: the server's WorkspaceEdit to make (a command's).
+    void editRequested(const QJsonObject &edit);
     // workspace/semanticTokens/refresh: every document's tokens are stale.
     void semanticTokensRefresh();
     // The process ended or could not start.

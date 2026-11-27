@@ -511,7 +511,9 @@ caret (↑↓, Return/Tab, Escape), the server's other edits (an #include) in
 the same undo step. Semantic highlighting: the server's tokens (clangd's,
 qmlls's) in Qt Creator's categories and colors (its schemes and defaults,
 in the themes' "semantic-styles"), over KSyntaxHighlighting's, asked a
-moment after typing, only what changed.
+moment after typing, only what changed. Quick fixes (⌥Return, as Qt
+Creator's Alt+Return): the server's fixes and refactorings at the caret,
+made in one undo step.
 
 - **Minimap** on top of `EditorView`: the document at a reduced scale
   beside the text, the part in view marked, click and drag to scroll. Bound

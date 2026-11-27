@@ -228,7 +228,9 @@ void TestLsp::legendStylesAsQtCreator()
     QCOMPARE(legend.style(type(u"variable"_s), modifier(u"globalScope"_s)), semantic::Global);
     QCOMPARE(legend.style(type(u"variable"_s), modifier(u"classScope"_s)), semantic::Field);
     QCOMPARE(legend.style(type(u"method"_s), modifier(u"virtual"_s)), semantic::VirtualMethod);
-    QCOMPARE(legend.style(type(u"method"_s), modifier(u"static"_s)), semantic::StaticMember | semantic::FunctionMixin);
+    // As Qt Creator shows them: a static function plain, an enumerator as a static member.
+    QCOMPARE(legend.style(type(u"method"_s), modifier(u"static"_s)), semantic::Function);
+    QCOMPARE(legend.style(type(u"enumMember"_s), modifier(u"readonly"_s)), semantic::StaticMember);
     QCOMPARE(legend.style(type(u"property"_s), modifier(u"static"_s)), semantic::StaticMember);
     QCOMPARE(legend.style(type(u"class"_s), modifier(u"constructorOrDestructor"_s)), semantic::Function);
     QCOMPARE(
@@ -331,6 +333,45 @@ void TestLsp::clangdStylesAType()
     const auto point{std::ranges::find(tokens, static_cast<qint32>(column), &TextDocument::SemanticToken::column)};
     QVERIFY(point != tokens.cend());
     QCOMPARE(point->style & kode::semantic::categoryMask, static_cast<quint32>(kode::semantic::Type));
+    servers.remove(&document);
+}
+
+void TestLsp::clangdFixesAnError()
+{
+    const QStringList folders{
+        qEnvironmentVariable("PATH").split(u':') +
+        QStringList{QStringLiteral("/opt/homebrew/bin"), QStringLiteral("/usr/local/bin")}
+    };
+    if (QStandardPaths::findExecutable(QStringLiteral("clangd"), folders).isEmpty()) {
+        QSKIP("clangd is not installed");
+    }
+    const QTemporaryDir folder;
+    const QString path{folder.filePath(QStringLiteral("main.cpp"))};
+    QFile file{path};
+    QVERIFY(file.open(QIODevice::WriteOnly));
+    file.write("int main()\n{\n    int x = 1\n    return x;\n}\n");
+    file.close();
+
+    kode::Document document;
+    QVERIFY(document.load(QUrl::fromLocalFile(path)));
+    kode::lsp::LanguageServers servers;
+    servers.setSearchFolders(folders);
+    servers.add(&document);
+    TextDocument *const text{document.textDocument()};
+    QTRY_VERIFY_WITH_TIMEOUT(text->errorCount() > 0, 30000);
+    const TextDocument::Diagnostic &error{text->diagnostics().first()};
+    QVERIFY(error.message.contains(u"fix available: ⌥↩"_s));
+
+    QSignalSpy found{&servers, &kode::lsp::LanguageServers::codeActionsFound};
+    const qint32 ticket{servers.requestCodeActions(&document, error.start, error.end)};
+    QVERIFY(ticket != 0);
+    QTRY_VERIFY_WITH_TIMEOUT(!found.isEmpty(), 30000);
+    const QStringList titles{found.first().at(1).toStringList()};
+    QVERIFY(!titles.isEmpty());
+    servers.applyCodeAction(ticket, 0);
+    QCOMPARE(text->text(), u"int main()\n{\n    int x = 1;\n    return x;\n}\n"_s);
+    // The server hears of it: the error goes.
+    QTRY_VERIFY_WITH_TIMEOUT(text->errorCount() == 0, 30000);
     servers.remove(&document);
 }
 

@@ -26,7 +26,10 @@ QJsonObject clientCapabilities()
          QJsonObject{{QStringLiteral("positionEncodings"), QJsonArray{QStringLiteral("utf-16")}}}},
         {QStringLiteral("window"), QJsonObject{{QStringLiteral("workDoneProgress"), true}}},
         {QStringLiteral("workspace"),
-         QJsonObject{{QStringLiteral("semanticTokens"), QJsonObject{{QStringLiteral("refreshSupport"), true}}}}},
+         QJsonObject{
+             {QStringLiteral("semanticTokens"), QJsonObject{{QStringLiteral("refreshSupport"), true}}},
+             {QStringLiteral("applyEdit"), true},
+         }},
         {QStringLiteral("textDocument"),
          QJsonObject{
              {QStringLiteral("synchronization"), QJsonObject{{QStringLiteral("dynamicRegistration"), false}}},
@@ -38,6 +41,28 @@ QJsonObject clientCapabilities()
                   {QStringLiteral("tokenTypes"), QJsonArray{}},
                   {QStringLiteral("tokenModifiers"), QJsonArray{}},
                   {QStringLiteral("formats"), QJsonArray{QStringLiteral("relative")}},
+              }},
+             // Code actions as literals (a title and an edit or a command).
+             {QStringLiteral("codeAction"),
+              QJsonObject{
+                  {QStringLiteral("codeActionLiteralSupport"),
+                   QJsonObject{
+                       {QStringLiteral("codeActionKind"),
+                        QJsonObject{
+                            {QStringLiteral("valueSet"),
+                             QJsonArray{
+                                 QString{},
+                                 QStringLiteral("quickfix"),
+                                 QStringLiteral("refactor"),
+                                 QStringLiteral("refactor.extract"),
+                                 QStringLiteral("refactor.inline"),
+                                 QStringLiteral("refactor.rewrite"),
+                                 QStringLiteral("source"),
+                                 QStringLiteral("source.organizeImports"),
+                             }},
+                        }},
+                   }},
+                  {QStringLiteral("isPreferredSupport"), true},
               }},
              // Plain text only: no snippets to expand.
              {QStringLiteral("completion"),
@@ -243,6 +268,15 @@ void LanguageServer::handle(const QJsonObject &message)
 {
     const QJsonValue id{message[QStringLiteral("id")]};
     const QString method{message[QStringLiteral("method")].toString()};
+    if (method == QLatin1String("workspace/applyEdit")) {
+        emit editRequested(message[QStringLiteral("params")][QStringLiteral("edit")].toObject());
+        write(
+            {{QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
+             {QStringLiteral("id"), id},
+             {QStringLiteral("result"), QJsonObject{{QStringLiteral("applied"), true}}}}
+        );
+        return;
+    }
     if (!method.isEmpty() && !id.isUndefined()) {
         answer(message);
         if (method == QLatin1String("workspace/semanticTokens/refresh")) {

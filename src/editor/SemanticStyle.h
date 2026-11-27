@@ -42,8 +42,6 @@ inline constexpr quint32 categoryMask{0xffU};
 inline constexpr quint32 Declaration{1U << 8U};
 inline constexpr quint32 FunctionDefinition{1U << 9U};
 inline constexpr quint32 OutputArgument{1U << 10U};
-// A static member function: the function's look over the static one's.
-inline constexpr quint32 FunctionMixin{1U << 11U};
 
 // Qt Creator's names, as its color schemes and Kode's themes ("semantic-styles") have them.
 inline constexpr std::array<QLatin1StringView, CategoryCount> names{
@@ -72,11 +70,10 @@ inline constexpr std::array<QLatin1StringView, CategoryCount> names{
 };
 
 // The mixins' names, by bit from Declaration up.
-inline constexpr std::array<QLatin1StringView, 4> mixinNames{
+inline constexpr std::array<QLatin1StringView, 3> mixinNames{
     QLatin1StringView{"Declaration"},
     QLatin1StringView{"FunctionDefinition"},
     QLatin1StringView{"OutputArgument"},
-    QLatin1StringView{"Function"},
 };
 
 // For a theme without them (not Kode's): the nearest text style.
