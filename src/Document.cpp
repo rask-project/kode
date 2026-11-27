@@ -197,20 +197,19 @@ Document::ReadResult Document::readFile(const QString &path, const QString &enco
     if (!file.open(QIODevice::ReadOnly)) {
         return std::unexpected{tr("“%1” could not be opened: %2").arg(path, file.errorString())};
     }
-    const QByteArray bytes{file.readAll()};
-    codec::Format format{codec::detect(bytes)};
-    if (!encoding.isEmpty() && encoding != format.encoding) {
-        format = {.encoding = encoding, .byteOrderMark = {}};
+    std::expected<codec::Decoded, QString> decoded{codec::readFile(file, encoding)};
+    if (!decoded) {
+        return std::unexpected{tr("“%1” is not valid %2 text.").arg(path, decoded.error())};
     }
-    std::optional<QString> text{codec::decode(bytes.sliced(format.byteOrderMark.size()), format.encoding)};
-    if (!text) {
-        return std::unexpected{tr("“%1” is not valid %2 text.").arg(path, format.encoding)};
-    }
-    const bool crlf{text->contains(crlfText)};
+    const bool crlf{decoded->text.contains(crlfText)};
     if (crlf) {
-        text->replace(crlfText, QStringLiteral("\n"));
+        decoded->text.replace(crlfText, QStringLiteral("\n"));
     }
-    return Loaded{.buffer = TextBuffer{std::move(*text)}, .format = std::move(format), .flags = crlf ? Crlf : 0U};
+    return Loaded{
+        .buffer = TextBuffer{std::move(decoded->text)},
+        .format = std::move(decoded->format),
+        .flags = crlf ? Crlf : 0U
+    };
 }
 
 bool Document::finishRead(const QUrl &fileUrl, ReadResult result, bool keepPlace)

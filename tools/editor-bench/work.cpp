@@ -75,8 +75,7 @@ int main(int argc, char *argv[])
     })};
     QString text;
     const qreal decodeMs{measure([&] {
-        const kode::codec::Format format{kode::codec::detect(bytes)};
-        text = kode::codec::decode(bytes.sliced(format.byteOrderMark.size()), format.encoding).value_or(QString{});
+        text = kode::codec::decodeFile(bytes).value_or(kode::codec::Decoded{}).text;
         if (text.contains(QStringLiteral("\r\n"))) {
             text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
         }

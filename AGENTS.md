@@ -169,7 +169,10 @@ Guidance for AI agents working in this repository.
   modification time and size.
 - `src/TextCodec.{h,cpp}` — detecting, decoding and encoding a file's
   bytes: Qt for UTF-8/16 and Latin-1 (no ICU in this Qt), CoreFoundation
-  (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest.
+  (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest. Each
+  encoding is tried by decoding once (not checked, then decoded);
+  `readFile()` decodes UTF-8 as it reads, 4 MB at a time, so a large
+  file's bytes are never all in memory.
 - `GoToLine.qml` — the ⌘L popup ("line" or "line:column", parsed by
   `EditorView::goToLine()`).
 - `SettingsWindow.qml` — the Settings window (⌘,): `Rask.Controls`'

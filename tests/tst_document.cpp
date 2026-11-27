@@ -2,7 +2,9 @@
 
 #include "Document.h"
 #include "EditorView.h"
+#include "TextCodec.h"
 
+#include <QBuffer>
 #include <QFile>
 #include <QSignalSpy>
 #include <QTest>
@@ -112,6 +114,35 @@ void TestDocument::readsWindows1252WhenNotUtf8()
     QCOMPARE(editor.text(), QStringLiteral("café €\n"));
     QVERIFY(document.save());
     QCOMPARE(readFile(path(QStringLiteral("cp1252.txt"))), bytes);
+}
+
+void TestDocument::readsUtf8CutAcrossBlocks()
+{
+    // Characters of 2, 3 and 4 bytes across every block boundary (4 MB).
+    const QString characters{QStringLiteral("é€😀")};
+    QString expected;
+    for (qsizetype padding{0}; expected.size() < qsizetype{9} * 1024 * 1024; ++padding) {
+        expected += QString{padding % 7, QLatin1Char('a')} + characters;
+    }
+    QByteArray bytes{expected.toUtf8()};
+    QBuffer device{&bytes};
+    QVERIFY(device.open(QIODevice::ReadOnly));
+    const std::expected<kode::codec::Decoded, QString> decoded{kode::codec::readFile(device)};
+    QVERIFY(decoded.has_value());
+    QCOMPARE(decoded->format.encoding, QStringLiteral("UTF-8"));
+    QVERIFY(decoded->text == expected);
+}
+
+void TestDocument::readsAFileEndingInACutCharacter()
+{
+    // "é" without its second byte: not UTF-8, so Windows-1252.
+    QByteArray bytes{QByteArrayLiteral("caf\xc3")};
+    QBuffer device{&bytes};
+    QVERIFY(device.open(QIODevice::ReadOnly));
+    const std::expected<kode::codec::Decoded, QString> decoded{kode::codec::readFile(device)};
+    QVERIFY(decoded.has_value());
+    QCOMPARE(decoded->format.encoding, QStringLiteral("Windows-1252"));
+    QCOMPARE(decoded->text, QStringLiteral("caf\u00c3"));
 }
 
 void TestDocument::keepsTheByteOrderMark()

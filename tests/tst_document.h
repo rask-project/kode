@@ -16,6 +16,8 @@ private slots:
     void keepsNonBreakingSpaces();
     void reportsMissingFile();
     void readsWindows1252WhenNotUtf8();
+    void readsUtf8CutAcrossBlocks();
+    void readsAFileEndingInACutCharacter();
     void keepsTheByteOrderMark();
     void reopensWithAnotherEncoding();
     void convertsEncodingAndLineEnding();

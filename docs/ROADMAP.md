@@ -471,7 +471,9 @@ cannot be sliced well, measured first (`kode-work-bench`,
 
 - Done: opening — from 2 MB on, reading, decoding (`TextCodec`) and the
   `TextBuffer`'s line index on a worker; the view shows "Opening…" and
-  then the text (100 MB: 0.1 ms blocking instead of ~230 ms).
+  then the text (100 MB: 0.1 ms blocking instead of ~230 ms). UTF-8 is
+  decoded as it is read, 4 MB at a time: opening 100 MB peaks at the
+  memory the file then takes (495 MB in all, from 782 MB).
 - Done: highlighting a jump far down a large file — the lines in view
   from a guessed state (no state, 200 lines above them) until the exact
   highlighting, still in 3 ms slices, gets there (100 MB: colors in 7 ms

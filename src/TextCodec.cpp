@@ -1,6 +1,7 @@
 #include "TextCodec.h"
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <QIODevice>
 #include <QStringDecoder>
 #include <QStringEncoder>
 
@@ -57,6 +58,13 @@ struct Mark {
     QByteArrayView bytes;
 };
 
+// Without a byte order mark, tried in turn.
+const std::array<QString, 3> detected{
+    QStringLiteral("UTF-8"),
+    QStringLiteral("Windows-1252"),
+    QStringLiteral("ISO-8859-1"),
+};
+
 const std::array<Mark, 3> marks{{
     {.encoding = QLatin1StringView{"UTF-8"}, .bytes = QByteArrayView{"\xEF\xBB\xBF", 3}},
     {.encoding = QLatin1StringView{"UTF-16LE"}, .bytes = QByteArrayView{"\xFF\xFE", 2}},
@@ -78,20 +86,108 @@ QStringList encodings()
     };
 }
 
-Format detect(const QByteArray &bytes)
+namespace
 {
-    for (const Mark &mark : marks) {
-        if (bytes.startsWith(mark.bytes)) {
-            return {.encoding = mark.encoding, .byteOrderMark = mark.bytes.toByteArray()};
+
+constexpr qint64 readBlock{qint64{4} * 1024 * 1024};
+
+// How much of `bytes` ends on a whole UTF-8 character: the last one left
+// out when its bytes may go on past the end.
+qsizetype wholeCharacters(QByteArrayView bytes)
+{
+    const qsizetype size{bytes.size()};
+    for (qsizetype back{1}; back <= 4 && back <= size; ++back) {
+        const auto byte{static_cast<quint8>(bytes.at(size - back))};
+        if ((byte & 0xC0U) == 0x80U) {
+            continue;
+        }
+        if (byte < 0x80U) {
+            return size;
+        }
+        const qsizetype length{byte >= 0xF0U ? 4 : (byte >= 0xE0U ? 3 : 2)};
+        return length > back ? size - back : size;
+    }
+    // Not UTF-8: the decoder tells.
+    return size;
+}
+
+// The rest of `device` as UTF-8, decoded block by block into the text;
+// nothing if it is not valid UTF-8 or cannot be read.
+std::optional<QString> readUtf8(QIODevice &device)
+{
+    QStringDecoder decoder{QStringConverter::Utf8};
+    const qint64 expected{device.size() - device.pos()};
+    QString text(decoder.requiredSpace(expected) + (expected / readBlock) + 1, Qt::Uninitialized);
+    qsizetype length{0};
+    // A block's last character, cut, starts the next one.
+    QByteArray block(readBlock + 4, Qt::Uninitialized);
+    qsizetype carried{0};
+    while (true) {
+        const qint64 read{device.read(block.data() + carried, readBlock)};
+        if (read < 0) {
+            return std::nullopt;
+        }
+        const QByteArrayView bytes{block.constData(), carried + read};
+        const qsizetype whole{wholeCharacters(bytes)};
+        if (read == 0 && whole < bytes.size()) {
+            return std::nullopt;
+        }
+        // The file may have grown since its size was taken.
+        if (const qsizetype needed{length + decoder.requiredSpace(whole)}; needed > text.size()) {
+            text.resize(needed);
+        }
+        length = decoder.appendToBuffer(text.data() + length, bytes.first(whole)) - text.constData();
+        if (decoder.hasError()) {
+            return std::nullopt;
+        }
+        if (read == 0) {
+            break;
+        }
+        carried = bytes.size() - whole;
+        std::ranges::copy(bytes.sliced(whole), block.begin());
+    }
+    text.truncate(length);
+    return text;
+}
+
+} // namespace
+
+std::expected<Decoded, QString> readFile(QIODevice &device, const QString &encoding)
+{
+    const QByteArray head{device.peek(4)};
+    const bool marked{std::ranges::any_of(marks, [&head](const Mark &mark) { return head.startsWith(mark.bytes); })};
+    if (encoding.isEmpty() && !marked) {
+        if (std::optional<QString> text{readUtf8(device)}) {
+            return Decoded{.text = std::move(*text), .format = {}};
+        }
+        device.seek(0);
+    }
+    return decodeFile(device.readAll(), encoding);
+}
+
+std::expected<Decoded, QString> decodeFile(const QByteArray &bytes, const QString &encoding)
+{
+    const auto mark{std::ranges::find_if(marks, [&bytes](const Mark &candidate) {
+        return bytes.startsWith(candidate.bytes);
+    })};
+    const bool marked{mark != marks.end() && (encoding.isEmpty() || encoding == mark->encoding)};
+    if (marked || !encoding.isEmpty()) {
+        Format format{
+            marked ? Format{.encoding = mark->encoding, .byteOrderMark = mark->bytes.toByteArray()}
+                   : Format{.encoding = encoding, .byteOrderMark = {}}
+        };
+        std::optional<QString> text{decode(bytes.sliced(format.byteOrderMark.size()), format.encoding)};
+        if (!text) {
+            return std::unexpected{format.encoding};
+        }
+        return Decoded{.text = std::move(*text), .format = std::move(format)};
+    }
+    for (const QString &candidate : detected) {
+        if (std::optional<QString> text{decode(bytes, candidate)}) {
+            return Decoded{.text = std::move(*text), .format = {.encoding = candidate, .byteOrderMark = {}}};
         }
     }
-    if (decode(bytes, QStringLiteral("UTF-8"))) {
-        return {};
-    }
-    if (decode(bytes, QStringLiteral("Windows-1252"))) {
-        return {.encoding = QStringLiteral("Windows-1252"), .byteOrderMark = {}};
-    }
-    return {.encoding = QStringLiteral("ISO-8859-1"), .byteOrderMark = {}};
+    return std::unexpected{detected.back()};
 }
 
 bool isBinary(QByteArrayView head)
