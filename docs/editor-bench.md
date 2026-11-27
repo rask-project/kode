@@ -101,6 +101,37 @@ laid out again). While slices run, a frame is missed now and then
 (33 ms); with 8 ms slices it was most of the first keystrokes. Moving the
 work off the GUI thread is the next step if this shows in use.
 
+## Work that grows with the file
+
+Stage 10: what blocks the GUI thread (or, sliced, keeps it busy) in
+proportion to the file, measured with `kode-work-bench` on the same files
+(`tools/editor-bench/run-work.sh`, offscreen, no window). Release build,
+Apple M1 with 8 GB, macOS 27.2.1, Qt 6.12.0, on 2026-11-26.
+
+| Size (MB) | Read (ms) | Decode (ms) | Set text (ms) | Highlight all (ms) | Search (ms) | Search, sliced (ms) | Replace All (ms) | Undo (ms) | Re-indent all (ms) | Save (ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1.2 | 0.9 | 1.8 | 0.9 | 269.4 | 13.8 | 14.1 | 5.7 | 4.7 | 298.2 | 15.9 |
+| 10.2 | 3.6 | 14.5 | 5.5 | 2 282.5 | 122.4 | 126.7 | 25.0 | 17.5 | 2 715.2 | 218.6 |
+| 100.4 | 38.7 | 143.5 | 50.1 | 22 434.6 | 1 277.5 | 1 355.3 | 234.4 | 154.0 | 60 341.4 | 14 424.7 |
+
+- **Opening** (read + decode + set text) blocks for 25 ms at 10 MB and
+  about 230 ms at 100 MB; decoding is most of it.
+- **Highlighting** every line takes 2.3 s at 10 MB and 22 s at 100 MB. It
+  runs in 3 ms slices, so it never blocks, but it takes the GUI thread's
+  spare time and a jump far down a large file shows plain text until the
+  slices get there.
+- **Find** is already sliced: done in about the time it takes in one go
+  (1.4 s against 1.3 s at 100 MB), never blocking.
+- **Replace All** and its undo block for 0.2 s and 0.15 s at 100 MB.
+- **Re-indent on save** (`Preferences.reindentOnSave`, off by default) is
+  the worst: 0.3 s at 1 MB, 2.7 s at 10 MB and a minute at 100 MB, all
+  blocking, with highlighting ready; when it is not ready the save waits up
+  to 2 s for it and then saves without re-indenting. It builds the whole
+  text twice and every line as a string: at 100 MB the process peaks at
+  1.5 GB and the system compresses memory, which also slows the save that
+  follows (14 s, against 0.2 s without re-indenting).
+- **Saving** blocks for about 0.2 s at 100 MB.
+
 ## Not covered by the prototype
 
 Selection, undo, preedit (marked text) display, soft wrap, horizontal
@@ -121,6 +152,8 @@ cmake -B build/Qt_6_12_0_for_macOS_Release -G Ninja \
   -DCMAKE_PREFIX_PATH=/opt/Qt/6.12.0/macos -DCMAKE_BUILD_TYPE=Release
 cmake --build build/Qt_6_12_0_for_macOS_Release --target kode_editor_bench
 tools/editor-bench/run.sh build/Qt_6_12_0_for_macOS_Release
+cmake --build build/Qt_6_12_0_for_macOS_Release --target kode_work_bench
+tools/editor-bench/run-work.sh build/Qt_6_12_0_for_macOS_Release
 # By hand: build/…/tools/editor-bench/kode-editor-bench try FILE
 ```
 

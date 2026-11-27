@@ -452,9 +452,8 @@ the sidebar and its width are saved with the session.
 - Done: **`Rask.Updater`** (linked, `rask_sparkle_plist_keys()` in
   `Info.plist`, `Updater.start()`, Settings ▸ Updates) + the appcast in the
   release workflow.
-- Developer ID signing and notarization (as in `konsoll/docs/RELEASE.md`;
-  every embedded `Rask.*` dylib and QML plugin signed with the hardened
-  runtime).
+- Decided: no Developer ID signing or notarization; releases stay signed ad
+  hoc (`docs/RELEASE.md`).
 - Liquid Glass (`Rask.Window`'s `GlassEffect`, `GlassSurface` as fallback) on
   the tab strip/status bar on macOS 26.
 - **`Rask.Style`** (a Qt Quick Controls style for macOS) adopted by Kode.

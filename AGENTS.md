@@ -312,7 +312,9 @@ Guidance for AI agents working in this repository.
     a few million pixels).
 - `tools/editor-bench/` — `kode-editor-bench` (TextEdit vs. EditorView on
   one file, in a real window) and `run.sh` (1/10/100 MB, Markdown table for
-  `docs/editor-bench.md`). Benchmark Release builds only.
+  `docs/editor-bench.md`); `kode-work-bench` and `run-work.sh`: the work
+  that grows with the file (opening, highlighting, find, Replace All,
+  re-indenting, saving), offscreen. Benchmark Release builds only.
 - `tests/` — QtTest (`tst_document`, `tst_textbuffer` with randomized edits
   against a `QString`, `tst_editorview`, `tst_syntaxhighlighter` with
   randomized edits against highlighting from scratch, `tst_matching`, `tst_textsearch`, `tst_indentation`, `tst_commenting`, `tst_wrapindex`, `tst_folding`,
