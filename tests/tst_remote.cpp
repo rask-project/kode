@@ -5,11 +5,13 @@
 #include "Document.h"
 #include "FileSearch.h"
 #include "FileTree.h"
+#include "LanguageServers.h"
 #include "TextDocument.h"
 #include "remote/Connection.h"
 #include "remote/Files.h"
 #include "remote/Host.h"
 #include "remote/Hosts.h"
+#include "remote/RemoteProcess.h"
 #include "remote/Ssh.h"
 
 #include <QDir>
@@ -19,10 +21,13 @@
 #include <QProcess>
 #include <QRandomGenerator>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTest>
 
 #include <sys/stat.h>
+
+#include <csignal>
 
 using kode::remote::Connection;
 using kode::remote::Frame;
@@ -30,6 +35,7 @@ using kode::remote::FrameReader;
 using kode::remote::FrameType;
 using kode::remote::Host;
 using kode::remote::Hosts;
+using namespace Qt::StringLiterals;
 
 namespace
 {
@@ -739,13 +745,17 @@ struct RemoteHost {
     QTemporaryDir folder;
     QString destination;
 
-    RemoteHost()
+    // `loginPath`: what the host's login shell tells as its PATH (a stand-in $SHELL).
+    explicit RemoteHost(const QString &loginPath = {})
     {
         static qint32 count{0};
         destination = QStringLiteral("box%1").arg(++count);
-        static_cast<void>(
-            Hosts::shared().host(destination, setupIn(folder, writeScript(folder, QStringLiteral("ssh"), fakeSsh)))
-        );
+        kode::remote::Setup setup{setupIn(folder, writeScript(folder, QStringLiteral("ssh"), fakeSsh))};
+        if (!loginPath.isEmpty()) {
+            const QString shell{u"#!/bin/sh\nprintf '__KODE_PATH__%s' '"_s + loginPath + u"'\n"_s};
+            setup.environment.insert(QStringLiteral("SHELL"), writeScript(folder, QStringLiteral("shell"), shell));
+        }
+        static_cast<void>(Hosts::shared().host(destination, std::move(setup)));
     }
     RemoteHost(const RemoteHost &) = delete;
     RemoteHost &operator=(const RemoteHost &) = delete;
@@ -1125,6 +1135,159 @@ void TestRemote::findsRemoteFiles()
     search.setActive(true);
     QTRY_COMPARE_WITH_TIMEOUT(search.count(), 1, 10000);
     QCOMPARE(search.fileAt(0), host.url(QStringLiteral("project/src/EditorView.cpp")));
+}
+
+namespace
+{
+
+// The agent's channel named by `key` in `result`, taken whole.
+void collect(
+    Connection &connection,
+    const Connection::Result &result,
+    const QString &key,
+    std::optional<QByteArray> &out
+)
+{
+    connection.receive(
+        static_cast<quint32>(result->toObject().value(key).toInteger()),
+        [&out, bytes = QByteArray{}](QByteArrayView piece, kode::remote::ChannelEnd end) mutable {
+            if (end == kode::remote::ChannelEnd::More) {
+                bytes.append(piece);
+            } else {
+                out = bytes;
+            }
+        }
+    );
+}
+
+// `argv` spawned; its output collected in `out`, its stdin channel returned.
+quint32
+spawned(Connection &connection, const QStringList &argv, std::optional<QByteArray> &out, std::optional<qint64> &id)
+{
+    const quint32 input{connection.openChannel()};
+    Connection *const link{&connection};
+    connection.request(
+        QStringLiteral("process/spawn"),
+        {{QStringLiteral("argv"), QJsonArray::fromStringList(argv)},
+         {QStringLiteral("cwd"), QDir::tempPath()},
+         {QStringLiteral("stdin"), static_cast<qint64>(input)}},
+        [link, &out, &id](const Connection::Result &result) {
+            if (!result) {
+                qWarning() << result.error().message;
+                return;
+            }
+            id = result->toObject().value(QStringLiteral("id")).toInteger();
+            collect(*link, result, QStringLiteral("stdout"), out);
+        }
+    );
+    return input;
+}
+
+bool exitedWith(const QSignalSpy &told, qint64 id, qint64 code)
+{
+    return std::ranges::any_of(told, [id, code](const QList<QVariant> &signal) {
+        const QJsonObject params{signal.at(1).value<QJsonValue>().toObject()};
+        return signal.at(0).toString() == QLatin1String("process/exited") &&
+               params.value(QStringLiteral("id")).toInteger() == id &&
+               params.value(QStringLiteral("code")).toInteger() == code;
+    });
+}
+
+} // namespace
+
+void TestRemote::runsPrograms()
+{
+    const auto connection{serving()};
+    const Connection::Result which{askWith(
+        *connection,
+        QStringLiteral("process/which"),
+        {{QStringLiteral("names"), QJsonArray{QStringLiteral("sh"), QStringLiteral("no-such-program-here")}}}
+    )};
+    QVERIFY(which.has_value());
+    const QJsonObject found{which->toObject().value(QStringLiteral("found")).toObject()};
+    QVERIFY(found.value(QStringLiteral("sh")).toString().endsWith(QStringLiteral("/sh")));
+    QVERIFY(!found.contains(QStringLiteral("no-such-program-here")));
+
+    QSignalSpy told{connection.get(), &Connection::notified};
+    std::optional<QByteArray> echoed;
+    std::optional<qint64> catId;
+    const quint32 input{spawned(*connection, {QStringLiteral("cat")}, echoed, catId)};
+    connection->write(input, "hello ");
+    connection->write(input, "there\n");
+    connection->end(input);
+    QTRY_VERIFY_WITH_TIMEOUT(echoed.has_value(), 10000);
+    QCOMPARE(*echoed, QByteArray{"hello there\n"});
+    QTRY_VERIFY_WITH_TIMEOUT(exitedWith(told, *catId, 0), 10000);
+
+    std::optional<QByteArray> large;
+    std::optional<qint64> largeId;
+    connection->end(spawned(
+        *connection,
+        {QStringLiteral("/bin/sh"), QStringLiteral("-c"), QStringLiteral("yes 0123456789 | head -c 3000000")},
+        large,
+        largeId
+    ));
+    QTRY_VERIFY_WITH_TIMEOUT(large.has_value(), 20000);
+    QCOMPARE(large->size(), 3000000);
+
+    std::optional<QByteArray> slept;
+    std::optional<qint64> sleepId;
+    static_cast<void>(spawned(*connection, {QStringLiteral("sleep"), QStringLiteral("30")}, slept, sleepId));
+    QTRY_VERIFY(sleepId.has_value());
+    QVERIFY(askWith(
+                *connection,
+                QStringLiteral("process/signal"),
+                {{QStringLiteral("id"), *sleepId}, {QStringLiteral("signal"), QStringLiteral("TERM")}}
+    ).has_value());
+    QTRY_VERIFY_WITH_TIMEOUT(slept.has_value(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(exitedWith(told, *sleepId, 128 + SIGTERM), 10000);
+}
+
+void TestRemote::runsARemoteProcess()
+{
+    const RemoteHost host;
+    kode::remote::RemoteProcess
+        process{*Hosts::shared().host(host.destination), QStringLiteral("cat"), {}, QDir::tempPath()};
+    QByteArray output;
+    connect(&process, &kode::remote::RemoteProcess::output, &process, [&output](const QByteArray &bytes) {
+        output.append(bytes);
+    });
+    QSignalSpy finished{&process, &kode::remote::RemoteProcess::finished};
+    // Before it started: it waits.
+    process.write("echo me\n");
+    QTRY_COMPARE_WITH_TIMEOUT(output, QByteArray{"echo me\n"}, 10000);
+    process.closeInput();
+    QTRY_COMPARE_WITH_TIMEOUT(finished.count(), 1, 10000);
+}
+
+void TestRemote::remoteClangdReportsAnError()
+{
+    const QString clangd{QStandardPaths::findExecutable(
+        QStringLiteral("clangd"),
+        {QStringLiteral("/opt/homebrew/opt/llvm/bin"),
+         QStringLiteral("/opt/homebrew/bin"),
+         QStringLiteral("/usr/local/bin")}
+    )};
+    if (clangd.isEmpty()) {
+        QSKIP("clangd is not installed");
+    }
+    const RemoteHost host{QFileInfo{clangd}.path() + QStringLiteral(":/usr/bin:/bin")};
+    host.write(QStringLiteral("project/main.cpp"), "int main() { return undefinedName; }\n");
+    QDir{}.mkpath(host.path(QStringLiteral("project/.git")));
+    kode::Document document;
+    QVERIFY(document.load(host.url(QStringLiteral("project/main.cpp"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    kode::lsp::LanguageServers servers;
+    servers.add(&document);
+    QTRY_VERIFY_WITH_TIMEOUT(document.textDocument()->errorCount() == 1, 60000);
+    const kode::TextDocument::Diagnostic &error{document.textDocument()->diagnostics().first()};
+    QCOMPARE(
+        document.textDocument()->text().mid(error.start, error.end - error.start),
+        QStringLiteral("undefinedName")
+    );
+    document.textDocument()->replace(error.start, error.end - error.start, QStringLiteral("0"), false, {});
+    QTRY_VERIFY_WITH_TIMEOUT(document.textDocument()->errorCount() == 0, 30000);
+    servers.remove(&document);
 }
 
 QTEST_MAIN(TestRemote)

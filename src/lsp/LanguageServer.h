@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Protocol.h"
+#include "remote/RemoteProcess.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -35,11 +36,22 @@ public:
         const QString &path,
         const QUrl &root
     );
+    // The same, on a host (docs/REMOTE.md): `program` found there, `root`
+    // its folder there as a file:// URL (what the server sees).
+    LanguageServer(
+        remote::Host &host,
+        const QString &program,
+        const QStringList &arguments,
+        const QJsonObject &options,
+        const QUrl &root
+    );
     ~LanguageServer() override;
     Q_DISABLE_COPY_MOVE(LanguageServer)
 
-    [[nodiscard]] QString program() const { return m_process.program(); }
-    [[nodiscard]] QStringList arguments() const { return m_process.arguments(); }
+    [[nodiscard]] QString program() const { return m_program; }
+    [[nodiscard]] QStringList arguments() const { return m_arguments; }
+    // The host it runs on; empty on this Mac.
+    [[nodiscard]] QString destination() const { return m_remote != nullptr ? m_remote->destination() : QString{}; }
     [[nodiscard]] QUrl root() const { return m_root; }
     // Edits go as ranges (else the whole text each time).
     [[nodiscard]] bool incrementalSync() const noexcept { return m_sync == IncrementalSync; }
@@ -93,10 +105,14 @@ private:
     void send(const QJsonObject &message);
     void write(const QJsonObject &message);
     void readOutput();
+    void received(const QByteArray &bytes);
     void handle(const QJsonObject &message);
     void answer(const QJsonObject &request);
 
     QProcess m_process;
+    std::unique_ptr<remote::RemoteProcess> m_remote;
+    QString m_program;
+    QStringList m_arguments;
     MessageReader m_reader;
     QHash<qint64, Handler> m_pending;
     // Held until the server is initialized.

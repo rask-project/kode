@@ -160,15 +160,38 @@ void Connection::receive(quint32 channel, Receiver receiver)
     m_incoming.insert(channel, Incoming{.receiver = std::move(receiver), .window = static_cast<qint64>(initialCredit)});
 }
 
-void Connection::send(quint32 channel, QByteArray bytes)
+void Connection::send(quint32 channel, const QByteArray &bytes)
+{
+    write(channel, bytes);
+    end(channel);
+}
+
+void Connection::write(quint32 channel, QByteArrayView bytes)
 {
     if (state() == State::Closed) {
         return;
     }
-    m_outgoing.insert(
-        channel,
-        Outgoing{.bytes = std::move(bytes), .sent = 0, .credit = static_cast<qint64>(initialCredit)}
-    );
+    auto out{m_outgoing.find(channel)};
+    if (out == m_outgoing.end()) {
+        out = m_outgoing.insert(
+            channel,
+            Outgoing{.bytes = {}, .sent = 0, .credit = static_cast<qint64>(initialCredit), .ending = 0}
+        );
+    }
+    out->bytes.append(bytes);
+    pump(channel);
+}
+
+void Connection::end(quint32 channel)
+{
+    const auto out{m_outgoing.find(channel)};
+    if (out == m_outgoing.end()) {
+        if (state() != State::Closed) {
+            writeFrame(FrameType::Eof, channel, {});
+        }
+        return;
+    }
+    out->ending = 1;
     pump(channel);
 }
 
@@ -184,10 +207,17 @@ void Connection::pump(quint32 channel)
         out->sent += size;
         out->credit -= size;
     }
-    if (out->sent == out->bytes.size()) {
+    if (out->sent < out->bytes.size()) {
+        return;
+    }
+    if (out->ending != 0) {
         writeFrame(FrameType::Eof, channel, {});
         m_outgoing.erase(out);
+        return;
     }
+    // All sent so far: room for what follows.
+    out->bytes.clear();
+    out->sent = 0;
 }
 
 bool Connection::handleChannel(const Frame &frame)

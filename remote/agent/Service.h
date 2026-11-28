@@ -45,10 +45,15 @@ private:
 
 // What a service that waits on the system gets from the agent.
 struct Hooks {
-    // `ready` whenever `fd` is readable (on the agent's loop).
-    std::function<void(int fd, std::function<void()> ready)> watch;
+    // `ready` whenever `fd` has the poll(2) `events` (on the agent's loop).
+    std::function<void(int fd, short events, std::function<void()> ready)> watch;
+    std::function<void(int fd)> unwatch;
+    // `callback` once, `milliseconds` from now.
+    std::function<void(std::int64_t milliseconds, std::function<void()> callback)> later;
     // A notification to a session: `method` with `params` (JSON text).
     std::function<void(std::uint64_t session, std::string_view method, std::string_view params)> notify;
+    // The session's channels have more to send (a source got bytes).
+    std::function<void(std::uint64_t session)> pump;
 };
 
 // One feature of the agent: its methods ("<name>/<method>"), what it offers

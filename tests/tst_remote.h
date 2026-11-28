@@ -81,5 +81,14 @@ private slots:
     void showsARemoteFolder();
     // FileSearch over a host's folder.
     void findsRemoteFiles();
+
+    // process over serve: which, a program fed and read, its exit code, a
+    // large output (past the agent's buffer), a signal.
+    void runsPrograms();
+    // RemoteProcess through a host: fed, read, finished.
+    void runsARemoteProcess();
+    // With clangd installed: a remote document's error from clangd running
+    // on the host (found on the login shell's PATH).
+    void remoteClangdReportsAnError();
     void cleanup();
 };

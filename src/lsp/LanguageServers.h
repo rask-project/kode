@@ -24,6 +24,11 @@ namespace kode
 
 class Document;
 
+namespace remote
+{
+class Host;
+} // namespace remote
+
 namespace lsp
 {
 
@@ -144,6 +149,15 @@ private:
     void semanticTokensFound(const Document *document, qint64 version, const QJsonValue &result);
     // Opens the document on the server for it, if any, after closing it where it was.
     void bind(Entry &entry);
+    // A document on a host: its server found there (process/which) and its
+    // root (the nearest folder with a .git), then started there.
+    void bindRemote(Entry &entry);
+    void startRemote(
+        const Document *document,
+        const QString &destination,
+        const QJsonObject &found,
+        const QStringList &gits
+    );
     void unbind(Entry &entry);
     // Tells the document its server and what it is busy with.
     void showStatus(const Entry &entry);
@@ -153,8 +167,15 @@ private:
     void documentReset(const Document *document);
     void diagnosticsPublished(const LanguageServer *server, const QUrl &uri, qint64 version, const QJsonArray &list);
     void serverFinished(const LanguageServer *server);
-    [[nodiscard]] LanguageServer *
-    server(const QString &program, const QStringList &arguments, const QJsonObject &options, const QUrl &root);
+    // Started when there is none yet for the program, its arguments and the
+    // root (on `host`, when given).
+    [[nodiscard]] LanguageServer *server(
+        const QString &program,
+        const QStringList &arguments,
+        const QJsonObject &options,
+        const QUrl &root,
+        remote::Host *host = nullptr
+    );
     // The server `server` points to, to talk to it.
     [[nodiscard]] LanguageServer *find(const LanguageServer *server) const;
     void readShellPath();
@@ -167,7 +188,8 @@ private:
     [[nodiscard]] std::optional<Choice> serverFor(const QString &syntax) const;
     // Makes a WorkspaceEdit's text edits (files not open are opened), each
     // document's as one undo step.
-    void applyEdit(const QJsonObject &edit);
+    // `destination`: the host of the server that sent it (its file:// URIs are there).
+    void applyEdit(const QJsonObject &edit, const QString &destination = {});
     // Stops the servers and opens the documents again with the settings.
     void restart();
     // Where servers are looked for, in order: searchFolders, then the shell's PATH.

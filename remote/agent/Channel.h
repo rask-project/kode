@@ -26,7 +26,8 @@ public:
     Source &operator=(Source &&) = delete;
     virtual ~Source() = default;
 
-    // At most `limit` bytes; none (nullopt) at the end; an error resets the channel.
+    // At most `limit` bytes; none (nullopt) at the end; an error resets the
+    // channel. Empty: nothing for now (Hooks::pump when there is).
     [[nodiscard]] virtual std::expected<std::optional<std::string>, std::string> next(std::size_t limit) = 0;
 };
 

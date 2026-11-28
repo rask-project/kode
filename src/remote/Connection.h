@@ -79,7 +79,10 @@ public:
     // A new channel of Kode's, for the request that names it.
     [[nodiscard]] quint32 openChannel() noexcept { return static_cast<quint32>(m_nextChannel += 2U); }
     // `bytes` on Kode's `channel` as the agent's credit allows, then its end.
-    void send(quint32 channel, QByteArray bytes);
+    void send(quint32 channel, const QByteArray &bytes);
+    // `bytes` added to what Kode's `channel` sends; it goes on until end().
+    void write(quint32 channel, QByteArrayView bytes);
+    void end(quint32 channel);
 
 signals:
     void stateChanged();
@@ -111,6 +114,8 @@ private:
         qint64 sent{0};
         // What the agent still accepts.
         qint64 credit{0};
+        // Its end is sent once the bytes went (a whole word: no padding).
+        qint64 ending{0};
     };
 
     QHash<qint64, Handler> m_pending;

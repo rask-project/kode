@@ -482,7 +482,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 | A2 — Bootstrap and connection | ✅ |
 | A3 — Remote documents | ✅ |
 | A4 — Remote folders | ✅ |
-| A5 — Remote language servers | ⬜ |
+| A5 — Remote language servers | ✅ |
 | A6 — Resilience and measurements | ⬜ |
 
 ### A0 — The seam (folded into A3–A5)
@@ -649,15 +649,36 @@ folder expanded), Find File over a host.
 Moved to A6: Open Recent for remote folders and files (`RecentDocuments`
 keeps local ones only); folders' `.gitignore` in Find File.
 
-### A5 — Remote language servers
+### A5 — Remote language servers ✅
 
-The `process` service; `LanguageServer` over `fs::Process`; URIs
-translated at its boundary both ways (the host's `file:///srv/app/x.cpp` ↔
-Kode's `ssh://box/srv/app/x.cpp`, in every message: documents, locations,
-`workspace/applyEdit`, related information); servers found with
-`process/which` on the host's PATH, roots and build folders with `fs/stat`;
-Settings > Language Servers per host. Tests: the URI translation; with
-clangd installed, a real round trip through the agent over pipes.
+Done. The agent's `process` service: `process/which` (programs on the
+login shell's PATH, read once — `$SHELL -ilc`, as Kode does here),
+`process/spawn` (argv, a folder; stdin a channel Kode opened, stdout one of
+the agent's, read ahead at most 1 MB and paused past it, stderr dropped;
+the pipes close-on-exec before the fork, so the program sees its stdin
+end), `process/signal`, `process/exited {id, code}` once its output was all
+sent; a session's processes stopped when it ends (SIGTERM, then SIGKILL).
+`Hooks` gained `unwatch`, `later` and `pump` (a source with bytes again);
+an empty piece from a source means "nothing now". Kode: `Connection`'s
+streaming `write()`/`end()` on a channel; `RemoteProcess` (a program on a
+host as `LanguageServer` uses it: writes wait until it started, output,
+finished); `LanguageServer` over one for a remote document; in
+`LanguageServers`, a remote document binds asynchronously
+(`bindRemote()`: its language's servers asked for with `process/which`,
+the nearest `.git` above with one `fs/stat` of every folder's, then
+`startRemote()`), servers kept per host as well as program and root, the
+server's own `file://` URIs kept as they are (diagnostics, edits and
+tokens matched by them) and those it answers with — definitions,
+`workspace/applyEdit` for a file not open, Switch Header/Source — turned
+into the host's `ssh://` URLs. Tests (`tst_remote`): `process/which`, a
+program fed and read with its exit code, 3 MB of output, a signal;
+`RemoteProcess` through a host; with clangd installed, a remote document's
+error reported by clangd on the "host" (found through a stand-in login
+shell's PATH) and gone once fixed.
+
+Not done here: Settings > Language Servers per host (the servers found on
+each), custom servers on a host, clangd's `compilationDatabasePath` and
+qmlls's `-b` on a host (both look for build folders on disk); moved to A6.
 
 ### A6 — Resilience and measurements
 

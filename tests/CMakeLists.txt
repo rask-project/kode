@@ -42,6 +42,8 @@ set(remote_sources
     ../src/remote/Host.cpp
     ../src/remote/Hosts.h
     ../src/remote/Hosts.cpp
+    ../src/remote/RemoteProcess.h
+    ../src/remote/RemoteProcess.cpp
     ../src/remote/RemoteTree.h
     ../src/remote/RemoteTree.cpp
     ../src/remote/Ssh.h
@@ -278,9 +280,10 @@ qt_add_executable(tst_remote
     ../src/TextCodec.h
     ../src/TextCodec.cpp
     ${editor_sources}
+    ${lsp_sources}
     ${remote_sources}
 )
-target_include_directories(tst_remote PRIVATE ../src ../src/editor)
+target_include_directories(tst_remote PRIVATE ../src ../src/editor ../src/lsp)
 target_link_libraries(tst_remote PRIVATE Qt6::Network Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
 target_compile_definitions(tst_remote PRIVATE
     KODE_VERSION="${KODE_DISPLAY_VERSION}"

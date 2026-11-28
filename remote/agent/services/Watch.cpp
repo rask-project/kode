@@ -3,6 +3,7 @@
 #include "../../protocol/Methods.h"
 
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #if defined(__linux__)
@@ -58,7 +59,7 @@ Watch::Watch(Hooks hooks) : m_hooks{std::move(hooks)}
     m_queue = Fd{::kqueue()};
 #endif
     if (m_queue.valid()) {
-        m_hooks.watch(m_queue.get(), [this] { read(); });
+        m_hooks.watch(m_queue.get(), POLLIN, [this] { read(); });
     }
 }
 

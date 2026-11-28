@@ -1,6 +1,7 @@
 #include "Agent.h"
 #include "Bridge.h"
 #include "services/Fs.h"
+#include "services/Process.h"
 #include "services/Search.h"
 #include "services/System.h"
 #include "services/Watch.h"
@@ -27,6 +28,7 @@ void addServices(kode::remote::Agent &agent)
     agent.addService(std::make_unique<kode::remote::Fs>());
     agent.addService(std::make_unique<kode::remote::Search>());
     agent.addService(std::make_unique<kode::remote::Watch>(agent.hooks()));
+    agent.addService(std::make_unique<kode::remote::Process>(agent.hooks()));
 }
 
 } // namespace

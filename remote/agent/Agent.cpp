@@ -254,6 +254,10 @@ void Agent::pump(Session &session)
                 ended = true;
                 break;
             }
+            // Nothing now: the source pumps again when it has more (Hooks::pump).
+            if (bytes->empty()) {
+                break;
+            }
             out.credit -= bytes->size();
             session.send(FrameType::Data, channel->first, *bytes);
         }
@@ -366,18 +370,25 @@ Hooks Agent::hooks()
 {
     return Hooks{
         .watch =
-            [this](int fd, std::function<void()> ready) {
-                m_loop.watch(
-                    fd,
-                    [] { return static_cast<short>(POLLIN); },
-                    [ready = std::move(ready)](short) { ready(); }
-                );
+            [this](int fd, short events, std::function<void()> ready) {
+                m_loop.watch(fd, [events] { return events; }, [ready = std::move(ready)](short) { ready(); });
+            },
+        .unwatch = [this](int fd) { m_loop.unwatch(fd); },
+        .later =
+            [this](std::int64_t milliseconds, std::function<void()> callback) {
+                m_loop.startTimer(std::chrono::milliseconds{milliseconds}, std::move(callback));
             },
         .notify =
             [this](std::uint64_t session, std::string_view method, std::string_view params) {
                 std::string message{R"({"jsonrpc":"2.0","method":")"};
                 message.append(method).append(R"(","params":)").append(params).append("}");
                 send(session, message);
+            },
+        .pump =
+            [this](std::uint64_t session) {
+                if (const auto found{m_sessions.find(session)}; found != m_sessions.end()) {
+                    pump(*found->second);
+                }
             },
     };
 }

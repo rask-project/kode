@@ -41,6 +41,8 @@ add_executable(kode-remote
     agent/Sha256.cpp
     agent/services/Fs.h
     agent/services/Fs.cpp
+    agent/services/Process.h
+    agent/services/Process.cpp
     agent/services/Search.h
     agent/services/Search.cpp
     agent/services/Watch.h

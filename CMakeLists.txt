@@ -171,6 +171,8 @@ qt_add_qml_module(kode
         src/remote/Hosts.cpp
         src/remote/RemoteFolder.h
         src/remote/RemoteFolder.cpp
+        src/remote/RemoteProcess.h
+        src/remote/RemoteProcess.cpp
         src/remote/RemoteTree.h
         src/remote/RemoteTree.cpp
         src/remote/Ssh.h
@@ -211,7 +213,7 @@ target_include_directories(kode PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_
 # on our sources only: Qt's generated code and rask's trip it.
 set_property(SOURCE main.cpp src/Document.cpp src/DocumentHistory.cpp src/FileIcons.cpp src/FileKinds.cpp src/FileOperations.cpp src/FileSearch.cpp src/FileTree.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/Commenting.cpp src/editor/Folding.cpp src/editor/EditorAccessible.cpp
     src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/Minimap.cpp src/editor/TextSearch.cpp src/lsp/Completion.cpp src/lsp/LanguageServer.cpp src/lsp/LanguageServers.cpp src/lsp/Protocol.cpp src/lsp/SemanticTokens.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
-    remote/protocol/Frame.cpp src/remote/Connection.cpp src/remote/Files.cpp src/remote/Host.cpp src/remote/Hosts.cpp src/remote/RemoteFolder.cpp src/remote/RemoteTree.cpp src/remote/Ssh.cpp
+    remote/protocol/Frame.cpp src/remote/Connection.cpp src/remote/Files.cpp src/remote/Host.cpp src/remote/Hosts.cpp src/remote/RemoteFolder.cpp src/remote/RemoteProcess.cpp src/remote/RemoteTree.cpp src/remote/Ssh.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
 # Debug builds get a bundle id of their own, so they don't share macOS
