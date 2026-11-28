@@ -234,3 +234,21 @@ target_include_directories(tst_lsp PRIVATE ../src ../src/lsp ../src/editor)
 target_link_libraries(tst_lsp PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
 add_test(NAME tst_lsp COMMAND tst_lsp)
 set_tests_properties(tst_lsp PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_remote
+    tst_remote.h
+    tst_remote.cpp
+    ../remote/protocol/Frame.h
+    ../remote/protocol/Frame.cpp
+    ../remote/protocol/Methods.h
+    ../src/remote/Connection.h
+    ../src/remote/Connection.cpp
+)
+target_include_directories(tst_remote PRIVATE ../src)
+target_link_libraries(tst_remote PRIVATE Qt6::Core Qt6::Test)
+target_compile_definitions(tst_remote PRIVATE
+    KODE_VERSION="${KODE_DISPLAY_VERSION}"
+    KODE_REMOTE_AGENT="$<TARGET_FILE:kode-remote>"
+)
+add_dependencies(tst_remote kode-remote)
+add_test(NAME tst_remote COMMAND tst_remote)

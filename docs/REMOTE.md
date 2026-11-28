@@ -473,26 +473,54 @@ Recent and the `kode` command (`kode ssh://box/srv/app`); `host` as named in
 ## 9. Stages
 
 Each ends with something usable and tested; none depends on a later one.
+Status: ✅ done · 🚧 in progress · ⬜ not started.
 
-### A0 — The seam, locally
+| Stage | Status |
+|---|---|
+| A0 — The seam | folded into A3–A5 |
+| A1 — Protocol and agent skeleton | ✅ |
+| A2 — Bootstrap and connection | ⬜ |
+| A3 — Remote documents | ⬜ |
+| A4 — Remote folders | ⬜ |
+| A5 — Remote language servers | ⬜ |
+| A6 — Resilience and measurements | ⬜ |
 
-`kode::fs::FileSystem`, `Process` and `Hosts` with only the local
-implementation; `Document`, `FileOperations`, `FileSearch`, `FileTree`'s
-operations, `LanguageServer`'s process and `OpenDocuments` moved onto them,
-asynchronous. No user-visible change; every current test passes. The
-largest refactor, and the one that makes the rest additive.
+### A0 — The seam (folded into A3–A5)
 
-### A1 — Protocol and agent skeleton
+First planned as its own stage: `kode::fs::FileSystem`, `Process` and
+`Hosts` with only the local implementation, everything moved onto them
+first. Dropped as a stage: a refactor of working local code with nothing
+yet to show for it, and an interface designed before the remote side it
+serves. Each stage brings the part of the seam it needs, with its remote
+implementation beside the local one — documents in A3, the tree, its
+operations and Find File in A4, processes in A5 — and the local code is
+moved onto it then, its tests still passing.
 
-`remote/protocol` (frames, reader, method names), the agent's event loop,
-worker pool, daemon, bridge, sessions, channels with credit, the service
-registry and the handshake; one trivial service to prove the path. Kode's
-`remote::Connection` (frames, requests by id with their handlers, channels
-as `QIODevice`s); the limits and the peer check of section 7. Tests: the
-framing (random pieces, as `tst_lsp`; fuzzed), a peer of another uid
-refused, and
-Kode talking to a locally built `kode-remote` over pipes — no SSH needed,
-which every later stage reuses.
+### A1 — Protocol and agent skeleton ✅
+
+Done: `remote/protocol` (`Frame`, `FrameReader`, `Methods.h`: frames
+bounded by type before anything is allocated), and `kode-remote`
+(`remote/agent`: C++23, POSIX and yyjson, `-fno-exceptions`) — a
+`poll(2)` event loop, sessions, the service registry (`Service`, `Reply`:
+answered now or later, an unanswered one answers with an internal
+error), the handshake (protocol version, a random 128-bit session id,
+platform, capabilities) and `system/ping`; `serve` (one session on
+stdio), `daemon` (the runtime folder checked, one per user and version by
+`flock`, a unix socket `0600`, each peer's uid checked, idle exit) and
+`bridge` (checks the folder and the daemon's uid, starts the daemon when
+none answers, copies stdio). Kode's `kode::remote::Connection` (the
+process, requests by id with handlers, notifications, stderr kept for
+ssh's messages, everything from the agent checked: a broken frame or
+message ends it). `tst_remote`: frames in random pieces, oversized and
+unknown frames refused, the handshake, requests before initialize
+refused, a broken frame ending the session, pending requests failed on
+close, two connections through the bridge to one daemon (separate
+sessions; idle exit), an open runtime folder refused.
+
+Moved to later stages, where something uses them: the worker pool (A3,
+reading files), data channels and their credit (A3, `fs/read`), fuzzing
+the reader (A2, with the CI job). Not testable here: a peer of another
+uid (needs a second user).
 
 ### A2 — Bootstrap and connection
 

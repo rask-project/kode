@@ -261,6 +261,26 @@ Guidance for AI agents working in this repository.
     document), dropped when the document was edited meanwhile, then decoded
     into `TextDocument::setSemanticTokens()`;
     through `OpenDocuments` (which exposes `languageServers`).
+- `remote/` — `kode-remote`, the agent Kode runs on a host over SSH
+  (`docs/REMOTE.md`: the plan, its stages marked as done). C++23, POSIX and
+  yyjson (`external/yyjson`, a submodule), no Qt, `-fno-exceptions`;
+  static on Linux.
+  - `protocol/` — shared with Kode: `Frame` and `FrameReader` (length,
+    type, channel; a frame larger than its type allows fails the stream
+    before anything is allocated), `Methods.h` (method names, error codes,
+    the protocol version).
+  - `agent/` — `EventLoop` (`poll(2)`, timers; runs while it has any),
+    `Session` (one client's frames, non-blocking), `Agent` (sessions,
+    services, the handshake: protocol version, a random session id,
+    platform, capabilities), `Service`/`Reply` (a feature's methods,
+    `<name>/<method>`; a reply answered now or later), `services/` (`System`:
+    `system/ping`), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
+    else `/tmp/kode-<uid>`, refused unless the user's only —, the socket, a
+    peer's uid), `Bridge` (stdio ↔ the daemon's socket, starting it). Commands:
+    `serve` (one session on stdio: the tests), `daemon [--idle s]`, `bridge`.
+- `src/remote/` — Kode's side: `Connection` (the process reaching the
+  agent, JSON-RPC over its frames, requests by id with handlers; anything
+  broken from the agent ends it).
 - `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
   in QSettings `session/folders` (JSON by canonical folder URL:
   `OpenDocuments::cleanFolder()` resolves links, as the Finder does).
@@ -489,7 +509,9 @@ Guidance for AI agents working in this repository.
   `tst_preferences`, `tst_filetree`, `tst_lsp` (framing, diagnostics
   following edits, semantic tokens (clangd's legend, decoding, deltas,
   moving with edits), and with clangd installed real round trips: an
-  error, a member completed, a type styled, a missing ';' fixed), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  error, a member completed, a type styled, a missing ';' fixed),
+  `tst_remote` (frames; Kode and a locally built `kode-remote` over stdio,
+  and through the bridge and daemon), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
   — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both
@@ -599,6 +621,10 @@ Qt Creator opens the project directly with the matching kit.
   `int`, `Q_PROPERTY` and `QList<qint32>` included (QML still sees `int`);
   only `main(int argc, …)` keeps `int`. Lists are `QList`, not `std::vector`.
   Platform API types (`CGFloat`, `NSInteger`, …) stay at the API boundary.
+  Exception: `remote/` has no Qt, so it uses the standard library's
+  (`std::int32_t`, `std::size_t`, `std::vector`, `std::string`) and POSIX's
+  (`int` descriptors) types; Kode's code converts at `remote/protocol`'s
+  boundary.
 - **Initialization:** brace-initialize every variable — data members,
   constants, locals and `for` counters (`bool m_modified{false};`,
   `for (qsizetype i{0}; ...)`): braces reject narrowing conversions. `=` only

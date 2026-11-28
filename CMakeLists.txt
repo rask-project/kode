@@ -318,6 +318,8 @@ if(APPLE)
     )
 endif()
 
+add_subdirectory(remote)
+
 option(KODE_BUILD_TOOLS "Build the Kode tools (editor benchmark)" ${PROJECT_IS_TOP_LEVEL})
 if(KODE_BUILD_TOOLS)
     add_subdirectory(tools/editor-bench)
