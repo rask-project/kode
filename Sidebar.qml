@@ -42,7 +42,7 @@ Item {
     // What the file operations act on: the selection, else the folder.
     readonly property url target: selectedFile.toString() !== "" ? selectedFile : folder
     readonly property bool targetIsRoot: selectedFile.toString() === ""
-    readonly property bool targetIsFolder: targetIsRoot || OpenDocuments.isFolder(selectedFile)
+    readonly property bool targetIsFolder: targetIsRoot || fileTree.isFolder(selectedFile)
     // Keys go to the tree (not to a name being typed): its shortcuts apply.
     readonly property bool treeFocused: tree.contentItem.activeFocus && renaming.toString() === "" && folder.toString() !== ""
     readonly property bool canCut: !targetIsRoot
@@ -74,7 +74,7 @@ Item {
         const url = sidebar.selectedFile;
         if (url.toString() === "")
             return;
-        if (OpenDocuments.isFolder(url)) {
+        if (fileTree.isFolder(url)) {
             const row = tree.rowAtIndex(fileTree.indexOf(url));
             if (row >= 0)
                 tree.toggleExpanded(row);
@@ -391,7 +391,8 @@ Item {
 
         text: qsTr("Reveal in Finder")
         shortcut: "Ctrl+Alt+R"
-        enabled: sidebar.treeFocused
+        // A host's files are not in the Finder.
+        enabled: sidebar.treeFocused && !fileTree.remote
         onTriggered: fileTree.revealInFinder(sidebar.target)
     }
 
@@ -517,12 +518,16 @@ Item {
     }
 
     // Once per window, level with the splits' status bars: the language
-    // server of the document in view, and what it is busy with.
+    // server of the document in view, and what it is busy with; a remote
+    // folder's host instead while it is not online.
     Item {
         id: footer
 
         readonly property string server: sidebar.currentText?.languageServer ?? ""
         readonly property string activity: sidebar.currentText?.languageServerActivity ?? ""
+        readonly property Host host: fileTree.remote ? Hosts.forUrl(sidebar.folder) : null
+        readonly property bool hostShown: footer.host !== null && footer.host.state !== Host.Online
+        readonly property bool hostBusy: footer.hostShown && (footer.host.state === Host.Connecting || footer.host.state === Host.Installing || footer.host.state === Host.Offline)
 
         anchors.left: parent.left
         anchors.right: parent.right
@@ -546,7 +551,7 @@ Item {
             anchors.rightMargin: 12
             anchors.verticalCenter: parent.verticalCenter
             spacing: 5
-            visible: footer.server !== ""
+            visible: footer.hostShown || footer.server !== ""
 
             BusyIndicator {
                 anchors.verticalCenter: parent.verticalCenter
@@ -554,21 +559,21 @@ Item {
                 height: 12
                 padding: 0
                 running: visible
-                visible: footer.activity !== ""
+                visible: footer.hostShown ? footer.hostBusy : footer.activity !== ""
             }
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter
-                width: footerRow.width - (footer.activity !== "" ? 17 : 0)
+                width: footerRow.width - (footer.hostBusy || (!footer.hostShown && footer.activity !== "") ? 17 : 0)
                 elide: Text.ElideRight
-                text: footer.activity === "" ? footer.server : qsTr("%1: %2").arg(footer.server).arg(footer.activity)
+                text: footer.hostShown ? footer.host.status : footer.activity === "" ? footer.server : qsTr("%1: %2").arg(footer.server).arg(footer.activity)
                 color: SystemColors.secondaryLabel
                 font.pixelSize: 11
             }
         }
 
         HelpTag {
-            text: footer.server === "" ? "" : footer.activity === "" ? qsTr("%1 checks this file for problems as you type.").arg(footer.server) : qsTr("%1 is busy: %2. Problems show when it is done.").arg(footer.server).arg(footer.activity)
+            text: footer.hostShown ? footer.host.status : footer.server === "" ? "" : footer.activity === "" ? qsTr("%1 checks this file for problems as you type.").arg(footer.server) : qsTr("%1 is busy: %2. Problems show when it is done.").arg(footer.server).arg(footer.activity)
             delay: 500
         }
     }

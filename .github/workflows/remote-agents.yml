@@ -1,0 +1,52 @@
+name: Remote agents
+
+# kode-remote for Linux hosts (docs/REMOTE.md): static (musl) builds in
+# Alpine containers, one per architecture, each checked by a handshake
+# (tools/remote-smoke.py). Called by CI and by the release, which bundles
+# them in Kode.app (KODE_REMOTE_AGENTS_DIR).
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "The Kode version the agents go with"
+        required: true
+        type: string
+
+jobs:
+  linux:
+    name: kode-remote (Linux ${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: git submodule update --init external/yyjson
+      - name: Build (Alpine, static)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src alpine:3.22 \
+            sh tools/build-remote.sh "${{ inputs.version }}" build/agents
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kode-remote-linux-${{ matrix.arch }}
+          path: build/agents
+          if-no-files-found: error
+
+  fuzz:
+    name: Fuzz the frame reader
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: git submodule update --init external/yyjson
+      - run: sudo apt-get install -y ninja-build
+      - name: Build
+        run: |
+          cmake -S remote -B build/fuzz -G Ninja -DKODE_REMOTE_FUZZ=ON \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          cmake --build build/fuzz --target fuzz-frames
+      - name: Fuzz (2 minutes)
+        run: build/fuzz/fuzz-frames -max_total_time=120 -max_len=65536

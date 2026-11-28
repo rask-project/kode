@@ -238,6 +238,7 @@ void TextDocument::setBuffer(TextBuffer buffer, bool keepPlace)
     m_undo.clear();
     m_undoIndex = 0;
     m_cleanIndex = 0;
+    m_savingIndex = -1;
     m_flags &= ~MergeOpen;
     if (!keepPlace) {
         m_place = {};
@@ -264,6 +265,9 @@ void TextDocument::record(Step step, bool mergeable)
         m_undo.resize(m_undoIndex);
         if (m_cleanIndex > m_undoIndex) {
             m_cleanIndex = -1;
+        }
+        if (m_savingIndex > m_undoIndex) {
+            m_savingIndex = -1;
         }
     }
     const bool canMerge{mergeable && (m_flags & MergeOpen) != 0U && !m_undo.isEmpty() && m_cleanIndex != m_undoIndex};
@@ -494,6 +498,30 @@ void TextDocument::noteEdited(qsizetype line, qsizetype removedLines, qsizetype 
     joined.append(edited);
     joined.append(after);
     m_edited = std::move(joined);
+}
+
+void TextDocument::beginSave() noexcept
+{
+    // Typing on does not extend the step being saved.
+    m_flags &= ~MergeOpen;
+    m_savingIndex = m_undoIndex;
+}
+
+void TextDocument::finishSave()
+{
+    const qsizetype saved{std::exchange(m_savingIndex, -1)};
+    if (saved < 0) {
+        return;
+    }
+    if (saved == m_undoIndex) {
+        markSaved();
+        return;
+    }
+    const bool wasModified{modified()};
+    m_cleanIndex = saved;
+    if (wasModified != modified()) {
+        emit modifiedChanged();
+    }
 }
 
 void TextDocument::markSaved()

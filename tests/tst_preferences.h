@@ -13,6 +13,8 @@ private slots:
     void hasDefaults();
     void clampsAndNotifiesOnlyOnChange();
     void instancesShareTheSettings();
+    void keepsOneCustomServerPerSyntax();
+    void keepsRemoteHostsAndTheirFolders();
 
 private:
     QTemporaryDir m_settingsDir;

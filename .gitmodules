@@ -7,3 +7,6 @@
 [submodule "external/syntax-highlighting"]
 	path = external/syntax-highlighting
 	url = https://invent.kde.org/frameworks/syntax-highlighting.git
+[submodule "external/yyjson"]
+	path = external/yyjson
+	url = https://github.com/ibireme/yyjson.git

@@ -83,7 +83,9 @@ LanguageServer::LanguageServer(
     const QString &path,
     const QUrl &root
 )
-    : m_root{root}
+    : m_program{program}
+    , m_arguments{arguments}
+    , m_root{root}
 {
     QProcessEnvironment environment{QProcessEnvironment::systemEnvironment()};
     environment.insert(QStringLiteral("PATH"), path);
@@ -103,8 +105,37 @@ LanguageServer::LanguageServer(
     initialize(options);
 }
 
+LanguageServer::LanguageServer(
+    remote::Host &host,
+    const QString &program,
+    const QStringList &arguments,
+    const QJsonObject &options,
+    const QUrl &root
+)
+    : m_remote{std::make_unique<remote::RemoteProcess>(host, program, arguments, root.path())}
+    , m_program{program}
+    , m_arguments{arguments}
+    , m_root{root}
+{
+    connect(m_remote.get(), &remote::RemoteProcess::output, this, &LanguageServer::received);
+    connect(m_remote.get(), &remote::RemoteProcess::finished, this, &LanguageServer::finished);
+    initialize(options);
+}
+
 LanguageServer::~LanguageServer()
 {
+    if (m_remote != nullptr) {
+        // Told to go; the agent stops it (SIGTERM) when this process goes.
+        m_remote->disconnect(this);
+        write(
+            {{QStringLiteral("jsonrpc"), QStringLiteral("2.0")},
+             {QStringLiteral("id"), m_nextId++},
+             {QStringLiteral("method"), QStringLiteral("shutdown")}}
+        );
+        write({{QStringLiteral("jsonrpc"), QStringLiteral("2.0")}, {QStringLiteral("method"), QStringLiteral("exit")}});
+        m_remote->closeInput();
+        return;
+    }
     if (m_process.state() == QProcess::NotRunning) {
         return;
     }
@@ -244,12 +275,21 @@ void LanguageServer::send(const QJsonObject &message)
 
 void LanguageServer::write(const QJsonObject &message)
 {
+    if (m_remote != nullptr) {
+        m_remote->write(frame(message));
+        return;
+    }
     m_process.write(frame(message));
 }
 
 void LanguageServer::readOutput()
 {
-    m_reader.append(m_process.readAllStandardOutput());
+    received(m_process.readAllStandardOutput());
+}
+
+void LanguageServer::received(const QByteArray &bytes)
+{
+    m_reader.append(bytes);
     while (true) {
         const auto next{m_reader.next()};
         // A malformed message is skipped; the stream goes on after it.

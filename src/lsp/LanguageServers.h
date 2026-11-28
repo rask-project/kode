@@ -1,5 +1,7 @@
 #pragma once
 
+#include "remote/Files.h"
+
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -23,6 +25,12 @@ namespace kode
 {
 
 class Document;
+
+namespace remote
+{
+class Connection;
+class Host;
+} // namespace remote
 
 namespace lsp
 {
@@ -58,6 +66,14 @@ class LanguageServers : public QObject
     Q_PROPERTY(QVariantList custom READ custom NOTIFY serversChanged)
     // The login shell's PATH, searched after `searchFolders`.
     Q_PROPERTY(QStringList shellPath READ shellPath NOTIFY serversChanged)
+    // Each host's folders searched before its login shell's PATH: {destination: [folder…]}.
+    Q_PROPERTY(QVariantMap hostFolders READ hostFolders WRITE setHostFolders NOTIFY settingsChanged)
+    // What detectOnHost() found last, on `hostServersDestination`: `servers`'
+    // shape without `install`; `hostPath`: that host's login shell's PATH.
+    Q_PROPERTY(QString hostServersDestination READ hostServersDestination NOTIFY hostServersChanged)
+    Q_PROPERTY(QVariantList hostServers READ hostServers NOTIFY hostServersChanged)
+    Q_PROPERTY(QStringList hostPath READ hostPath NOTIFY hostServersChanged)
+    Q_PROPERTY(bool detectingOnHost READ detectingOnHost NOTIFY hostServersChanged)
 public:
     explicit LanguageServers(QObject *parent = nullptr);
     ~LanguageServers() override;
@@ -78,8 +94,16 @@ public:
     [[nodiscard]] QVariantList customServers() const { return m_customServers; }
     void setCustomServers(const QVariantList &servers);
     [[nodiscard]] QVariantList custom() const { return m_customFound; }
+    [[nodiscard]] QVariantMap hostFolders() const { return m_hostFolders; }
+    void setHostFolders(const QVariantMap &folders);
+    [[nodiscard]] QString hostServersDestination() const { return m_hostServersDestination; }
+    [[nodiscard]] QVariantList hostServers() const { return m_hostServers; }
+    [[nodiscard]] QStringList hostPath() const { return m_hostPath; }
+    [[nodiscard]] bool detectingOnHost() const noexcept { return (m_flags & DetectingOnHost) != 0U; }
     // Reads the shell's PATH again (a server installed since), then looks for the servers.
     Q_INVOKABLE void detect();
+    // Looks for each language's server on `destination` (connecting to it).
+    Q_INVOKABLE void detectOnHost(const QString &destination);
     // Puts the `index`th group's install command on the clipboard.
     Q_INVOKABLE static void copyInstallCommand(qint32 index);
 
@@ -106,6 +130,7 @@ public:
 signals:
     void settingsChanged();
     void serversChanged();
+    void hostServersChanged();
     // Each {file, line, column (-1, 0: no place), label}.
     void locationsFound(qint32 ticket, const QVariantList &locations);
     // The actions' titles, in order.
@@ -115,6 +140,7 @@ signals:
 
 private:
     static constexpr quint64 Enabled{1U << 0U};
+    static constexpr quint64 DetectingOnHost{1U << 1U};
 
     // A document followed, and the server that knows it (null: none).
     struct Entry {
@@ -144,6 +170,42 @@ private:
     void semanticTokensFound(const Document *document, qint64 version, const QJsonValue &result);
     // Opens the document on the server for it, if any, after closing it where it was.
     void bind(Entry &entry);
+    // A document on a host: its server found there (process/which) and its
+    // root (the nearest folder with a .git), then started there.
+    void bindRemote(Entry &entry);
+    // The folders searched first on `destination`.
+    [[nodiscard]] QStringList foldersOn(const QString &destination) const;
+    void hostServersFound(const QString &destination, const QJsonObject &result);
+    void startRemote(
+        const Document *document,
+        const QString &destination,
+        const QJsonObject &found,
+        const QStringList &gits
+    );
+    // A server to start on a host once its build folder is known (clangd's
+    // compilation database, qmlls's -b): the newest under the root or
+    // root/build holding `name`, as here.
+    struct RemoteLaunch {
+        QPointer<const Document> document;
+        QString program;
+        QStringList arguments;
+        QUrl root;
+        QString languageId;
+        QString name;
+        // qmlls (else clangd), as a whole word: no padding.
+        qint64 qmlls{0};
+    };
+    void findRemoteBuild(remote::Connection &link, const RemoteLaunch &launch);
+    void listedRemoteRoot(remote::Connection &link, const RemoteLaunch &launch, const QList<remote::files::Entry> &top);
+    void remoteBuildFound(const RemoteLaunch &launch, const QList<remote::files::Entry> &entries);
+    void launchRemote(
+        const Document *document,
+        const QString &program,
+        const QStringList &arguments,
+        const QJsonObject &options,
+        const QUrl &root,
+        const QString &languageId
+    );
     void unbind(Entry &entry);
     // Tells the document its server and what it is busy with.
     void showStatus(const Entry &entry);
@@ -153,8 +215,15 @@ private:
     void documentReset(const Document *document);
     void diagnosticsPublished(const LanguageServer *server, const QUrl &uri, qint64 version, const QJsonArray &list);
     void serverFinished(const LanguageServer *server);
-    [[nodiscard]] LanguageServer *
-    server(const QString &program, const QStringList &arguments, const QJsonObject &options, const QUrl &root);
+    // Started when there is none yet for the program, its arguments and the
+    // root (on `host`, when given).
+    [[nodiscard]] LanguageServer *server(
+        const QString &program,
+        const QStringList &arguments,
+        const QJsonObject &options,
+        const QUrl &root,
+        remote::Host *host = nullptr
+    );
     // The server `server` points to, to talk to it.
     [[nodiscard]] LanguageServer *find(const LanguageServer *server) const;
     void readShellPath();
@@ -167,7 +236,8 @@ private:
     [[nodiscard]] std::optional<Choice> serverFor(const QString &syntax) const;
     // Makes a WorkspaceEdit's text edits (files not open are opened), each
     // document's as one undo step.
-    void applyEdit(const QJsonObject &edit);
+    // `destination`: the host of the server that sent it (its file:// URIs are there).
+    void applyEdit(const QJsonObject &edit, const QString &destination = {});
     // Stops the servers and opens the documents again with the settings.
     void restart();
     // Where servers are looked for, in order: searchFolders, then the shell's PATH.
@@ -185,6 +255,10 @@ private:
     QVariantList m_found;
     QVariantList m_customServers;
     QVariantList m_customFound;
+    QVariantMap m_hostFolders;
+    QVariantList m_hostServers;
+    QStringList m_hostPath;
+    QString m_hostServersDestination;
     // The login shell's PATH; empty until it is known.
     QString m_shellPath;
     std::function<Document *(const QUrl &)> m_opener;

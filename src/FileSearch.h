@@ -1,8 +1,11 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include "remote/Connection.h"
+
 #include <QColor>
 #include <QList>
+#include <QPointer>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
@@ -14,7 +17,8 @@ namespace kode
 // Finding a file of a folder (⌘K, as Qt Creator's Locate): the files whose
 // name matches what is typed, best first. The folder's files are listed on
 // a worker thread while `active` (.git, build folders and node_modules
-// aside, hidden ones only with `showHidden`); each query filters that list.
+// aside, hidden ones only with `showHidden`) — an ssh:// folder's by its
+// host's agent (search/files); each query filters that list here.
 class FileSearch : public QAbstractListModel
 {
     Q_OBJECT
@@ -86,7 +90,18 @@ private:
     static constexpr quint64 Listing{1U << 2U};
 
     void list();
+    void listRemote(quint64 generation);
+    void receiveFiles(
+        quint64 generation,
+        const QPointer<remote::Connection> &link,
+        const remote::Connection::Result &result
+    );
+    void listed(quint64 generation, QStringList files);
     void filter();
+    // A file's path (on its host for a remote folder) and URL.
+    [[nodiscard]] QString pathOf(const QString &relative) const;
+    [[nodiscard]] QUrl urlOf(const QString &path) const;
+    [[nodiscard]] bool remote() const { return m_folder.scheme() == QLatin1String("ssh"); }
 
     QStringList m_files;
     // Indices into m_files, best first.

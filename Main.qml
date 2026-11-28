@@ -26,7 +26,8 @@ Item {
     // EditorWindow.state()), else one split with a new document (none in a
     // window opened on a folder: the start page).
     function openWindow(state: var): EditorWindow {
-        const folder = state && OpenDocuments.isFolder(state.folder ?? "") ? state.folder : "";
+        // A host's folder cannot be checked from here: kept.
+        const folder = state && (OpenDocuments.isFolder(state.folder ?? "") || OpenDocuments.isRemote(state.folder ?? "")) ? state.folder : "";
         const window = windowComponent.createObject(app, {
             folder: folder,
             sidebarVisible: folder !== "" && (state.sidebar ?? true),
@@ -109,7 +110,7 @@ Item {
     // (Open Folder, the sidebar), it takes the folder, saving the one it had.
     function openFolder(given: url, window: EditorWindow) {
         const folder = OpenDocuments.cleanFolder(given);
-        RecentDocuments.add(folder);
+        RecentDocuments.add(OpenDocuments.recentFolder(folder));
         const state = Session.folderState(folder);
         if (window) {
             app.saveFolder(window);
@@ -242,6 +243,46 @@ Item {
         id: aboutQtDialog
     }
 
+    // ssh's prompts while connecting to a host (kode-askpass), one at a time.
+    TextPrompt {
+        id: sshPrompt
+
+        property int promptId: -1
+
+        window: app.lastActiveWindow
+        informativeText: qsTr("Kode is connecting to this host over SSH.")
+        onFinished: (button, value) => Hosts.answer(sshPrompt.promptId, button === 0, value)
+    }
+
+    Alert {
+        id: sshQuestion
+
+        property int promptId: -1
+
+        window: app.lastActiveWindow
+        style: Alert.Warning
+        buttons: [qsTr("Connect"), qsTr("Cancel")]
+        onFinished: button => Hosts.answer(sshQuestion.promptId, button === 0, "yes")
+    }
+
+    Connections {
+        target: Hosts
+
+        function onPromptRequested(id: int, host: string, text: string, kind: int) {
+            if (kind === Hosts.Confirm) {
+                sshQuestion.promptId = id;
+                sshQuestion.text = qsTr("Connect to “%1”?").arg(host);
+                sshQuestion.informativeText = text.trim();
+                sshQuestion.open();
+                return;
+            }
+            sshPrompt.promptId = id;
+            sshPrompt.text = text.trim();
+            sshPrompt.secure = kind === Hosts.Secret;
+            sshPrompt.open();
+        }
+    }
+
     Alert {
         id: errorAlert
 
@@ -263,6 +304,8 @@ Item {
         onFinished: button => {
             if (button === 0 && changedAlert.document)
                 changedAlert.document.reload();
+            else if (changedAlert.document)
+                changedAlert.document.keepMine();
             changedAlert.document = null;
         }
     }
@@ -300,6 +343,11 @@ Item {
         target: OpenDocuments.languageServers
         property: "customServers"
         value: Preferences.customLanguageServers
+    }
+    Binding {
+        target: OpenDocuments.languageServers
+        property: "hostFolders"
+        value: Preferences.remoteServerFolders
     }
 
     Connections {

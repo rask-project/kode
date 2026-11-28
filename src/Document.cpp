@@ -1,9 +1,15 @@
 #include "Document.h"
 
+#include "../remote/protocol/Methods.h"
+#include "remote/Host.h"
+#include "remote/Hosts.h"
+
+#include <QBuffer>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QFuture>
+#include <QPointer>
 #include <QPromise>
 #include <QSaveFile>
 #include <QThreadPool>
@@ -17,6 +23,15 @@ namespace
 const QString crlfText{QStringLiteral("\r\n")};
 // Files from this size on are read off the GUI thread (about 7 ms of work on the GUI thread).
 constexpr qint64 backgroundSize{qint64{2} * 1024 * 1024};
+// How often a remote file's host is asked whether it changed.
+constexpr qint32 pollMilliseconds{5000};
+// As git tells a binary file: a NUL in its first bytes.
+constexpr qsizetype binaryProbe{8000};
+
+bool isRemote(const QUrl &url)
+{
+    return url.scheme() == QLatin1String("ssh");
+}
 
 } // namespace
 
@@ -30,6 +45,35 @@ Document::Document(QObject *parent) : QObject(parent)
     connect(&m_watcher, &QFileSystemWatcher::fileChanged, &m_checkTimer, qOverload<>(&QTimer::start));
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, &m_checkTimer, qOverload<>(&QTimer::start));
     connect(&m_text, &TextDocument::modifiedChanged, this, &Document::modifiedChanged);
+    m_pollTimer.setInterval(pollMilliseconds);
+    connect(&m_pollTimer, &QTimer::timeout, this, &Document::checkRemote);
+}
+
+Document::~Document()
+{
+    watchRemote({});
+}
+
+void Document::watchRemote(const QUrl &fileUrl)
+{
+    if (m_watching == fileUrl) {
+        return;
+    }
+    if (remote::Host *const old{remote::Hosts::shared().forUrl(m_watching)}) {
+        old->unwatch(m_watching.path());
+    }
+    disconnect(m_hostChanged);
+    m_watching = fileUrl;
+    remote::Host *const host{remote::Hosts::shared().forUrl(fileUrl)};
+    if (host == nullptr) {
+        return;
+    }
+    host->watch(fileUrl.path());
+    m_hostChanged = connect(host, &remote::Host::changed, this, [this](const QString &path) {
+        if (path == m_fileUrl.path()) {
+            checkRemote();
+        }
+    });
 }
 
 QString Document::fileName() const
@@ -108,6 +152,23 @@ bool Document::reload()
 
 void Document::watch()
 {
+    if (isRemote(m_fileUrl)) {
+        if (const QStringList watched{m_watcher.files() + m_watcher.directories()}; !watched.isEmpty()) {
+            m_watcher.removePaths(watched);
+        }
+        m_fileSize = -1;
+        watchRemote(m_fileUrl);
+        // Asked now and then only where the agent cannot push changes.
+        const remote::Host *const host{remote::Hosts::shared().forUrl(m_fileUrl)};
+        if (host != nullptr && host->canWatch()) {
+            m_pollTimer.stop();
+        } else {
+            m_pollTimer.start();
+        }
+        return;
+    }
+    watchRemote({});
+    m_pollTimer.stop();
     const QString path{m_fileUrl.toLocalFile()};
     const QFileInfo info{path};
     // The folder too: a file replaced by another one comes back there.
@@ -161,6 +222,10 @@ void Document::checkFile()
 
 bool Document::read(const QUrl &fileUrl, const QString &encoding, bool keepPlace)
 {
+    if (isRemote(fileUrl)) {
+        readRemote(fileUrl, encoding, keepPlace);
+        return true;
+    }
     const QString path{fileUrl.toLocalFile()};
     const quint64 generation{++m_generation};
     if (QFileInfo{path}.size() < backgroundSize) {
@@ -177,6 +242,12 @@ bool Document::read(const QUrl &fileUrl, const QString &encoding, bool keepPlace
         promise.addResult(readFile(path, encoding));
         promise.finish();
     });
+    finishLater(std::move(future), fileUrl, generation);
+    return true;
+}
+
+void Document::finishLater(QFuture<ReadResult> future, const QUrl &fileUrl, quint64 generation)
+{
     // Not run if this document is gone by then.
     future.then(this, [this, generation, fileUrl](ReadResult result) {
         if (generation != m_generation) {
@@ -188,7 +259,74 @@ bool Document::read(const QUrl &fileUrl, const QString &encoding, bool keepPlace
             emit loadFailed();
         }
     });
-    return true;
+}
+
+void Document::readRemote(const QUrl &fileUrl, const QString &encoding, bool keepPlace)
+{
+    const quint64 generation{++m_generation};
+    setLoading(true);
+    m_flags = keepPlace ? (m_flags | KeepPlace) : (m_flags & ~KeepPlace);
+    setFileUrl(fileUrl);
+    remote::Host *const host{remote::Hosts::shared().forUrl(fileUrl)};
+    if (host == nullptr) {
+        remoteReadFailed(
+            fileUrl,
+            remote::Error{.message = tr("This is not a host Kode can reach."), .data = {}, .code = 0}
+        );
+        return;
+    }
+    host->whenOnline(this, [this, generation, fileUrl, encoding](auto connection) {
+        if (generation != m_generation) {
+            return;
+        }
+        if (!connection) {
+            remoteReadFailed(fileUrl, remote::Error{.message = connection.error(), .data = {}, .code = 0});
+            return;
+        }
+        const QPointer<Document> self{this};
+        remote::files::read(connection->get(), fileUrl.path(), [self, generation, fileUrl, encoding](auto read) {
+            if (self == nullptr || generation != self->m_generation) {
+                return;
+            }
+            if (!read) {
+                self->remoteReadFailed(fileUrl, read.error());
+                return;
+            }
+            self->m_remote = read->version;
+            self->m_remoteSeen = read->version;
+            QPromise<ReadResult> promise;
+            QFuture<ReadResult> future{promise.future()};
+            QThreadPool::globalInstance()->start([promise = std::move(promise),
+                                                  bytes = std::move(read->bytes),
+                                                  encoding,
+                                                  name = fileUrl.path()]() mutable {
+                promise.start();
+                QBuffer buffer{&bytes};
+                buffer.open(QIODevice::ReadOnly);
+                if (bytes.first(std::min(bytes.size(), binaryProbe)).contains('\0')) {
+                    promise.addResult(ReadResult{std::unexpected{tr("“%1” is not a text file.").arg(name)}});
+                } else {
+                    promise.addResult(decode(buffer, encoding, name));
+                }
+                promise.finish();
+            });
+            self->finishLater(std::move(future), fileUrl, generation);
+        });
+    });
+}
+
+void Document::remoteReadFailed(const QUrl &fileUrl, const remote::Error &error)
+{
+    setLoading(false);
+    // A file the `kode` command named that does not exist yet: saving writes it.
+    if (error.code == remote::error::notFound && (m_flags & Read) == 0U) {
+        startFile(fileUrl);
+        return;
+    }
+    emit errorOccurred(tr("“%1” could not be opened: %2").arg(fileUrl.path(), error.message));
+    if ((m_flags & Read) == 0U) {
+        emit loadFailed();
+    }
 }
 
 Document::ReadResult Document::readFile(const QString &path, const QString &encoding)
@@ -197,9 +335,14 @@ Document::ReadResult Document::readFile(const QString &path, const QString &enco
     if (!file.open(QIODevice::ReadOnly)) {
         return std::unexpected{tr("“%1” could not be opened: %2").arg(path, file.errorString())};
     }
-    std::expected<codec::Decoded, QString> decoded{codec::readFile(file, encoding)};
+    return decode(file, encoding, path);
+}
+
+Document::ReadResult Document::decode(QIODevice &device, const QString &encoding, const QString &name)
+{
+    std::expected<codec::Decoded, QString> decoded{codec::readFile(device, encoding)};
     if (!decoded) {
-        return std::unexpected{tr("“%1” is not valid %2 text.").arg(path, decoded.error())};
+        return std::unexpected{tr("“%1” is not valid %2 text.").arg(name, decoded.error())};
     }
     const bool crlf{decoded->text.contains(crlfText)};
     if (crlf) {
@@ -244,6 +387,7 @@ bool Document::save()
 {
     if (m_fileUrl.isEmpty()) {
         emit errorOccurred(tr("The document has no file yet."));
+        emit saveFailed();
         return false;
     }
     return saveAs(m_fileUrl);
@@ -254,10 +398,15 @@ bool Document::saveAs(const QUrl &fileUrl)
     // Its text is not there yet: saving would empty the file.
     if (loading()) {
         emit errorOccurred(tr("“%1” is still being opened.").arg(fileName()));
+        emit saveFailed();
         return false;
+    }
+    if (isRemote(fileUrl)) {
+        return saveRemote(fileUrl);
     }
     if (const std::expected<void, QString> written{write(fileUrl)}; !written) {
         emit errorOccurred(written.error());
+        emit saveFailed();
         return false;
     }
     m_text.markSaved();
@@ -267,11 +416,106 @@ bool Document::saveAs(const QUrl &fileUrl)
     }
     setFileUrl(fileUrl);
     watch();
+    emit saved();
     return true;
+}
+
+bool Document::saveRemote(const QUrl &fileUrl)
+{
+    const auto fail{[this](const QString &message) {
+        emit errorOccurred(message);
+        emit saveFailed();
+        return false;
+    }};
+    const std::expected<QByteArray, QString> bytes{encoded(fileUrl.path())};
+    if (!bytes) {
+        return fail(bytes.error());
+    }
+    remote::Host *const host{remote::Hosts::shared().forUrl(fileUrl)};
+    remote::Connection *const connection{host != nullptr ? host->connection() : nullptr};
+    if (connection == nullptr) {
+        return fail(tr("“%1” could not be saved: the host is not connected. Your changes are kept here.")
+                        .arg(fileUrl.fileName()));
+    }
+    // The version it replaces, when it is the file read here.
+    const std::optional<remote::files::Version> expect{
+        fileUrl == m_fileUrl && m_remote.valid() ? std::optional{m_remote} : std::nullopt
+    };
+    m_text.beginSave();
+    const QPointer<Document> self{this};
+    remote::files::write(*connection, fileUrl.path(), *bytes, expect, true, [self, fileUrl](auto result) {
+        if (self != nullptr) {
+            self->remoteSaved(fileUrl, result);
+        }
+    });
+    return true;
+}
+
+void Document::remoteSaved(const QUrl &fileUrl, const std::expected<remote::files::Version, remote::Error> &result)
+{
+    if (!result) {
+        if (result.error().code == remote::error::conflict) {
+            m_remoteSeen = remote::files::versionOf(result.error().data.toObject());
+            emit changedOnDisk();
+        } else {
+            emit errorOccurred(tr("“%1” could not be saved: %2").arg(fileUrl.fileName(), result.error().message));
+        }
+        emit saveFailed();
+        return;
+    }
+    m_remote = *result;
+    m_remoteSeen = *result;
+    m_text.finishSave();
+    setFormatChanged(false);
+    if (fileUrl != m_fileUrl) {
+        m_text.detectSyntax(fileUrl.fileName());
+    }
+    setFileUrl(fileUrl);
+    watch();
+    emit saved();
+}
+
+void Document::keepMine()
+{
+    if (isRemote(m_fileUrl) && m_remoteSeen.valid()) {
+        m_remote = m_remoteSeen;
+    }
+}
+
+void Document::checkRemote()
+{
+    remote::Host *const host{remote::Hosts::shared().forUrl(m_fileUrl)};
+    remote::Connection *const connection{host != nullptr ? host->connection() : nullptr};
+    if (connection == nullptr || loading()) {
+        return;
+    }
+    const QPointer<Document> self{this};
+    const QUrl url{m_fileUrl};
+    remote::files::stat(*connection, {url.path()}, [self, url](auto entries) {
+        if (self == nullptr || self->m_fileUrl != url || !entries || entries->isEmpty()) {
+            return;
+        }
+        const remote::files::Version now{entries->first().version};
+        // Gone (deleted or moved away): keep the text.
+        if (!now.valid() || now.sameAs(self->m_remoteSeen)) {
+            return;
+        }
+        self->m_remoteSeen = now;
+        if (now.sameAs(self->m_remote)) {
+            return;
+        }
+        if (self->modified()) {
+            emit self->changedOnDisk();
+            return;
+        }
+        self->reload();
+    });
 }
 
 void Document::clear()
 {
+    m_remote = {};
+    m_remoteSeen = {};
     m_text.setText({});
     m_text.setSyntax({});
     m_format = {};
@@ -284,6 +528,8 @@ void Document::clear()
 
 void Document::startFile(const QUrl &fileUrl)
 {
+    m_remote = {};
+    m_remoteSeen = {};
     m_text.setText({});
     m_text.detectSyntax(fileUrl.fileName());
     m_format = {};
@@ -294,17 +540,26 @@ void Document::startFile(const QUrl &fileUrl)
     watch();
 }
 
-std::expected<void, QString> Document::write(const QUrl &fileUrl) const
+std::expected<QByteArray, QString> Document::encoded(const QString &name) const
 {
-    const QString path{fileUrl.toLocalFile()};
     QString text{m_text.text()};
     if (crlf()) {
         text.replace(QLatin1Char('\n'), crlfText);
     }
-    const std::optional<QByteArray> bytes{codec::encode(text, m_format)};
+    std::optional<QByteArray> bytes{codec::encode(text, m_format)};
     if (!bytes) {
         return std::unexpected{tr("“%1” could not be saved as %2: some characters cannot be represented in it.")
-                                   .arg(path, m_format.encoding)};
+                                   .arg(name, m_format.encoding)};
+    }
+    return std::move(*bytes);
+}
+
+std::expected<void, QString> Document::write(const QUrl &fileUrl) const
+{
+    const QString path{fileUrl.toLocalFile()};
+    const std::expected<QByteArray, QString> bytes{encoded(path)};
+    if (!bytes) {
+        return std::unexpected{bytes.error()};
     }
 
     // A file the `kode` command named may be in folders that do not exist yet.

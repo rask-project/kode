@@ -1,5 +1,8 @@
 #include "LanguageServers.h"
 
+#include "remote/Hosts.h"
+#include "remote/Ssh.h"
+
 #include "Document.h"
 #include "LanguageServer.h"
 #include "SemanticTokens.h"
@@ -139,6 +142,20 @@ constexpr std::array serverGroups{
     ServerGroup{.languages = "TOML"_L1, .servers = toml, .install = "brew install taplo"_L1},
 };
 
+// The programs a group (or groups) looks for, each once.
+QStringList programNames(std::span<const ServerGroup> groups)
+{
+    QStringList names;
+    for (const ServerGroup &group : groups) {
+        std::ranges::for_each(group.servers, [&names](const Candidate &candidate) {
+            if (!names.contains(QString{candidate.program})) {
+                names.append(QString{candidate.program});
+            }
+        });
+    }
+    return names;
+}
+
 // C and the like: a header and its source.
 constexpr std::array headerSuffixes{"h"_L1, "hh"_L1, "hpp"_L1, "hxx"_L1, "h++"_L1};
 constexpr std::array sourceSuffixes{"c"_L1, "cc"_L1, "cpp"_L1, "cxx"_L1, "c++"_L1, "m"_L1, "mm"_L1};
@@ -218,11 +235,20 @@ QString counterpart(const QString &file)
     return {};
 }
 
+// A server's file:// URI as Kode names it: the same, or on the server's host.
+QUrl kodeUrl(const QString &destination, const QUrl &uri)
+{
+    if (destination.isEmpty() || uri.scheme() != u"file"_s) {
+        return uri;
+    }
+    return remote::ssh::fileUrl(destination, uri.path());
+}
+
 // A Location or LocationLink: where it points.
-QVariantMap location(const QJsonValue &value)
+QVariantMap location(const QJsonValue &value, const QString &destination)
 {
     const bool link{value[u"targetUri"_s].isString()};
-    const QUrl file{value[link ? u"targetUri"_s : u"uri"_s].toString()};
+    const QUrl file{kodeUrl(destination, QUrl{value[link ? u"targetUri"_s : u"uri"_s].toString()})};
     const QJsonValue start{value[link ? u"targetSelectionRange"_s : u"range"_s][u"start"_s]};
     const qint64 line{start[u"line"_s].toInteger()};
     return {
@@ -234,16 +260,29 @@ QVariantMap location(const QJsonValue &value)
 }
 
 // textDocument/definition's result: none, one or a list.
-QVariantList locations(const QJsonValue &result)
+QVariantList locations(const QJsonValue &result, const QString &destination)
 {
     QVariantList list;
     if (result.isObject()) {
-        list.append(location(result));
+        list.append(location(result, destination));
     }
     // Parentheses: braces would make a list holding the array.
     const QJsonArray items(result.toArray());
-    std::ranges::transform(items, std::back_inserter(list), [](const QJsonValue &item) { return location(item); });
+    std::ranges::transform(items, std::back_inserter(list), [&destination](const QJsonValue &item) {
+        return location(item, destination);
+    });
     return list;
+}
+
+// The folders above `path` on a host, deepest first, each with ".git".
+QStringList gitsAbove(const QString &path)
+{
+    QStringList gits;
+    for (qsizetype slash{path.lastIndexOf(u'/')}; slash > 0; slash = path.lastIndexOf(u'/', slash - 1)) {
+        gits.append(path.left(slash) + u"/.git"_s);
+    }
+    gits.append(u"/.git"_s);
+    return gits;
 }
 
 // The nearest folder above `file` with a .git, else the file's.
@@ -348,7 +387,13 @@ LanguageServers::LanguageServers(QObject *parent) : QObject(parent)
     m_shellTimeout.start(shellTimeoutMs);
 }
 
-LanguageServers::~LanguageServers() = default;
+LanguageServers::~LanguageServers()
+{
+    // Killed as a member, the shell would end into readShellPath() over members already gone.
+    m_shell.disconnect(this);
+    m_shell.kill();
+    m_shell.waitForFinished();
+}
 
 void LanguageServers::readShellPath()
 {
@@ -399,6 +444,79 @@ void LanguageServers::setSearchFolders(const QStringList &folders)
     m_searchFolders = folders;
     emit settingsChanged();
     restart();
+}
+
+void LanguageServers::setHostFolders(const QVariantMap &folders)
+{
+    if (folders == m_hostFolders) {
+        return;
+    }
+    m_hostFolders = folders;
+    emit settingsChanged();
+    restart();
+}
+
+QStringList LanguageServers::foldersOn(const QString &destination) const
+{
+    return m_hostFolders.value(destination).toStringList();
+}
+
+void LanguageServers::detectOnHost(const QString &destination)
+{
+    remote::Host *const host{remote::Hosts::shared().host(destination)};
+    if (host == nullptr) {
+        return;
+    }
+    const QStringList names{programNames(serverGroups)};
+    m_flags |= DetectingOnHost;
+    m_hostServersDestination = destination;
+    m_hostServers.clear();
+    m_hostPath.clear();
+    emit hostServersChanged();
+    const QPointer<LanguageServers> self{this};
+    const QStringList folders{foldersOn(destination)};
+    host->whenOnline(this, [self, destination, names, folders](auto connection) {
+        if (self == nullptr) {
+            return;
+        }
+        if (!connection) {
+            self->hostServersFound(destination, {});
+            return;
+        }
+        connection->get().request(
+            u"process/which"_s,
+            {{u"names"_s, QJsonArray::fromStringList(names)}, {u"folders"_s, QJsonArray::fromStringList(folders)}},
+            [self, destination](const remote::Connection::Result &which) {
+                if (self != nullptr) {
+                    self->hostServersFound(destination, which ? which->toObject() : QJsonObject{});
+                }
+            }
+        );
+    });
+}
+
+void LanguageServers::hostServersFound(const QString &destination, const QJsonObject &result)
+{
+    if (destination != m_hostServersDestination) {
+        return;
+    }
+    m_flags &= ~DetectingOnHost;
+    const QJsonObject found{result.value(u"found"_s).toObject()};
+    m_hostServers.clear();
+    for (const ServerGroup &group : serverGroups) {
+        const QStringList names{programNames(std::span{&group, 1})};
+        const auto first{std::ranges::find_if(names, [&found](const QString &name) { return found.contains(name); })};
+        m_hostServers.append(QVariantMap{
+            {u"languages"_s, QString{group.languages}},
+            {u"path"_s, first == names.cend() ? QString{} : found.value(*first).toString()},
+            {u"servers"_s, names.join(u", "_s)},
+        });
+    }
+    m_hostPath.clear();
+    std::ranges::for_each(result.value(u"path"_s).toArray(), [this](const QJsonValue &folder) {
+        m_hostPath.append(folder.toString());
+    });
+    emit hostServersChanged();
 }
 
 void LanguageServers::setClangdThreads(qint32 threads)
@@ -518,19 +636,22 @@ qint32 LanguageServers::findDefinition(const Document *document, qsizetype posit
     }
     const TextBuffer &buffer{found->document->textDocument()->buffer()};
     const qsizetype line{buffer.lineAt(position)};
+    LanguageServer *const server{find(found->server)};
+    if (server == nullptr) {
+        return 0;
+    }
     const qint32 ticket{++m_lastTicket};
-    find(found->server)
-        ->request(
-            u"textDocument/definition"_s,
-            QJsonObject{
-                {u"textDocument"_s, QJsonObject{{u"uri"_s, found->uri.toString()}}},
-                {u"position"_s, protocolPosition(line, position - buffer.lineStart(line))},
-            },
-            // A qint64 copy: the lambda keeps no padding.
-            [this, wide = qint64{ticket}](const QJsonValue &result) {
-                emit locationsFound(static_cast<qint32>(wide), locations(result));
-            }
-        );
+    server->request(
+        u"textDocument/definition"_s,
+        QJsonObject{
+            {u"textDocument"_s, QJsonObject{{u"uri"_s, found->uri.toString()}}},
+            {u"position"_s, protocolPosition(line, position - buffer.lineStart(line))},
+        },
+        // A qint64 copy: the lambda keeps no padding.
+        [this, wide = qint64{ticket}, destination = server->destination()](const QJsonValue &result) {
+            emit locationsFound(static_cast<qint32>(wide), locations(result, destination));
+        }
+    );
     return ticket;
 }
 
@@ -631,11 +752,11 @@ void LanguageServers::applyCodeAction(qint32 ticket, qint32 index)
     }
     const QJsonValue action{m_actions.at(index)};
     // A CodeAction's edit, then its command; or a bare Command.
+    LanguageServer *const server{find(m_actionsServer)};
     if (action[u"edit"_s].isObject()) {
-        applyEdit(action[u"edit"_s].toObject());
+        applyEdit(action[u"edit"_s].toObject(), server != nullptr ? server->destination() : QString{});
     }
     const QJsonValue command{action[u"command"_s].isObject() ? action[u"command"_s] : action};
-    LanguageServer *const server{find(m_actionsServer)};
     if (server != nullptr && command[u"command"_s].isString()) {
         server->request(
             u"workspace/executeCommand"_s,
@@ -648,7 +769,7 @@ void LanguageServers::applyCodeAction(qint32 ticket, qint32 index)
     }
 }
 
-void LanguageServers::applyEdit(const QJsonObject &edit)
+void LanguageServers::applyEdit(const QJsonObject &edit, const QString &destination)
 {
     // By file: a TextDocumentEdit's edits (creating, renaming and deleting files aside), or "changes".
     QList<std::pair<QUrl, QJsonArray>> files;
@@ -666,7 +787,7 @@ void LanguageServers::applyEdit(const QJsonObject &edit)
         const auto open{std::ranges::find_if(m_entries, [&uri](const Entry &entry) { return entry.uri == uri; })};
         Document *const document{
             open != m_entries.end() && open->document != nullptr ? open->document.data()
-            : m_opener                                           ? m_opener(uri)
+            : m_opener                                           ? m_opener(kodeUrl(destination, uri))
                                                                  : nullptr
         };
         if (document == nullptr || document->loading()) {
@@ -708,7 +829,7 @@ QStringList LanguageServers::completionTriggers(const Document *document) const
 
 qint32 LanguageServers::switchHeaderSource(const Document *document)
 {
-    if (document == nullptr || !document->fileUrl().isLocalFile()) {
+    if (document == nullptr || document->fileUrl().isEmpty()) {
         return 0;
     }
     const qint32 ticket{++m_lastTicket};
@@ -724,7 +845,11 @@ qint32 LanguageServers::switchHeaderSource(const Document *document)
         }
         emit locationsFound(static_cast<qint32>(wide), list);
     }};
-    if (const QString beside{counterpart(document->fileUrl().toLocalFile())}; !beside.isEmpty()) {
+    // Beside it on this Mac; a host's files are clangd's to tell.
+    if (const QString beside{
+            document->fileUrl().isLocalFile() ? counterpart(document->fileUrl().toLocalFile()) : QString{}
+        };
+        !beside.isEmpty()) {
         // After the caller has its ticket.
         QTimer::singleShot(0, this, [answer, beside] { answer(QUrl::fromLocalFile(beside)); });
         return ticket;
@@ -743,7 +868,9 @@ qint32 LanguageServers::switchHeaderSource(const Document *document)
     server->request(
         u"textDocument/switchSourceHeader"_s,
         QJsonObject{{u"uri"_s, found->uri.toString()}},
-        [answer](const QJsonValue &result) { answer(QUrl{result.toString()}); }
+        [answer, destination = server->destination()](const QJsonValue &result) {
+            answer(kodeUrl(destination, QUrl{result.toString()}));
+        }
     );
     return ticket;
 }
@@ -803,6 +930,10 @@ void LanguageServers::bind(Entry &entry)
 {
     unbind(entry);
     Document *const document{entry.document};
+    if (enabled() && document != nullptr && !document->loading() && document->fileUrl().scheme() == u"ssh"_s) {
+        bindRemote(entry);
+        return;
+    }
     if (!enabled() || m_shellPath.isEmpty() || document == nullptr || document->loading() ||
         !document->fileUrl().isLocalFile()) {
         return;
@@ -839,6 +970,228 @@ void LanguageServers::bind(Entry &entry)
         }
     );
     showStatus(entry);
+    scheduleSemantic(document);
+}
+
+void LanguageServers::bindRemote(Entry &entry)
+{
+    const Document *const document{entry.document};
+    TextDocument *const text{entry.document->textDocument()};
+    remote::Host *const host{remote::Hosts::shared().forUrl(document->fileUrl())};
+    const Language *const language{languageFor(text->syntax())};
+    if (host == nullptr || language == nullptr || text->length() > maxLength) {
+        return;
+    }
+    QStringList names;
+    std::ranges::transform(language->servers, std::back_inserter(names), [](const Candidate &candidate) {
+        return QString{candidate.program};
+    });
+    const QString path{document->fileUrl().path()};
+    const QPointer<LanguageServers> self{this};
+    const QPointer<const Document> pointer{document};
+    const QString destination{host->destination()};
+    const QStringList folders{foldersOn(destination)};
+    host->whenOnline(this, [self, pointer, names, path, destination, folders](auto connection) {
+        if (!connection || pointer == nullptr) {
+            return;
+        }
+        remote::Connection &link{connection->get()};
+        link.request(
+            u"process/which"_s,
+            {{u"names"_s, QJsonArray::fromStringList(names)}, {u"folders"_s, QJsonArray::fromStringList(folders)}},
+            [self, pointer, path, destination, &link](const remote::Connection::Result &which) {
+                if (self == nullptr || pointer == nullptr || !which) {
+                    return;
+                }
+                const QJsonObject found{which->toObject().value(u"found"_s).toObject()};
+                const QStringList gits{gitsAbove(path)};
+                remote::files::stat(link, gits, [self, pointer, found, destination](auto entries) {
+                    if (self == nullptr || pointer == nullptr || !entries) {
+                        return;
+                    }
+                    QStringList present;
+                    std::ranges::for_each(*entries, [&present](const remote::files::Entry &entry) {
+                        if (entry.type != u"missing"_s && entry.type != u"error"_s) {
+                            present.append(entry.name);
+                        }
+                    });
+                    self->startRemote(pointer, destination, found, present);
+                });
+            }
+        );
+    });
+}
+
+void LanguageServers::startRemote(
+    const Document *document,
+    const QString &destination,
+    const QJsonObject &found,
+    const QStringList &gits
+)
+{
+    const auto entry{m_entries.find(document)};
+    remote::Host *const host{remote::Hosts::shared().forUrl(document->fileUrl())};
+    if (entry == m_entries.end() || entry->server != nullptr || entry->document == nullptr || host == nullptr ||
+        host->destination() != destination) {
+        return;
+    }
+    TextDocument *const text{entry->document->textDocument()};
+    const Language *const language{languageFor(text->syntax())};
+    if (language == nullptr) {
+        return;
+    }
+    const auto candidate{std::ranges::find_if(language->servers, [&found](const Candidate &candidate) {
+        return found.contains(QString{candidate.program});
+    })};
+    if (candidate == language->servers.end()) {
+        return;
+    }
+    const QString path{document->fileUrl().path()};
+    // The nearest .git above (gits come deepest first), else the file's folder.
+    const QString folder{
+        gits.isEmpty() ? path.left(std::max(qsizetype{1}, path.lastIndexOf(u'/'))) : gits.first().chopped(5)
+    };
+    const QUrl root{QUrl::fromLocalFile(folder.isEmpty() ? u"/"_s : folder)};
+    const QString program{found.value(QString{candidate->program}).toString()};
+    QStringList arguments{QString{candidate->arguments}.split(u' ', Qt::SkipEmptyParts)};
+    if (isClangd(program)) {
+        arguments << u"-j=%1"_s.arg(m_clangdThreads) << u"--background-index-priority=low"_s;
+    }
+    const bool qmlls{QFileInfo{program}.fileName() == u"qmlls"_s};
+    if (!isClangd(program) && !qmlls) {
+        launchRemote(document, program, arguments, {}, root, QString{language->id});
+        return;
+    }
+    // As here: the build folder clangd would miss, the one qmlls reads the project's modules from.
+    remote::Connection *const link{host->connection()};
+    if (link != nullptr) {
+        findRemoteBuild(
+            *link,
+            RemoteLaunch{
+                .document = document,
+                .program = program,
+                .arguments = arguments,
+                .root = root,
+                .languageId = QString{language->id},
+                .name = qmlls ? u"CMakeCache.txt"_s : u"compile_commands.json"_s,
+                .qmlls = qmlls ? 1 : 0,
+            }
+        );
+    }
+}
+
+void LanguageServers::findRemoteBuild(remote::Connection &link, const RemoteLaunch &launch)
+{
+    const QPointer<LanguageServers> self{this};
+    const QPointer<remote::Connection> connection{&link};
+    remote::files::list(link, launch.root.path(), [self, connection, launch](const auto &top) {
+        if (self != nullptr && connection != nullptr) {
+            self->listedRemoteRoot(*connection, launch, top ? *top : QList<remote::files::Entry>{});
+        }
+    });
+}
+
+void LanguageServers::listedRemoteRoot(
+    remote::Connection &link,
+    const RemoteLaunch &launch,
+    const QList<remote::files::Entry> &top
+)
+{
+    const QPointer<LanguageServers> self{this};
+    const QPointer<remote::Connection> connection{&link};
+    const QString root{launch.root.path()};
+    remote::files::list(link, root + u"/build"_s, [self, connection, launch, top, root](const auto &below) {
+        if (self == nullptr || connection == nullptr) {
+            return;
+        }
+        // root/name and root/build/name first, then each folder's.
+        QStringList candidates{root + u'/' + launch.name, root + u"/build/"_s + launch.name};
+        const auto add{[&candidates, &launch](const QString &parent, const QList<remote::files::Entry> &entries) {
+            std::ranges::for_each(entries, [&](const remote::files::Entry &entry) {
+                if (entry.isFolder()) {
+                    candidates.append(parent + u'/' + entry.name + u'/' + launch.name);
+                }
+            });
+        }};
+        add(root, top);
+        add(root + u"/build"_s, below ? *below : QList<remote::files::Entry>{});
+        remote::files::stat(*connection, candidates, [self, launch](const auto &entries) {
+            if (self != nullptr) {
+                self->remoteBuildFound(launch, entries ? *entries : QList<remote::files::Entry>{});
+            }
+        });
+    });
+}
+
+void LanguageServers::remoteBuildFound(const RemoteLaunch &launch, const QList<remote::files::Entry> &entries)
+{
+    if (launch.document == nullptr) {
+        return;
+    }
+    const auto present{[](const remote::files::Entry &entry) { return entry.type == u"file"_s; }};
+    const QString root{launch.root.path()};
+    // Beside the root (or in root/build): clangd finds it by itself.
+    const bool beside{entries.size() >= 2 && std::ranges::any_of(entries.first(2), present)};
+    QString build{beside ? root + u"/build"_s : QString{}};
+    if (!beside && entries.size() > 2) {
+        const QList<remote::files::Entry> rest{entries.sliced(2)};
+        const auto newest{std::ranges::max_element(rest, {}, [&present](const remote::files::Entry &entry) {
+            return present(entry) ? entry.version.seconds : std::numeric_limits<qint64>::min();
+        })};
+        if (newest != rest.cend() && present(*newest)) {
+            build = newest->name.left(newest->name.lastIndexOf(u'/'));
+        }
+    }
+    QStringList arguments{launch.arguments};
+    QJsonObject options;
+    if (launch.qmlls != 0) {
+        arguments << u"--no-cmake-calls"_s;
+        if (!build.isEmpty()) {
+            arguments << u"-b"_s << build;
+        }
+    } else {
+        options.insert(u"clangdFileStatus"_s, true);
+        if (!beside && !build.isEmpty()) {
+            options.insert(u"compilationDatabasePath"_s, build);
+        }
+    }
+    launchRemote(launch.document, launch.program, arguments, options, launch.root, launch.languageId);
+}
+
+void LanguageServers::launchRemote(
+    const Document *document,
+    const QString &program,
+    const QStringList &arguments,
+    const QJsonObject &options,
+    const QUrl &root,
+    const QString &languageId
+)
+{
+    const auto entry{m_entries.find(document)};
+    remote::Host *const host{remote::Hosts::shared().forUrl(document->fileUrl())};
+    if (entry == m_entries.end() || entry->server != nullptr || entry->document == nullptr || host == nullptr) {
+        return;
+    }
+    TextDocument *const text{entry->document->textDocument()};
+    const QString path{document->fileUrl().path()};
+    LanguageServer *const server{this->server(program, arguments, options, root, host)};
+    entry->server = server;
+    entry->uri = QUrl::fromLocalFile(path);
+    entry->languageId = languageId;
+    entry->version = 1;
+    server->notify(
+        u"textDocument/didOpen"_s,
+        QJsonObject{
+            {u"textDocument"_s,
+             QJsonObject{
+                 {u"uri"_s, entry->uri.toString()},
+                 {u"languageId"_s, entry->languageId},
+                 {u"version"_s, entry->version},
+                 {u"text"_s, text->text()},
+             }}
+        }
+    );
+    showStatus(*entry);
     scheduleSemantic(document);
 }
 
@@ -1076,9 +1429,27 @@ void LanguageServers::diagnosticsPublished(
 
 void LanguageServers::serverFinished(const LanguageServer *server)
 {
+    // A host's server gone with its connection: its documents bind again once the host is back.
+    const LanguageServer *const finished{find(server)};
+    remote::Host *const host{
+        finished != nullptr && !finished->destination().isEmpty()
+            ? remote::Hosts::shared().host(finished->destination())
+            : nullptr
+    };
+    // Offline: lost and retried (not disconnected on purpose, nor failed).
+    const bool lost{host != nullptr && host->state() == remote::Host::State::Offline};
     for (Entry &entry : m_entries) {
         if (entry.server != server) {
             continue;
+        }
+        if (lost && entry.document != nullptr) {
+            const QPointer<const Document> document{entry.document.data()};
+            host->whenOnline(this, [this, document](const auto &connection) {
+                const auto again{document != nullptr ? m_entries.find(document.data()) : m_entries.end()};
+                if (connection && again != m_entries.end() && again->server == nullptr) {
+                    bind(*again);
+                }
+            });
         }
         entry.server = nullptr;
         entry.fileState.clear();
@@ -1097,16 +1468,22 @@ LanguageServer *LanguageServers::server(
     const QString &program,
     const QStringList &arguments,
     const QJsonObject &options,
-    const QUrl &root
+    const QUrl &root,
+    remote::Host *host
 )
 {
+    const QString destination{host != nullptr ? host->destination() : QString{}};
     const auto found{std::ranges::find_if(m_servers, [&](const std::unique_ptr<LanguageServer> &server) {
-        return server->program() == program && server->arguments() == arguments && server->root() == root;
+        return server->program() == program && server->arguments() == arguments && server->root() == root &&
+               server->destination() == destination;
     })};
     if (found != m_servers.cend()) {
         return found->get();
     }
-    auto started{std::make_unique<LanguageServer>(program, arguments, options, searchPath().join(u':'), root)};
+    auto started{
+        host != nullptr ? std::make_unique<LanguageServer>(*host, program, arguments, options, root)
+                        : std::make_unique<LanguageServer>(program, arguments, options, searchPath().join(u':'), root)
+    };
     const LanguageServer *const key{started.get()};
     connect(
         started.get(),
@@ -1123,7 +1500,9 @@ LanguageServer *LanguageServers::server(
         [this, key](const QUrl &uri, const QString &state) { fileStatusChanged(key, uri, state); }
     );
     connect(started.get(), &LanguageServer::activityChanged, this, [this, key] { activityChanged(key); });
-    connect(started.get(), &LanguageServer::editRequested, this, &LanguageServers::applyEdit);
+    connect(started.get(), &LanguageServer::editRequested, this, [this, destination](const QJsonObject &edit) {
+        applyEdit(edit, destination);
+    });
     connect(started.get(), &LanguageServer::semanticTokensRefresh, this, [this, key] {
         for (const Entry &entry : std::as_const(m_entries)) {
             if (entry.server == key) {

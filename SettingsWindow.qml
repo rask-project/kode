@@ -60,6 +60,10 @@ Window {
                 iconSource: Qt.resolvedUrl("assets/settings/languageservers.svg")
             },
             {
+                title: qsTr("Remote"),
+                iconSource: Qt.resolvedUrl("assets/settings/remote.svg")
+            },
+            {
                 title: qsTr("Updates"),
                 iconSource: Qt.resolvedUrl("assets/settings/updates.svg")
             }
@@ -625,6 +629,290 @@ Window {
 
                 title: qsTr("Search Folder for Language Servers")
                 onAccepted: Preferences.addLanguageServerFolder(selectedFolder)
+            }
+
+            Item {
+                Layout.fillHeight: true
+            }
+        }
+        // Remote: the hosts reached over SSH; for the one selected, its
+        // connection, the agent, signing in with a key, and its language
+        // servers (folders searched before its PATH, what was found).
+        ColumnLayout {
+            id: remotePage
+
+            // The host clicked last; the first one until then.
+            property string selected: ""
+            readonly property string current: Preferences.remoteHosts.indexOf(selected) >= 0 ? selected : (Preferences.remoteHosts[0] ?? "")
+            readonly property Host host: current !== "" ? Hosts.host(current) : null
+            readonly property bool online: host !== null && host.state === Host.Online
+            readonly property bool detected: OpenDocuments.languageServers.hostServersDestination === current
+
+            spacing: 6
+
+            SshKey {
+                id: sshKey
+
+                destination: remotePage.current
+                onDestinationChanged: check()
+            }
+
+            FormGroup {
+                FormRow {
+                    id: addHostRow
+
+                    property bool invalid: false
+
+                    label: qsTr("Add a host")
+                    detail: invalid ? qsTr("Not a host ssh takes") : qsTr("user@host, or a name from ~/.ssh/config")
+                    showSeparator: false
+
+                    ComboBox {
+                        id: hostName
+
+                        Layout.preferredWidth: 220
+                        editable: true
+                        model: Hosts.configuredHosts()
+                        onEditTextChanged: addHostRow.invalid = false
+                        onAccepted: addHostRow.add()
+                    }
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Add")
+                        enabled: hostName.editText.trim() !== ""
+                        onClicked: addHostRow.add()
+                    }
+
+                    function add() {
+                        const name = hostName.editText.trim();
+                        addHostRow.invalid = !Preferences.addRemoteHost(name);
+                        if (!addHostRow.invalid) {
+                            remotePage.selected = name;
+                            hostName.editText = "";
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: Preferences.remoteHosts
+
+                    delegate: FormRow {
+                        id: hostRow
+
+                        required property string modelData
+                        readonly property Host rowHost: Hosts.host(modelData)
+
+                        label: modelData
+                        detail: rowHost.status
+                        selectable: true
+                        highlighted: remotePage.current === modelData
+                        onClicked: remotePage.selected = modelData
+                        leading: IconImage {
+                            name: hostRow.rowHost.state === Host.Online ? "circle.fill" : "circle"
+                            sourceSize.width: 10
+                            sourceSize.height: 10
+                            color: hostRow.rowHost.state === Host.Online ? (Appearance.dark ? "#30d158" : "#28cd41") : SystemColors.tertiaryLabel
+                        }
+                    }
+                }
+            }
+
+            FormGroup {
+                visible: remotePage.host !== null
+
+                FormRow {
+                    label: remotePage.current
+                    detail: remotePage.online ? qsTr("Online: %1, %2").arg(remotePage.host.user).arg(remotePage.host.platform) : remotePage.host?.status ?? ""
+                    showSeparator: false
+
+                    Button {
+                        readonly property bool connected: remotePage.host !== null && remotePage.host.state !== Host.Disconnected && remotePage.host.state !== Host.Failed
+
+                        focusPolicy: Qt.TabFocus
+                        text: connected ? qsTr("Disconnect") : qsTr("Connect")
+                        onClicked: connected ? remotePage.host.disconnectFromHost() : remotePage.host.connectToHost()
+                    }
+                }
+                FormRow {
+                    label: qsTr("Kode’s agent")
+                    detail: qsTr("Installed on the host when Kode connects (in ~/.cache/kode/remote), and again when Kode is updated")
+                }
+                FormRow {
+                    label: qsTr("Sign-in")
+                    detail: sshKey.message !== "" ? sshKey.message : qsTr("A password, or this Mac’s key")
+                    leading: IconImage {
+                        name: sshKey.state === SshKey.Works ? "key.fill" : "key"
+                        sourceSize.width: 14
+                        sourceSize.height: 14
+                        color: sshKey.state === SshKey.Works ? (Appearance.dark ? "#30d158" : "#28cd41") : SystemColors.secondaryLabel
+                    }
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Install Key")
+                        visible: sshKey.state !== SshKey.Works
+                        enabled: sshKey.state !== SshKey.Checking && sshKey.state !== SshKey.Installing
+                        onClicked: sshKey.install()
+                    }
+                }
+                FormRow {
+                    label: qsTr("Remove this host")
+                    detail: qsTr("From this list; its files stay in Open Recent")
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Remove")
+                        onClicked: {
+                            remotePage.host.disconnectFromHost();
+                            Preferences.removeRemoteHost(remotePage.current);
+                        }
+                    }
+                }
+            }
+
+            // As Language Servers' search path, on the host.
+            FormGroup {
+                visible: remotePage.host !== null
+                enabled: Preferences.languageServers
+
+                FormRow {
+                    id: hostPathRow
+
+                    property bool invalid: false
+
+                    label: qsTr("Language servers on the host")
+                    detail: invalid ? qsTr("Not an absolute path on the host") : qsTr("Folders searched before its shell’s PATH, e.g. /opt/Qt/6.11.2/gcc_64/bin")
+                    showSeparator: false
+
+                    FilledTextField {
+                        id: hostPathField
+
+                        Layout.preferredWidth: 200
+                        placeholderText: "/opt/…/bin or ~/…"
+                        onTextEdited: hostPathRow.invalid = false
+                        onAccepted: hostPathRow.add()
+                    }
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Add")
+                        enabled: hostPathField.text.trim() !== ""
+                        onClicked: hostPathRow.add()
+                    }
+
+                    function add() {
+                        hostPathRow.invalid = !Preferences.addRemoteServerFolder(remotePage.current, hostPathField.text);
+                        if (hostPathRow.invalid)
+                            return;
+                        hostPathField.clear();
+                        if (remotePage.online)
+                            OpenDocuments.languageServers.detectOnHost(remotePage.current);
+                    }
+                }
+
+                Repeater {
+                    model: Preferences.remoteServerFolders[remotePage.current] ?? []
+
+                    delegate: FormRow {
+                        id: hostFolderRow
+
+                        required property string modelData
+                        required property int index
+
+                        label: modelData
+                        detail: qsTr("Your folder")
+
+                        Button {
+                            focusPolicy: Qt.TabFocus
+                            text: qsTr("Remove")
+                            onClicked: {
+                                Preferences.removeRemoteServerFolder(remotePage.current, hostFolderRow.index);
+                                if (remotePage.online)
+                                    OpenDocuments.languageServers.detectOnHost(remotePage.current);
+                            }
+                        }
+                    }
+                }
+
+                FormRow {
+                    id: hostShellPathRow
+
+                    property bool expanded: false
+
+                    visible: remotePage.detected && OpenDocuments.languageServers.hostPath.length > 0
+                    label: qsTr("The host’s shell PATH")
+                    detail: qsTr("%1 folders").arg(OpenDocuments.languageServers.hostPath.length)
+                    selectable: true
+                    onClicked: expanded = !expanded
+                    leading: IconImage {
+                        name: "chevron.right"
+                        sourceSize.width: 10
+                        sourceSize.height: 10
+                        color: SystemColors.secondaryLabel
+                        rotation: hostShellPathRow.expanded ? 90 : 0
+                    }
+                }
+
+                Repeater {
+                    model: hostShellPathRow.visible && hostShellPathRow.expanded ? OpenDocuments.languageServers.hostPath : []
+
+                    delegate: FormRow {
+                        required property string modelData
+
+                        label: modelData
+                        leading: Item {
+                            implicitWidth: 10
+                        }
+                    }
+                }
+            }
+
+            FormGroup {
+                visible: remotePage.host !== null
+                enabled: Preferences.languageServers
+
+                FormRow {
+                    label: qsTr("Servers on the host")
+                    detail: remotePage.detected && OpenDocuments.languageServers.detectingOnHost ? qsTr("Looking on %1…").arg(remotePage.current) : remotePage.detected ? qsTr("Each language’s first one found") : qsTr("Connects to the host and looks for each language’s server")
+                    showSeparator: false
+
+                    Button {
+                        focusPolicy: Qt.TabFocus
+                        text: remotePage.detected ? qsTr("Detect Again") : qsTr("Detect")
+                        enabled: !OpenDocuments.languageServers.detectingOnHost
+                        onClicked: OpenDocuments.languageServers.detectOnHost(remotePage.current)
+                    }
+                }
+
+                Repeater {
+                    model: remotePage.detected ? OpenDocuments.languageServers.hostServers : []
+
+                    delegate: FormRow {
+                        id: hostServerRow
+
+                        required property var modelData
+                        readonly property bool found: modelData.path !== ""
+
+                        label: modelData.languages
+                        detail: found ? modelData.path : qsTr("Not found (looked for %1)").arg(modelData.servers)
+                        monospaceDetail: found
+                        leading: IconImage {
+                            name: hostServerRow.found ? "checkmark.circle.fill" : "xmark.circle"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            color: hostServerRow.found ? (Appearance.dark ? "#30d158" : "#28cd41") : SystemColors.tertiaryLabel
+                        }
+                    }
+                }
+            }
+
+            // Online for the first time here: what it has.
+            Connections {
+                target: remotePage.host
+
+                function onStateChanged() {
+                    if (remotePage.online && !remotePage.detected)
+                        OpenDocuments.languageServers.detectOnHost(remotePage.current);
+                }
             }
 
             Item {

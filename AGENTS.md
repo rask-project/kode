@@ -32,7 +32,7 @@ Guidance for AI agents working in this repository.
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
   (`SearchBar`, `FilledTextField` for ⌘L's field, `HelpTag` for tooltips, `OverlayScrollBar` for the editor's
   and the sidebar's scroll bars, the Settings controls), `Rask.Dialogs`
-  (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
+  (`Alert`, `TextPrompt` for ssh's prompts, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler` with the "Open in Kode" Service,
   `RecentDocuments`, `DefaultApplication`, `CommandLineTool`) and
   `Rask.Updater` (Sparkle: "Check for Updates…" in the app menu, started
@@ -109,7 +109,8 @@ Guidance for AI agents working in this repository.
   only while the tree has the focus); text, icon
   and row sizes from `Preferences.sidebarSize`;
 - `src/FileTree.{h,cpp}` — `FileTree`: a `QSortFilterProxyModel` over a
-  `QFileSystemModel` (folders read in its thread, changes on disk
+  `QFileSystemModel` (a `remote::RemoteTree` for an ssh:// folder: `remote`,
+  its operations made on the host after showing) (folders read in its thread, changes on disk
   followed): the name column, folders first, names by `QCollator`
   (numeric), hidden files on request; `rootIndex` for the view and the
   roles `iconSource`, `isFolder`, `fileUrl`, `parentFolder`; the folder is
@@ -247,6 +248,10 @@ Guidance for AI agents working in this repository.
     (the user's: a syntax, a command split as a shell would, a language
     id) come before the table; `custom` tells each one's program found.
     `findDefinition()` (`textDocument/definition`) and
+    A remote document's server runs on its host (`bindRemote()`: found with
+    `process/which`, its root by `.git`; a `LanguageServer` over a
+    `RemoteProcess`), its `file://` URIs turned into `ssh://` ones where
+    they come back (definitions, edits, Switch Header/Source).
     `switchHeaderSource()` (the file beside it, else clangd's
     `textDocument/switchSourceHeader`) answer with `locationsFound(ticket)`,
     `requestCompletion()` with `completionsFound(ticket)`,
@@ -261,6 +266,57 @@ Guidance for AI agents working in this repository.
     document), dropped when the document was edited meanwhile, then decoded
     into `TextDocument::setSemanticTokens()`;
     through `OpenDocuments` (which exposes `languageServers`).
+- `remote/` — `kode-remote`, the agent Kode runs on a host over SSH
+  (`docs/REMOTE.md`: the plan, its stages marked as done). C++23, POSIX and
+  yyjson (`external/yyjson`, a submodule), no Qt, `-fno-exceptions`;
+  static on Linux.
+  - `protocol/` — shared with Kode: `Frame` and `FrameReader` (length,
+    type, channel; a frame larger than its type allows fails the stream
+    before anything is allocated), `Methods.h` (method names, error codes,
+    the protocol version).
+  - `agent/` — `EventLoop` (`poll(2)`, timers; runs while it has any),
+    `Session` (one client's frames, non-blocking), `Agent` (sessions,
+    services, the handshake: protocol version, a random session id,
+    platform, capabilities), `Service`/`Reply` (a feature's methods,
+    `<name>/<method>`; a reply answered now or later, with an error's data),
+    `Channel.h` (`Source`/`Sink`: a channel's bytes either way, by credit),
+    `Sha256`, `services/` (`System`: `system/ping`; `Fs`: `fs/stat`,
+    `fs/list`, `fs/read` on a channel, `fs/write` from one — atomic, checked
+    against the expected version, mode, owner and links kept —, `fs/create`,
+    `fs/rename`, `fs/copy`, `fs/remove`, `fs/trash`; `Watch`: `watch/set`,
+    `watch/changed` pushed, inotify/kqueue; `Search`: `search/files` on a
+    channel; `Process`: `process/which` in the folders given, then on the login shell's PATH (told back),
+    `process/spawn` with stdin/stdout on channels, `process/signal`,
+    `process/exited`), `Hooks` (a service's way to the loop, timers and
+    notifications), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
+    else `/tmp/kode-<uid>`, refused unless the user's only —, the socket, a
+    peer's uid), `Bridge` (stdio ↔ the daemon's socket, starting it). Commands:
+    `serve` (one session on stdio: the tests), `daemon [--idle s]`, `bridge`.
+  - `askpass/` — `kode-askpass`, ssh's `SSH_ASKPASS` (bundled in
+    `Contents/MacOS`): asks the running Kode through `KODE_ASKPASS_SOCKET`
+    with `KODE_ASKPASS_TOKEN`, prints the answer.
+  - `fuzz/` — `fuzz-frames` (libFuzzer, `KODE_REMOTE_FUZZ`, in CI).
+  - Also a project of its own (`cmake -S remote`): CI builds the Linux
+    agents with `tools/build-remote.sh` in Alpine (static, musl), checked by
+    `tools/remote-smoke.py`; `.github/workflows/remote-agents.yml`.
+- `src/remote/` — Kode's side: `Connection` (the process reaching the
+  agent, JSON-RPC over its frames, requests by id with handlers, channels
+  with credit; anything broken from the agent ends it), `Files`
+  (`remote::files`: read, write with the expected version, stat, list),
+  `RemoteFolder` (a host's folder as a list model, for Connect to Server's
+  picker), `RemoteTree` (a host's folder as a tree for `FileTree`: listed
+  as expanded, watched, operations shown at once), `RemoteProcess` (a
+  program on a host, for `LanguageServer`), `Ssh` (ssh's arguments: ControlMaster in
+  `~/.ssh/kode`, no forwarding; the probe, install and bridge commands for
+  `sh -c`; `~/.ssh/config`'s hosts), `Host` (probe, install by SHA-256,
+  bridge; states, retried with backoff once online; `whenOnline()`),
+  `Hosts` (QML singleton, `shared()` for C++: a `Host` per destination or
+  ssh:// URL, the askpass socket and its prompts,
+  one at a time), `SshKey` (signing in with this Mac's key: checked, or
+  made and added to the host's `authorized_keys`). `ConnectToServer.qml` —
+  File > Connect to Server… (⇧⌘K), which adds the host to Settings > Remote.
+  `Kode.app` bundles the agents in `Contents/Resources/remote/<os>-<arch>`
+  (this Mac's, and those in `KODE_REMOTE_AGENTS_DIR`).
 - `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
   in QSettings `session/folders` (JSON by canonical folder URL:
   `OpenDocuments::cleanFolder()` resolves links, as the Finder does).
@@ -274,7 +330,12 @@ Guidance for AI agents working in this repository.
   the file and its folder (a file replaced by renaming comes back there)
   reloads a change made elsewhere when nothing is unsaved (keeping the
   caret), else emits `changedOnDisk()`; its own saves are told apart by the
-  modification time and size.
+  modification time and size. Every save ends with `saved()` or
+  `saveFailed()` (QML waits for it). An `ssh://` file is on a host
+  (`docs/REMOTE.md`): read and written through its agent
+  (`remote::files`), always asynchronously, the save checked there against
+  the version read (a conflict: `changedOnDisk()`, then `keepMine()`), the
+  host asked every 5 s whether it changed.
 - `src/TextCodec.{h,cpp}` — detecting, decoding and encoding a file's
   bytes: Qt for UTF-8/16 and Latin-1 (no ICU in this Qt), CoreFoundation
   (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest. Each
@@ -292,7 +353,12 @@ Guidance for AI agents working in this repository.
   (your folders: Add Folder…, a typed path, Remove; then the shell's PATH,
   a disclosure group), custom servers (a syntax from `Syntaxes.all`, a
   command, a language id; Remove), each language's server found or its
-  install command (press and hold to copy; Detect Again).
+  install command (press and hold to copy; Detect Again). Remote: the hosts
+  (`Preferences.remoteHosts`), the one selected's connection, agent and
+  sign-in (`SshKey`, Install Key), its folders searched for language
+  servers before its PATH (`Preferences.remoteServerFolders`, bound to
+  `LanguageServers.hostFolders`) and the servers found there
+  (`detectOnHost()`, automatic once it is online).
 - `bin/kode` — the `kode` command, as VS Code's `code` (bundled in
   `Contents/Resources/bin`, linked into `/usr/local/bin` from Settings):
   `open -a` for existing paths (the running Kode, no second instance), a
@@ -489,7 +555,10 @@ Guidance for AI agents working in this repository.
   `tst_preferences`, `tst_filetree`, `tst_lsp` (framing, diagnostics
   following edits, semantic tokens (clangd's legend, decoding, deltas,
   moving with edits), and with clangd installed real round trips: an
-  error, a member completed, a type styled, a missing ';' fixed), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  error, a member completed, a type styled, a missing ';' fixed),
+  `tst_remote` (frames; Kode and a locally built `kode-remote` over stdio,
+  and through the bridge and daemon; `worksOnARealHost` against a real host
+  named by `KODE_TEST_HOST`…, skipped without one), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
   — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both
@@ -514,7 +583,8 @@ Guidance for AI agents working in this repository.
   images and a local preview) and `screenshots/` (`docshot.sh`, which drives
   an isolated copy of the app over a demo project, `demo/aurora`, to take the
   README and site images; kept out of `format-code.sh`).
-- `.github/workflows/` — `ci.yml` (formatting, Release build, tests),
+- `.github/workflows/` — `ci.yml` (formatting, Release build, tests, the
+  Linux agents and fuzzing through `remote-agents.yml`),
   `release.yml` (a `v*` tag: tests, `package-macos`, the ad-hoc-signed
   `.dmg`/`.zip` on a GitHub Release, notes from `docs/releases/<tag>.md`,
   then the Sparkle appcast on the `appcast` branch, signed with the
@@ -599,6 +669,10 @@ Qt Creator opens the project directly with the matching kit.
   `int`, `Q_PROPERTY` and `QList<qint32>` included (QML still sees `int`);
   only `main(int argc, …)` keeps `int`. Lists are `QList`, not `std::vector`.
   Platform API types (`CGFloat`, `NSInteger`, …) stay at the API boundary.
+  Exception: `remote/` has no Qt, so it uses the standard library's
+  (`std::int32_t`, `std::size_t`, `std::vector`, `std::string`) and POSIX's
+  (`int` descriptors) types; Kode's code converts at `remote/protocol`'s
+  boundary.
 - **Initialization:** brace-initialize every variable — data members,
   constants, locals and `for` counters (`bool m_modified{false};`,
   `for (qsizetype i{0}; ...)`): braces reject narrowing conversions. `=` only

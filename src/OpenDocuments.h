@@ -61,6 +61,12 @@ public:
     Q_INVOKABLE void fileMoved(const QUrl &from, const QUrl &to);
     // `url` is a folder on disk (a window's folder, not a document).
     Q_INVOKABLE [[nodiscard]] static bool isFolder(const QUrl &url);
+    // On a host (ssh://).
+    Q_INVOKABLE [[nodiscard]] static bool isRemote(const QUrl &url);
+    // How a folder is kept in Open Recent: a host's with a trailing slash (isFolder() tells it then).
+    Q_INVOKABLE [[nodiscard]] static QUrl recentFolder(const QUrl &folder);
+    // A recent entry's name for the menu: the file's or folder's, and a host's after it.
+    Q_INVOKABLE [[nodiscard]] static QString recentName(const QUrl &url);
     [[nodiscard]] lsp::LanguageServers *languageServers() noexcept { return &m_languageServers; }
     // Where the symbol at `position` of `document` is defined: the language
     // server answers with locationsFound(ticket); 0: none to ask.

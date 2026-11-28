@@ -68,7 +68,14 @@ qt_add_executable(kode_work_bench
     ../../src/editor/TextBuffer.cpp
     ../../src/editor/TextDocument.h
     ../../src/editor/TextDocument.cpp
+    ../../remote/protocol/Frame.cpp
+    ../../src/remote/Connection.cpp
+    ../../src/remote/Files.cpp
+    ../../src/remote/Host.cpp
+    ../../src/remote/Hosts.cpp
+    ../../src/remote/Ssh.cpp
 )
 set_target_properties(kode_work_bench PROPERTIES OUTPUT_NAME kode-work-bench)
 target_include_directories(kode_work_bench PRIVATE ../../src ../../src/editor)
-target_link_libraries(kode_work_bench PRIVATE Qt6::Quick KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_link_libraries(kode_work_bench PRIVATE Qt6::Network Qt6::Quick KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_compile_definitions(kode_work_bench PRIVATE KODE_VERSION="${KODE_DISPLAY_VERSION}")

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.21.1)
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS target architecture")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.4" CACHE STRING "Minimum supported macOS version")
 
-project(Kode VERSION 1.1.2 LANGUAGES CXX OBJCXX)
+project(Kode VERSION 1.2.0 LANGUAGES CXX OBJCXX)
 
 execute_process(
     COMMAND git rev-parse --short=7 HEAD
@@ -57,7 +57,7 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 6.12 REQUIRED COMPONENTS Quick QuickControls2 QuickDialogs2 Svg)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Network Quick QuickControls2 QuickDialogs2 Svg)
 include(cmake/KSyntaxHighlighting.cmake)
 
 qt_standard_project_setup(REQUIRES 6.12)
@@ -68,6 +68,9 @@ include(cmake/AppIcons.cmake)
 set(RASK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(RASK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory(external/rask)
+
+# kode-remote (the agent) and kode-askpass, both bundled in Kode.app.
+add_subdirectory(remote)
 
 qt_add_executable(kode
     main.cpp
@@ -86,6 +89,7 @@ qt_add_qml_module(kode
     # For qmllint and qmlcachegen: where rask's modules are built.
     IMPORT_PATH "${CMAKE_CURRENT_BINARY_DIR}/external/rask/qml"
     QML_FILES
+        ConnectToServer.qml
         DividerHandle.qml
         DocumentSwitcher.qml
         FindFile.qml
@@ -154,6 +158,27 @@ qt_add_qml_module(kode
         src/lsp/Protocol.cpp
         src/lsp/SemanticTokens.h
         src/lsp/SemanticTokens.cpp
+        remote/protocol/Frame.h
+        remote/protocol/Frame.cpp
+        remote/protocol/Methods.h
+        src/remote/Connection.h
+        src/remote/Connection.cpp
+        src/remote/Files.h
+        src/remote/Files.cpp
+        src/remote/Host.h
+        src/remote/Host.cpp
+        src/remote/Hosts.h
+        src/remote/Hosts.cpp
+        src/remote/RemoteFolder.h
+        src/remote/RemoteFolder.cpp
+        src/remote/SshKey.h
+        src/remote/SshKey.cpp
+        src/remote/RemoteProcess.h
+        src/remote/RemoteProcess.cpp
+        src/remote/RemoteTree.h
+        src/remote/RemoteTree.cpp
+        src/remote/Ssh.h
+        src/remote/Ssh.cpp
         src/editor/SemanticStyle.h
         src/editor/SyntaxHighlighter.h
         src/editor/SyntaxHighlighter.cpp
@@ -170,6 +195,7 @@ qt_add_qml_module(kode
         assets/settings/editor.svg
         assets/settings/files.svg
         assets/settings/languageservers.svg
+        assets/settings/remote.svg
         assets/settings/updates.svg
 )
 
@@ -184,12 +210,13 @@ qt_add_resources(kode syntax_themes
 )
 
 # The generated QML type registrations include the headers by their bare name.
-target_include_directories(kode PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/editor ${CMAKE_CURRENT_SOURCE_DIR}/src/lsp)
+target_include_directories(kode PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/editor ${CMAKE_CURRENT_SOURCE_DIR}/src/lsp ${CMAKE_CURRENT_SOURCE_DIR}/src/remote)
 
 # Flag padded class layouts in Debug (the member ordering rule in AGENTS.md),
 # on our sources only: Qt's generated code and rask's trip it.
 set_property(SOURCE main.cpp src/Document.cpp src/DocumentHistory.cpp src/FileIcons.cpp src/FileKinds.cpp src/FileOperations.cpp src/FileSearch.cpp src/FileTree.cpp src/Preferences.cpp src/Session.cpp src/Syntaxes.cpp src/OpenDocuments.cpp src/Splits.cpp src/TextCodec.cpp src/editor/TextBuffer.cpp src/editor/TextDocument.cpp src/editor/EditorView.cpp src/editor/Commenting.cpp src/editor/Folding.cpp src/editor/EditorAccessible.cpp
     src/editor/SyntaxHighlighter.cpp src/editor/Matching.cpp src/editor/Minimap.cpp src/editor/TextSearch.cpp src/lsp/Completion.cpp src/lsp/LanguageServer.cpp src/lsp/LanguageServers.cpp src/lsp/Protocol.cpp src/lsp/SemanticTokens.cpp src/editor/Indentation.cpp src/editor/WrapIndex.cpp
+    remote/protocol/Frame.cpp src/remote/Connection.cpp src/remote/Files.cpp src/remote/Host.cpp src/remote/Hosts.cpp src/remote/RemoteFolder.cpp src/remote/RemoteProcess.cpp src/remote/RemoteTree.cpp src/remote/Ssh.cpp src/remote/SshKey.cpp
     APPEND PROPERTY COMPILE_OPTIONS $<$<CONFIG:Debug>:-Wpadded>)
 
 # Debug builds get a bundle id of their own, so they don't share macOS
@@ -252,6 +279,7 @@ target_compile_definitions(kode PRIVATE
 
 target_link_libraries(kode
     PRIVATE
+        Qt6::Network
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
@@ -278,6 +306,27 @@ install(TARGETS kode
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# The agents Kode installs on hosts, by <os>-<arch>: this Mac's, built here,
+# and those KODE_REMOTE_AGENTS_DIR holds (the Linux ones, built by CI:
+# .github/workflows; laid out as linux-x86_64/kode-remote…). And the askpass
+# helper ssh runs, beside the app's executable.
+set(KODE_REMOTE_AGENTS_DIR "" CACHE PATH "Folder of prebuilt kode-remote agents (<os>-<arch>/kode-remote)")
+add_dependencies(kode kode-remote kode-askpass)
+add_custom_command(TARGET kode POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:kode-askpass>" "$<TARGET_BUNDLE_CONTENT_DIR:kode>/MacOS/kode-askpass"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:kode>/Resources/remote/darwin-arm64"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:kode-remote>" "$<TARGET_BUNDLE_CONTENT_DIR:kode>/Resources/remote/darwin-arm64/kode-remote"
+    COMMENT "Bundling kode-remote and kode-askpass"
+    VERBATIM
+)
+if(KODE_REMOTE_AGENTS_DIR)
+    add_custom_command(TARGET kode POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${KODE_REMOTE_AGENTS_DIR}" "$<TARGET_BUNDLE_CONTENT_DIR:kode>/Resources/remote"
+        COMMENT "Bundling the agents in ${KODE_REMOTE_AGENTS_DIR}"
+        VERBATIM
+    )
+endif()
 
 if(APPLE)
     # The linker signs the executable alone, leaving Info.plist unbound;
