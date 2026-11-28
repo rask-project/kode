@@ -110,7 +110,7 @@ Item {
     // (Open Folder, the sidebar), it takes the folder, saving the one it had.
     function openFolder(given: url, window: EditorWindow) {
         const folder = OpenDocuments.cleanFolder(given);
-        RecentDocuments.add(folder);
+        RecentDocuments.add(OpenDocuments.recentFolder(folder));
         const state = Session.folderState(folder);
         if (window) {
             app.saveFolder(window);

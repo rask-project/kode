@@ -445,7 +445,7 @@ ApplicationWindow {
                     onObjectAdded: (index, object) => {
                         recentMenu.insertItem(index, object);
                         const item = object as MenuItem;
-                        item.action.text = Qt.binding(() => decodeURIComponent(item.modelData.toString().split("/").pop()));
+                        item.action.text = Qt.binding(() => OpenDocuments.recentName(item.modelData));
                     }
                     onObjectRemoved: (index, object) => recentMenu.removeItem(object)
                 }

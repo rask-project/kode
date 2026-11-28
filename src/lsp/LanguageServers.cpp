@@ -963,10 +963,127 @@ void LanguageServers::startRemote(
     if (isClangd(program)) {
         arguments << u"-j=%1"_s.arg(m_clangdThreads) << u"--background-index-priority=low"_s;
     }
-    LanguageServer *const server{this->server(program, arguments, {}, root, host)};
+    const bool qmlls{QFileInfo{program}.fileName() == u"qmlls"_s};
+    if (!isClangd(program) && !qmlls) {
+        launchRemote(document, program, arguments, {}, root, QString{language->id});
+        return;
+    }
+    // As here: the build folder clangd would miss, the one qmlls reads the project's modules from.
+    remote::Connection *const link{host->connection()};
+    if (link != nullptr) {
+        findRemoteBuild(
+            *link,
+            RemoteLaunch{
+                .document = document,
+                .program = program,
+                .arguments = arguments,
+                .root = root,
+                .languageId = QString{language->id},
+                .name = qmlls ? u"CMakeCache.txt"_s : u"compile_commands.json"_s,
+                .qmlls = qmlls ? 1 : 0,
+            }
+        );
+    }
+}
+
+void LanguageServers::findRemoteBuild(remote::Connection &link, const RemoteLaunch &launch)
+{
+    const QPointer<LanguageServers> self{this};
+    const QPointer<remote::Connection> connection{&link};
+    remote::files::list(link, launch.root.path(), [self, connection, launch](const auto &top) {
+        if (self != nullptr && connection != nullptr) {
+            self->listedRemoteRoot(*connection, launch, top ? *top : QList<remote::files::Entry>{});
+        }
+    });
+}
+
+void LanguageServers::listedRemoteRoot(
+    remote::Connection &link,
+    const RemoteLaunch &launch,
+    const QList<remote::files::Entry> &top
+)
+{
+    const QPointer<LanguageServers> self{this};
+    const QPointer<remote::Connection> connection{&link};
+    const QString root{launch.root.path()};
+    remote::files::list(link, root + u"/build"_s, [self, connection, launch, top, root](const auto &below) {
+        if (self == nullptr || connection == nullptr) {
+            return;
+        }
+        // root/name and root/build/name first, then each folder's.
+        QStringList candidates{root + u'/' + launch.name, root + u"/build/"_s + launch.name};
+        const auto add{[&candidates, &launch](const QString &parent, const QList<remote::files::Entry> &entries) {
+            std::ranges::for_each(entries, [&](const remote::files::Entry &entry) {
+                if (entry.isFolder()) {
+                    candidates.append(parent + u'/' + entry.name + u'/' + launch.name);
+                }
+            });
+        }};
+        add(root, top);
+        add(root + u"/build"_s, below ? *below : QList<remote::files::Entry>{});
+        remote::files::stat(*connection, candidates, [self, launch](const auto &entries) {
+            if (self != nullptr) {
+                self->remoteBuildFound(launch, entries ? *entries : QList<remote::files::Entry>{});
+            }
+        });
+    });
+}
+
+void LanguageServers::remoteBuildFound(const RemoteLaunch &launch, const QList<remote::files::Entry> &entries)
+{
+    if (launch.document == nullptr) {
+        return;
+    }
+    const auto present{[](const remote::files::Entry &entry) { return entry.type == u"file"_s; }};
+    const QString root{launch.root.path()};
+    // Beside the root (or in root/build): clangd finds it by itself.
+    const bool beside{entries.size() >= 2 && std::ranges::any_of(entries.first(2), present)};
+    QString build{beside ? root + u"/build"_s : QString{}};
+    if (!beside && entries.size() > 2) {
+        const QList<remote::files::Entry> rest{entries.sliced(2)};
+        const auto newest{std::ranges::max_element(rest, {}, [&present](const remote::files::Entry &entry) {
+            return present(entry) ? entry.version.seconds : std::numeric_limits<qint64>::min();
+        })};
+        if (newest != rest.cend() && present(*newest)) {
+            build = newest->name.left(newest->name.lastIndexOf(u'/'));
+        }
+    }
+    QStringList arguments{launch.arguments};
+    QJsonObject options;
+    if (launch.qmlls != 0) {
+        arguments << u"--no-cmake-calls"_s;
+        if (!build.isEmpty()) {
+            arguments << u"-b"_s << build;
+        }
+    } else {
+        options.insert(u"clangdFileStatus"_s, true);
+        if (!beside && !build.isEmpty()) {
+            options.insert(u"compilationDatabasePath"_s, build);
+        }
+    }
+    launchRemote(launch.document, launch.program, arguments, options, launch.root, launch.languageId);
+}
+
+void LanguageServers::launchRemote(
+    const Document *document,
+    const QString &program,
+    const QStringList &arguments,
+    const QJsonObject &options,
+    const QUrl &root,
+    const QString &languageId
+)
+{
+    const auto entry{m_entries.find(document)};
+    remote::Host *const host{remote::Hosts::shared().forUrl(document->fileUrl())};
+    if (entry == m_entries.end() || entry->server != nullptr || entry->document == nullptr || host == nullptr) {
+        return;
+    }
+    TextDocument *const text{entry->document->textDocument()};
+    const QString path{document->fileUrl().path()};
+    LanguageServer *const server{this->server(program, arguments, options, root, host)};
     entry->server = server;
     entry->uri = QUrl::fromLocalFile(path);
-    entry->languageId = QString{language->id};
+    entry->languageId = languageId;
     entry->version = 1;
     server->notify(
         u"textDocument/didOpen"_s,
@@ -1218,9 +1335,27 @@ void LanguageServers::diagnosticsPublished(
 
 void LanguageServers::serverFinished(const LanguageServer *server)
 {
+    // A host's server gone with its connection: its documents bind again once the host is back.
+    const LanguageServer *const finished{find(server)};
+    remote::Host *const host{
+        finished != nullptr && !finished->destination().isEmpty()
+            ? remote::Hosts::shared().host(finished->destination())
+            : nullptr
+    };
+    // Offline: lost and retried (not disconnected on purpose, nor failed).
+    const bool lost{host != nullptr && host->state() == remote::Host::State::Offline};
     for (Entry &entry : m_entries) {
         if (entry.server != server) {
             continue;
+        }
+        if (lost && entry.document != nullptr) {
+            const QPointer<const Document> document{entry.document.data()};
+            host->whenOnline(this, [this, document](const auto &connection) {
+                const auto again{document != nullptr ? m_entries.find(document.data()) : m_entries.end()};
+                if (connection && again != m_entries.end() && again->server == nullptr) {
+                    bind(*again);
+                }
+            });
         }
         entry.server = nullptr;
         entry.fileState.clear();

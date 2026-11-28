@@ -1,5 +1,7 @@
 #pragma once
 
+#include "remote/Files.h"
+
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -26,6 +28,7 @@ class Document;
 
 namespace remote
 {
+class Connection;
 class Host;
 } // namespace remote
 
@@ -157,6 +160,30 @@ private:
         const QString &destination,
         const QJsonObject &found,
         const QStringList &gits
+    );
+    // A server to start on a host once its build folder is known (clangd's
+    // compilation database, qmlls's -b): the newest under the root or
+    // root/build holding `name`, as here.
+    struct RemoteLaunch {
+        QPointer<const Document> document;
+        QString program;
+        QStringList arguments;
+        QUrl root;
+        QString languageId;
+        QString name;
+        // qmlls (else clangd), as a whole word: no padding.
+        qint64 qmlls{0};
+    };
+    void findRemoteBuild(remote::Connection &link, const RemoteLaunch &launch);
+    void listedRemoteRoot(remote::Connection &link, const RemoteLaunch &launch, const QList<remote::files::Entry> &top);
+    void remoteBuildFound(const RemoteLaunch &launch, const QList<remote::files::Entry> &entries);
+    void launchRemote(
+        const Document *document,
+        const QString &program,
+        const QStringList &arguments,
+        const QJsonObject &options,
+        const QUrl &root,
+        const QString &languageId
     );
     void unbind(Entry &entry);
     // Tells the document its server and what it is busy with.

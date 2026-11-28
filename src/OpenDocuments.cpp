@@ -146,6 +146,27 @@ bool OpenDocuments::isRemote(const QUrl &url)
     return url.scheme() == QLatin1String("ssh");
 }
 
+QUrl OpenDocuments::recentFolder(const QUrl &folder)
+{
+    if (!isRemote(folder) || folder.path().endsWith(u'/')) {
+        return folder;
+    }
+    QUrl kept{folder};
+    kept.setPath(folder.path() + u'/');
+    return kept;
+}
+
+QString OpenDocuments::recentName(const QUrl &url)
+{
+    const QString path{url.path()};
+    const QString trimmed{path.size() > 1 && path.endsWith(u'/') ? path.chopped(1) : path};
+    const QString name{trimmed.sliced(trimmed.lastIndexOf(u'/') + 1)};
+    if (!isRemote(url)) {
+        return name;
+    }
+    return tr("%1 — %2").arg(name.isEmpty() ? QStringLiteral("/") : name, url.host());
+}
+
 void OpenDocuments::fileMoved(const QUrl &from, const QUrl &to)
 {
     // By path on the same machine (this Mac, or one host): file:// and ssh:// alike.

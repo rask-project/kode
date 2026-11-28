@@ -483,7 +483,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 | A3 — Remote documents | ✅ |
 | A4 — Remote folders | ✅ |
 | A5 — Remote language servers | ✅ |
-| A6 — Resilience and measurements | ⬜ |
+| A6 — Resilience and measurements | 🚧 |
 
 ### A0 — The seam (folded into A3–A5)
 
@@ -680,18 +680,30 @@ Not done here: Settings > Language Servers per host (the servers found on
 each), custom servers on a host, clangd's `compilationDatabasePath` and
 qmlls's `-b` on a host (both look for build folders on disk); moved to A6.
 
-### A6 — Resilience and measurements
+### A6 — Resilience and measurements 🚧
 
-Sessions resumed after a dropped connection (`initialize {session}`,
-`watch/since`, `process/list`: the language servers kept, their unanswered
-requests failed and re-asked), idle exit, the daemon's log
-(`~/.cache/kode/remote/<version>/kode.log`, rotated). Measured on a slow
-link (`dnctl`/`pfctl` adding 150 ms): opening a large repository's tree,
-Find File on 100 000 files, the delay of an outside change, saving a 10 MB
-file. Then, only if the numbers ask for them: compression of large
-transfers (zstd per channel), and saves as edits (`fs/write` with the
-changed byte ranges against `expect.hash`, the agent checking the result's
-hash; the `"edits"` capability).
+Done so far: language servers come back after a dropped connection (a
+host's server that ends while the host is offline binds its documents again
+once it is online — not after Disconnect, nor when the server itself
+crashed: a crash is not restarted, as here); clangd's
+`compilationDatabasePath` and qmlls's `-b` found on the host as here (the
+newest build folder under the root or `root/build` holding
+`compile_commands.json` or `CMakeCache.txt`, by `fs/list` and `fs/stat`);
+Open Recent keeps remote files and folders (Rask's `RecentDocuments` keeps
+any URL, the system's list local files only; a host's folder kept with a
+trailing slash so it opens as one; named "name — host"). After a
+reconnection the folders are listed again, the watches sent again and the
+documents checked (A2–A4).
+
+Left for the real test (section 10's list): sessions resumed after a
+dropped connection (`initialize {session}`, `watch/since`,
+`process/list`: the language servers kept instead of started again — only
+if starting them again proves slow on real projects), the daemon's log,
+measurements on a slow link (opening a large repository's tree, Find File
+on 100 000 files, an outside change's delay, saving 10 MB), then only if the
+numbers ask for them: compression of large transfers and saves as edits.
+Also: Settings > Language Servers per host and custom servers on a host;
+a folder's `.gitignore` in Find File.
 
 ### Later (not planned now)
 
@@ -703,7 +715,27 @@ port forwarding.
 
 ---
 
-## 10. Open decisions
+## 10. The real test
+
+Nothing so far ran against a real SSH server (the tests run the same
+commands through a stand-in ssh and the agent on this Mac; CI builds and
+checks the Linux agents). To try, with the app CI uploads for the branch
+(the "Kode-<commit>" artifact: its Linux agents inside):
+
+1. File > Connect to Server… (⇧⌘K): a host of `~/.ssh/config`. The first
+   time the agent is installed (`~/.cache/kode/remote/<version>`); a
+   password, passphrase or unknown host key is asked in a sheet.
+2. Browse to a folder, Open Folder: the sidebar shows it; expand folders,
+   create, rename, delete files; change a file on the host (from a
+   terminal): the sidebar and an open document follow.
+3. Open a file, edit, save; change it on the host meanwhile and save
+   again: "changed on disk" (Keep Mine saves over it).
+4. ⌘K over the folder; a C++ or Python file with clangd or pyright
+   installed on the host: diagnostics, completion, F2.
+5. Drop the network a moment (or `kill` the agent's daemon on the host):
+   the footer shows the host offline, then it comes back by itself.
+
+## 11. Open decisions
 
 - A remote binary file: refused, or copied to a temporary folder and handed
   to the system's app.
