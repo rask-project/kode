@@ -90,5 +90,9 @@ private slots:
     // With clangd installed: a remote document's error from clangd running
     // on the host (found on the login shell's PATH).
     void remoteClangdReportsAnError();
+    void findsServersInAHostsFolders();
+    void installsAKeyOnce();
+    // A real host over ssh (KODE_TEST_HOST; see the test), skipped without one.
+    void worksOnARealHost();
     void cleanup();
 };

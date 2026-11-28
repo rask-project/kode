@@ -344,6 +344,11 @@ Item {
         property: "customServers"
         value: Preferences.customLanguageServers
     }
+    Binding {
+        target: OpenDocuments.languageServers
+        property: "hostFolders"
+        value: Preferences.remoteServerFolders
+    }
 
     Connections {
         target: FileOpenHandler

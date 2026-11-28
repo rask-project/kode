@@ -170,6 +170,8 @@ qt_add_executable(tst_preferences
     tst_preferences.cpp
     ../src/Preferences.h
     ../src/Preferences.cpp
+    ../src/remote/Ssh.h
+    ../src/remote/Ssh.cpp
 )
 target_include_directories(tst_preferences PRIVATE ../src)
 target_link_libraries(tst_preferences PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)

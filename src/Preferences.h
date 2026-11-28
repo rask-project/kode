@@ -5,6 +5,7 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace kode
@@ -55,6 +56,10 @@ class Preferences : public QObject
     Q_PROPERTY(qint32 clangdThreads READ clangdThreads WRITE setClangdThreads NOTIFY changed)
     // The user's own language servers: each {syntax, command, languageId}.
     Q_PROPERTY(QVariantList customLanguageServers READ customLanguageServers NOTIFY changed)
+    // The hosts of Settings > Remote, as ssh names them, and each one's
+    // folders searched for language servers before its PATH ({destination: [folder…]}).
+    Q_PROPERTY(QStringList remoteHosts READ remoteHosts NOTIFY changed)
+    Q_PROPERTY(QVariantMap remoteServerFolders READ remoteServerFolders NOTIFY changed)
 public:
     explicit Preferences(QObject *parent = nullptr);
 
@@ -106,6 +111,15 @@ public:
     // One per syntax: replaces the one it had. False without a syntax or a command.
     Q_INVOKABLE bool addCustomLanguageServer(const QString &syntax, const QString &command, const QString &languageId);
     Q_INVOKABLE void removeCustomLanguageServer(qint32 index);
+    [[nodiscard]] static QStringList remoteHosts();
+    // False when ssh could not take it as a destination.
+    Q_INVOKABLE bool addRemoteHost(const QString &destination);
+    // Its folders go with it.
+    Q_INVOKABLE void removeRemoteHost(const QString &destination);
+    [[nodiscard]] static QVariantMap remoteServerFolders();
+    // An absolute path on the host, or one under its home ('~/'); false for anything else.
+    Q_INVOKABLE bool addRemoteServerFolder(const QString &destination, const QString &path);
+    Q_INVOKABLE void removeRemoteServerFolder(const QString &destination, qint32 index);
     [[nodiscard]] static qint32 clangdThreads();
     void setClangdThreads(qint32 threads);
 

@@ -52,4 +52,47 @@ void TestPreferences::instancesShareTheSettings()
     QVERIFY(second.indentWithTabs());
 }
 
+void TestPreferences::keepsOneCustomServerPerSyntax()
+{
+    kode::Preferences preferences;
+    QVERIFY(preferences.addCustomLanguageServer(QStringLiteral("Java"), QStringLiteral("jdtls"), {}));
+    QVERIFY(preferences.addCustomLanguageServer(QStringLiteral("Lua"), QStringLiteral("lua-ls"), {}));
+    QVERIFY(preferences.addCustomLanguageServer(QStringLiteral("Java"), QStringLiteral("jdtls -data /tmp"), {}));
+    const QVariantList servers(kode::Preferences::customLanguageServers());
+    QCOMPARE(servers.size(), 2);
+    QCOMPARE(servers.at(0).toMap().value(QStringLiteral("syntax")).toString(), QStringLiteral("Lua"));
+    QCOMPARE(servers.at(1).toMap().value(QStringLiteral("command")).toString(), QStringLiteral("jdtls -data /tmp"));
+    preferences.removeCustomLanguageServer(0);
+    QCOMPARE(kode::Preferences::customLanguageServers().size(), 1);
+}
+
+void TestPreferences::keepsRemoteHostsAndTheirFolders()
+{
+    kode::Preferences preferences;
+    QVERIFY(preferences.addRemoteHost(QStringLiteral(" me@box ")));
+    QVERIFY(preferences.addRemoteHost(QStringLiteral("ssh://me@other:2222")));
+    QVERIFY(preferences.addRemoteHost(QStringLiteral("me@box")));
+    QVERIFY(!preferences.addRemoteHost(QStringLiteral("-oProxyCommand=x")));
+    QVERIFY(!preferences.addRemoteHost(QStringLiteral("two words")));
+    QCOMPARE(
+        kode::Preferences::remoteHosts(),
+        (QStringList{QStringLiteral("me@box"), QStringLiteral("ssh://me@other:2222")})
+    );
+    QVERIFY(preferences.addRemoteServerFolder(QStringLiteral("me@box"), QStringLiteral("/opt/Qt/bin/")));
+    QVERIFY(preferences.addRemoteServerFolder(QStringLiteral("me@box"), QStringLiteral("~/.local/bin")));
+    QVERIFY(!preferences.addRemoteServerFolder(QStringLiteral("me@box"), QStringLiteral("relative/bin")));
+    QCOMPARE(
+        kode::Preferences::remoteServerFolders().value(QStringLiteral("me@box")).toStringList(),
+        (QStringList{QStringLiteral("/opt/Qt/bin"), QStringLiteral("~/.local/bin")})
+    );
+    preferences.removeRemoteServerFolder(QStringLiteral("me@box"), 0);
+    QCOMPARE(
+        kode::Preferences::remoteServerFolders().value(QStringLiteral("me@box")).toStringList(),
+        QStringList{QStringLiteral("~/.local/bin")}
+    );
+    preferences.removeRemoteHost(QStringLiteral("me@box"));
+    QCOMPARE(kode::Preferences::remoteHosts(), QStringList{QStringLiteral("ssh://me@other:2222")});
+    QVERIFY(kode::Preferences::remoteServerFolders().isEmpty());
+}
+
 QTEST_MAIN(TestPreferences)

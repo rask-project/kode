@@ -66,6 +66,14 @@ class LanguageServers : public QObject
     Q_PROPERTY(QVariantList custom READ custom NOTIFY serversChanged)
     // The login shell's PATH, searched after `searchFolders`.
     Q_PROPERTY(QStringList shellPath READ shellPath NOTIFY serversChanged)
+    // Each host's folders searched before its login shell's PATH: {destination: [folder…]}.
+    Q_PROPERTY(QVariantMap hostFolders READ hostFolders WRITE setHostFolders NOTIFY settingsChanged)
+    // What detectOnHost() found last, on `hostServersDestination`: `servers`'
+    // shape without `install`; `hostPath`: that host's login shell's PATH.
+    Q_PROPERTY(QString hostServersDestination READ hostServersDestination NOTIFY hostServersChanged)
+    Q_PROPERTY(QVariantList hostServers READ hostServers NOTIFY hostServersChanged)
+    Q_PROPERTY(QStringList hostPath READ hostPath NOTIFY hostServersChanged)
+    Q_PROPERTY(bool detectingOnHost READ detectingOnHost NOTIFY hostServersChanged)
 public:
     explicit LanguageServers(QObject *parent = nullptr);
     ~LanguageServers() override;
@@ -86,8 +94,16 @@ public:
     [[nodiscard]] QVariantList customServers() const { return m_customServers; }
     void setCustomServers(const QVariantList &servers);
     [[nodiscard]] QVariantList custom() const { return m_customFound; }
+    [[nodiscard]] QVariantMap hostFolders() const { return m_hostFolders; }
+    void setHostFolders(const QVariantMap &folders);
+    [[nodiscard]] QString hostServersDestination() const { return m_hostServersDestination; }
+    [[nodiscard]] QVariantList hostServers() const { return m_hostServers; }
+    [[nodiscard]] QStringList hostPath() const { return m_hostPath; }
+    [[nodiscard]] bool detectingOnHost() const noexcept { return (m_flags & DetectingOnHost) != 0U; }
     // Reads the shell's PATH again (a server installed since), then looks for the servers.
     Q_INVOKABLE void detect();
+    // Looks for each language's server on `destination` (connecting to it).
+    Q_INVOKABLE void detectOnHost(const QString &destination);
     // Puts the `index`th group's install command on the clipboard.
     Q_INVOKABLE static void copyInstallCommand(qint32 index);
 
@@ -114,6 +130,7 @@ public:
 signals:
     void settingsChanged();
     void serversChanged();
+    void hostServersChanged();
     // Each {file, line, column (-1, 0: no place), label}.
     void locationsFound(qint32 ticket, const QVariantList &locations);
     // The actions' titles, in order.
@@ -123,6 +140,7 @@ signals:
 
 private:
     static constexpr quint64 Enabled{1U << 0U};
+    static constexpr quint64 DetectingOnHost{1U << 1U};
 
     // A document followed, and the server that knows it (null: none).
     struct Entry {
@@ -155,6 +173,9 @@ private:
     // A document on a host: its server found there (process/which) and its
     // root (the nearest folder with a .git), then started there.
     void bindRemote(Entry &entry);
+    // The folders searched first on `destination`.
+    [[nodiscard]] QStringList foldersOn(const QString &destination) const;
+    void hostServersFound(const QString &destination, const QJsonObject &result);
     void startRemote(
         const Document *document,
         const QString &destination,
@@ -234,6 +255,10 @@ private:
     QVariantList m_found;
     QVariantList m_customServers;
     QVariantList m_customFound;
+    QVariantMap m_hostFolders;
+    QVariantList m_hostServers;
+    QStringList m_hostPath;
+    QString m_hostServersDestination;
     // The login shell's PATH; empty until it is known.
     QString m_shellPath;
     std::function<Document *(const QUrl &)> m_opener;

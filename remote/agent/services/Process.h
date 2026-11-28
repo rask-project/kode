@@ -13,7 +13,8 @@ namespace kode::remote
 {
 
 // Programs run on the host (docs/REMOTE.md, section 5): process/which finds
-// them on the login shell's PATH (read once), process/spawn starts one —
+// them in the folders it is given, then on the login shell's PATH (read
+// once; told back), process/spawn starts one —
 // its stdin a channel the client opened, its stdout one of the agent's,
 // stderr dropped —, process/signal stops it; process/exited tells, once its
 // output was all sent. A session's processes are stopped when it ends.
@@ -59,7 +60,8 @@ private:
     void spawn(std::uint64_t session, yyjson_val *params, Reply reply, const Channels &channels);
     void signal(std::uint64_t session, yyjson_val *params, Reply reply);
     [[nodiscard]] const std::vector<std::string> &path();
-    [[nodiscard]] std::string find(const std::string &name);
+    // In `folders` first ('~/' for the home folder), then the PATH.
+    [[nodiscard]] std::string find(const std::string &name, const std::vector<std::string> &folders = {});
 
     void readOutput(std::int64_t id);
     [[nodiscard]] std::expected<std::optional<std::string>, std::string> pull(std::int64_t id, std::size_t limit);

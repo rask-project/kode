@@ -1,5 +1,7 @@
 #include "Preferences.h"
 
+#include "remote/Ssh.h"
+
 #include <QDir>
 #include <QFileInfo>
 #include <QFontDatabase>
@@ -35,6 +37,8 @@ const QString languageServersKey{QStringLiteral("languageServers/enabled")};
 const QString languageServerFoldersKey{QStringLiteral("languageServers/folders")};
 const QString clangdThreadsKey{QStringLiteral("languageServers/clangdThreads")};
 const QString customLanguageServersKey{QStringLiteral("languageServers/custom")};
+const QString remoteHostsKey{QStringLiteral("remote/hosts")};
+const QString remoteServerFoldersKey{QStringLiteral("remote/serverFolders")};
 
 constexpr qint32 defaultIndentWidth{4};
 constexpr qint32 largestIndentWidth{16};
@@ -288,7 +292,7 @@ bool Preferences::addCustomLanguageServer(const QString &syntax, const QString &
     if (syntax.isEmpty() || command.trimmed().isEmpty()) {
         return false;
     }
-    QVariantList servers{customLanguageServers()};
+    QVariantList servers(customLanguageServers());
     servers.removeIf([&syntax](const QVariant &item) {
         return item.toMap().value(QStringLiteral("syntax")).toString() == syntax;
     });
@@ -303,11 +307,79 @@ bool Preferences::addCustomLanguageServer(const QString &syntax, const QString &
 
 void Preferences::removeCustomLanguageServer(qint32 index)
 {
-    QVariantList servers{customLanguageServers()};
+    QVariantList servers(customLanguageServers());
     if (index >= 0 && index < servers.size()) {
         servers.removeAt(index);
         store(customLanguageServersKey, servers);
     }
+}
+
+QStringList Preferences::remoteHosts()
+{
+    return QSettings().value(remoteHostsKey).toStringList();
+}
+
+bool Preferences::addRemoteHost(const QString &destination)
+{
+    const QString name{destination.trimmed()};
+    if (!remote::ssh::validDestination(name)) {
+        return false;
+    }
+    QStringList hosts{remoteHosts()};
+    if (!hosts.contains(name)) {
+        hosts.append(name);
+        store(remoteHostsKey, hosts);
+    }
+    return true;
+}
+
+void Preferences::removeRemoteHost(const QString &destination)
+{
+    QStringList hosts{remoteHosts()};
+    hosts.removeAll(destination);
+    QVariantMap folders{remoteServerFolders()};
+    folders.remove(destination);
+    store(remoteServerFoldersKey, folders);
+    store(remoteHostsKey, hosts);
+}
+
+QVariantMap Preferences::remoteServerFolders()
+{
+    return QSettings().value(remoteServerFoldersKey).toMap();
+}
+
+bool Preferences::addRemoteServerFolder(const QString &destination, const QString &path)
+{
+    const QString trimmed{path.trimmed()};
+    if (destination.isEmpty() || !(trimmed.startsWith(u'/') || trimmed.startsWith(QLatin1String("~/")))) {
+        return false;
+    }
+    // The host's paths are POSIX ones, whatever this machine's are.
+    const QString clean{QDir::cleanPath(trimmed)};
+    QVariantMap all{remoteServerFolders()};
+    QStringList folders{all.value(destination).toStringList()};
+    if (!folders.contains(clean)) {
+        folders.append(clean);
+        all.insert(destination, folders);
+        store(remoteServerFoldersKey, all);
+    }
+    return true;
+}
+
+void Preferences::removeRemoteServerFolder(const QString &destination, qint32 index)
+{
+    QVariantMap all{remoteServerFolders()};
+    QStringList folders{all.value(destination).toStringList()};
+    if (index < 0 || index >= folders.size()) {
+        return;
+    }
+    folders.removeAt(index);
+    if (folders.isEmpty()) {
+        all.remove(destination);
+    } else {
+        all.insert(destination, folders);
+    }
+    store(remoteServerFoldersKey, all);
 }
 
 qint32 Preferences::clangdThreads()

@@ -1290,4 +1290,136 @@ void TestRemote::remoteClangdReportsAnError()
     servers.remove(&document);
 }
 
+void TestRemote::findsServersInAHostsFolders()
+{
+    const RemoteHost host{QStringLiteral("/usr/bin:/bin")};
+    host.write(QStringLiteral("tools/clangd"), "#!/bin/sh\n");
+    QFile::setPermissions(host.path(QStringLiteral("tools/clangd")), QFile::ReadOwner | QFile::ExeOwner);
+    kode::lsp::LanguageServers servers;
+    servers.setHostFolders({{host.destination, QStringList{host.path(QStringLiteral("tools"))}}});
+    servers.detectOnHost(host.destination);
+    QVERIFY(servers.detectingOnHost());
+    QTRY_VERIFY_WITH_TIMEOUT(!servers.detectingOnHost(), 20000);
+    QCOMPARE(servers.hostServersDestination(), host.destination);
+    QCOMPARE(servers.hostPath(), (QStringList{QStringLiteral("/usr/bin"), QStringLiteral("/bin")}));
+    const QVariantMap clang{servers.hostServers().first().toMap()};
+    QCOMPARE(clang.value(u"languages"_s).toString(), QStringLiteral("C, C++, Objective-C"));
+    QCOMPARE(clang.value(u"path"_s).toString(), host.path(QStringLiteral("tools/clangd")));
+    QVERIFY(servers.hostServers().at(1).toMap().value(u"path"_s).toString().isEmpty());
+}
+
+void TestRemote::installsAKeyOnce()
+{
+    const QTemporaryDir home;
+    QProcessEnvironment environment{QProcessEnvironment::systemEnvironment()};
+    environment.insert(QStringLiteral("HOME"), home.path());
+    for (qint32 round{0}; round < 2; ++round) {
+        QProcess shell;
+        shell.setProcessEnvironment(environment);
+        shell.start(QStringLiteral("/bin/sh"), {QStringLiteral("-c"), kode::remote::ssh::keyInstallCommand()});
+        shell.write("ssh-ed25519 AAAAkey kode@mac\n");
+        shell.closeWriteChannel();
+        QVERIFY(shell.waitForFinished());
+        QCOMPARE(shell.exitCode(), 0);
+    }
+    const QString keys{home.filePath(QStringLiteral(".ssh/authorized_keys"))};
+    QCOMPARE(contentsOf(keys), QByteArray{"ssh-ed25519 AAAAkey kode@mac\n"});
+    QCOMPARE(
+        QFileInfo{home.filePath(QStringLiteral(".ssh"))}.permissions() & (QFile::ReadOther | QFile::ReadGroup),
+        QFile::Permissions{}
+    );
+    QCOMPARE(QFileInfo{keys}.permissions() & (QFile::ReadOther | QFile::ReadGroup), QFile::Permissions{});
+}
+
+// Against a real host, when one is named: KODE_TEST_HOST (as ssh takes it,
+// signing in with a key), KODE_TEST_FOLDER (a CMake Qt Quick project there,
+// in git, configured in build/ with compile_commands.json, holding Counter.cpp
+// and CounterView.qml), KODE_TEST_AGENTS (the agents, <os>-<arch>/kode-remote)
+// and KODE_TEST_SERVER_FOLDERS (the host's folders with clangd and qmlls, ':'
+// between them).
+void TestRemote::worksOnARealHost()
+{
+    const QString destination{qEnvironmentVariable("KODE_TEST_HOST")};
+    const QString project{qEnvironmentVariable("KODE_TEST_FOLDER")};
+    if (destination.isEmpty() || project.isEmpty()) {
+        QSKIP("No real host named (KODE_TEST_HOST, KODE_TEST_FOLDER)");
+    }
+    kode::remote::Setup setup{Hosts::shared().setup(destination)};
+    setup.agents = qEnvironmentVariable("KODE_TEST_AGENTS");
+    Host *const host{Hosts::shared().host(destination, std::move(setup))};
+    host->connectToHost();
+    QTRY_VERIFY_WITH_TIMEOUT(host->state() == Host::State::Online || host->state() == Host::State::Failed, 120000);
+    QVERIFY2(host->state() == Host::State::Online, qPrintable(host->errorString()));
+    QVERIFY2(host->platform().contains(u"linux"_s, Qt::CaseInsensitive), qPrintable(host->platform()));
+
+    // Saved there and read back.
+    const QUrl counter{kode::remote::ssh::fileUrl(destination, project + u"/Counter.cpp"_s)};
+    {
+        kode::Document document;
+        QVERIFY(document.load(counter));
+        QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 30000);
+        const QString original{document.textDocument()->text()};
+        QVERIFY(original.contains(u"Counter::increment"_s));
+        typeAtStart(document, QStringLiteral("// Saved by Kode's test\n"));
+        QSignalSpy saved{&document, &kode::Document::saved};
+        QVERIFY(document.save());
+        QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 30000);
+        kode::Document again;
+        QVERIFY(again.load(counter));
+        QTRY_VERIFY_WITH_TIMEOUT(!again.loading(), 30000);
+        QCOMPARE(again.textDocument()->text(), QStringLiteral("// Saved by Kode's test\n") + original);
+        document.textDocument()->setText(original);
+        QVERIFY(document.save());
+        QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 2, 30000);
+    }
+
+    // The servers found there, in the folders given first.
+    kode::lsp::LanguageServers servers;
+    const QStringList folders{qEnvironmentVariable("KODE_TEST_SERVER_FOLDERS").split(u':', Qt::SkipEmptyParts)};
+    servers.setHostFolders({{destination, folders}});
+    servers.detectOnHost(destination);
+    QTRY_VERIFY_WITH_TIMEOUT(!servers.detectingOnHost(), 30000);
+    QVERIFY(!servers.hostPath().isEmpty());
+    const auto pathFor{[&servers](const QString &languages) {
+        const QVariantList list(servers.hostServers());
+        const auto found{std::ranges::find_if(list, [&languages](const QVariant &item) {
+            return item.toMap().value(u"languages"_s).toString() == languages;
+        })};
+        return found == list.cend() ? QString{} : found->toMap().value(u"path"_s).toString();
+    }};
+    QVERIFY2(
+        pathFor(u"C, C++, Objective-C"_s).endsWith(u"/clangd"_s),
+        qPrintable(QJsonDocument{QJsonArray::fromVariantList(servers.hostServers())}.toJson())
+    );
+    QVERIFY(pathFor(u"QML"_s).endsWith(u"/qmlls"_s));
+
+    // clangd there, with the project's compilation database: an error, then none.
+    kode::Document source;
+    QVERIFY(source.load(counter));
+    QTRY_VERIFY_WITH_TIMEOUT(!source.loading(), 30000);
+    servers.add(&source);
+    QTRY_VERIFY_WITH_TIMEOUT(source.textDocument()->languageServer().contains(u"clangd"_s), 60000);
+    const qsizetype end{source.textDocument()->length()};
+    source.textDocument()
+        ->replace(end, 0, QStringLiteral("int broken() { return m_value + undefinedName; }\n"), false, {});
+    QTRY_VERIFY_WITH_TIMEOUT(source.textDocument()->errorCount() > 0, 120000);
+    source.textDocument()->undo();
+    QTRY_VERIFY_WITH_TIMEOUT(source.textDocument()->errorCount() == 0, 60000);
+    servers.remove(&source);
+
+    // qmlls there: a QML error, then none.
+    kode::Document qml;
+    QVERIFY(qml.load(kode::remote::ssh::fileUrl(destination, project + u"/CounterView.qml"_s)));
+    QTRY_VERIFY_WITH_TIMEOUT(!qml.loading(), 30000);
+    servers.add(&qml);
+    QTRY_VERIFY_WITH_TIMEOUT(qml.textDocument()->languageServer().contains(u"qmlls"_s), 60000);
+    const qsizetype brace{qml.textDocument()->text().lastIndexOf(u'}')};
+    qml.textDocument()->replace(brace, 0, QStringLiteral("    Rectangle { color: \n"), false, {});
+    QTRY_VERIFY_WITH_TIMEOUT(qml.textDocument()->errorCount() > 0, 60000);
+    qml.textDocument()->undo();
+    QTRY_VERIFY_WITH_TIMEOUT(qml.textDocument()->errorCount() == 0, 60000);
+    servers.remove(&qml);
+    host->disconnectFromHost();
+}
+
 QTEST_MAIN(TestRemote)

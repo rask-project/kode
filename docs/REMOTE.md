@@ -695,6 +695,16 @@ trailing slash so it opens as one; named "name — host"). After a
 reconnection the folders are listed again, the watches sent again and the
 documents checked (A2–A4).
 
+Settings > Remote: the hosts (added there or by Connect to Server), each
+one's connection, the agent (installed on connecting, replaced when Kode
+changes: a daemon of the agent replaced is stopped), signing in with this
+Mac's key (`SshKey`: checked with `BatchMode`; Install Key makes
+`~/.ssh/id_ed25519` when there is none and adds it to the host's
+`authorized_keys`, the password asked as when connecting), and its language
+servers: folders searched first (`process/which {folders}`: clangd from Qt
+Creator's install, qmlls from a Qt under `/opt`), the host's PATH and each
+language's server found there (`LanguageServers::detectOnHost()`).
+
 Left for the real test (section 10's list): sessions resumed after a
 dropped connection (`initialize {session}`, `watch/since`,
 `process/list`: the language servers kept instead of started again — only
@@ -702,8 +712,7 @@ if starting them again proves slow on real projects), the daemon's log,
 measurements on a slow link (opening a large repository's tree, Find File
 on 100 000 files, an outside change's delay, saving 10 MB), then only if the
 numbers ask for them: compression of large transfers and saves as edits.
-Also: Settings > Language Servers per host and custom servers on a host;
-a folder's `.gitignore` in Find File.
+Also: custom servers on a host; a folder's `.gitignore` in Find File.
 
 ### Later (not planned now)
 
@@ -717,10 +726,14 @@ port forwarding.
 
 ## 10. The real test
 
-Nothing so far ran against a real SSH server (the tests run the same
-commands through a stand-in ssh and the agent on this Mac; CI builds and
-checks the Linux agents). To try, with the app CI uploads for the branch
-(the "Kode-<commit>" artifact: its Linux agents inside):
+`tst_remote`'s `worksOnARealHost` runs against a real host when one is
+named (`KODE_TEST_HOST`, `KODE_TEST_FOLDER`, `KODE_TEST_AGENTS`,
+`KODE_TEST_SERVER_FOLDERS`; skipped otherwise): connecting and installing
+the agent, a save read back, the servers found in the host's folders,
+clangd's and qmlls's errors and their fixes. It passes on KDE neon 24.04
+(x86_64) with clangd from Qt Creator and qmlls from Qt 6.11. By hand, with
+the app CI uploads for the branch (the "Kode-<commit>" artifact: its Linux
+agents inside):
 
 1. File > Connect to Server… (⇧⌘K): a host of `~/.ssh/config`. The first
    time the agent is installed (`~/.cache/kode/remote/<version>`); a
@@ -731,7 +744,8 @@ checks the Linux agents). To try, with the app CI uploads for the branch
 3. Open a file, edit, save; change it on the host meanwhile and save
    again: "changed on disk" (Keep Mine saves over it).
 4. ⌘K over the folder; a C++ or Python file with clangd or pyright
-   installed on the host: diagnostics, completion, F2.
+   installed on the host: diagnostics, completion, F2. Settings > Remote
+   shows what the host has; a server outside its PATH goes in its folders.
 5. Drop the network a moment (or `kill` the agent's daemon on the host):
    the footer shows the host offline, then it comes back by itself.
 

@@ -127,8 +127,36 @@ QString installCommand(const QString &version)
         folder + QStringLiteral("/kode-remote.tmp && chmod 700 ") + folder +
         QStringLiteral("/kode-remote.tmp && mv -f ") + folder + QStringLiteral("/kode-remote.tmp ") + folder +
         QStringLiteral("/kode-remote && for o in ") + root + QStringLiteral("/*; do [ \"$o\" = ") + folder +
-        QStringLiteral(" ] || rm -rf \"$o\"; done; h ") + folder + QStringLiteral("/kode-remote")
+        QStringLiteral(" ] || rm -rf \"$o\"; done; pkill -u \"$(id -u)\" -f ") + folder +
+        // A daemon of the agent replaced (a build of the same version) would go on serving.
+        QStringLiteral("/kode-remote' daemon' 2>/dev/null; h ") + folder + QStringLiteral("/kode-remote")
     );
+}
+
+QString keyInstallCommand()
+{
+    return shell(QStringLiteral(
+        "umask 077 && mkdir -p \"$HOME/.ssh\" && touch \"$HOME/.ssh/authorized_keys\" && IFS= read -r k && "
+        "{ grep -qxF \"$k\" \"$HOME/.ssh/authorized_keys\" || printf '%s\\n' \"$k\" >> "
+        "\"$HOME/.ssh/authorized_keys\"; }"
+    ));
+}
+
+QStringList keyCheckArguments(const QString &destination)
+{
+    return {
+        QStringLiteral("-o"),
+        QStringLiteral("BatchMode=yes"),
+        QStringLiteral("-o"),
+        QStringLiteral("ControlPath=none"),
+        QStringLiteral("-o"),
+        QStringLiteral("PreferredAuthentications=publickey"),
+        QStringLiteral("-o"),
+        QStringLiteral("ConnectTimeout=10"),
+        QStringLiteral("--"),
+        destination,
+        QStringLiteral("true"),
+    };
 }
 
 QString bridgeCommand(const QString &home, const QString &version)

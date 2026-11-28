@@ -20,6 +20,8 @@ Popup {
     readonly property bool online: root.host !== null && root.host.state === Host.Online
 
     function connectHost() {
+        // Listed in Settings > Remote from now on.
+        Preferences.addRemoteHost(hostField.editText);
         root.host = Hosts.host(hostField.editText);
         root.host.connectToHost();
     }

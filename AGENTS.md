@@ -285,7 +285,7 @@ Guidance for AI agents working in this repository.
     against the expected version, mode, owner and links kept —, `fs/create`,
     `fs/rename`, `fs/copy`, `fs/remove`, `fs/trash`; `Watch`: `watch/set`,
     `watch/changed` pushed, inotify/kqueue; `Search`: `search/files` on a
-    channel; `Process`: `process/which` on the login shell's PATH,
+    channel; `Process`: `process/which` in the folders given, then on the login shell's PATH (told back),
     `process/spawn` with stdin/stdout on channels, `process/signal`,
     `process/exited`), `Hooks` (a service's way to the loop, timers and
     notifications), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
@@ -312,7 +312,9 @@ Guidance for AI agents working in this repository.
   bridge; states, retried with backoff once online; `whenOnline()`),
   `Hosts` (QML singleton, `shared()` for C++: a `Host` per destination or
   ssh:// URL, the askpass socket and its prompts,
-  one at a time). `ConnectToServer.qml` — File > Connect to Server… (⇧⌘K).
+  one at a time), `SshKey` (signing in with this Mac's key: checked, or
+  made and added to the host's `authorized_keys`). `ConnectToServer.qml` —
+  File > Connect to Server… (⇧⌘K), which adds the host to Settings > Remote.
   `Kode.app` bundles the agents in `Contents/Resources/remote/<os>-<arch>`
   (this Mac's, and those in `KODE_REMOTE_AGENTS_DIR`).
 - `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
@@ -351,7 +353,12 @@ Guidance for AI agents working in this repository.
   (your folders: Add Folder…, a typed path, Remove; then the shell's PATH,
   a disclosure group), custom servers (a syntax from `Syntaxes.all`, a
   command, a language id; Remove), each language's server found or its
-  install command (press and hold to copy; Detect Again).
+  install command (press and hold to copy; Detect Again). Remote: the hosts
+  (`Preferences.remoteHosts`), the one selected's connection, agent and
+  sign-in (`SshKey`, Install Key), its folders searched for language
+  servers before its PATH (`Preferences.remoteServerFolders`, bound to
+  `LanguageServers.hostFolders`) and the servers found there
+  (`detectOnHost()`, automatic once it is online).
 - `bin/kode` — the `kode` command, as VS Code's `code` (bundled in
   `Contents/Resources/bin`, linked into `/usr/local/bin` from Settings):
   `open -a` for existing paths (the running Kode, no second instance), a
@@ -550,7 +557,8 @@ Guidance for AI agents working in this repository.
   moving with edits), and with clangd installed real round trips: an
   error, a member completed, a type styled, a missing ';' fixed),
   `tst_remote` (frames; Kode and a locally built `kode-remote` over stdio,
-  and through the bridge and daemon), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
+  and through the bridge and daemon; `worksOnARealHost` against a real host
+  named by `KODE_TEST_HOST`…, skipped without one), `tst_splits` with stand-in views, `OpenDocuments` and `DocumentHistory`), run offscreen with
   `ctest`; the sources under test are compiled into each test.
 - `cmake/` — `Info.plist.in`, `FinderKeys.plist.in` (the document types
   — the "Code" (Make Default) and "Text" lists and imported types shared with Konsoll's Neovim, so both

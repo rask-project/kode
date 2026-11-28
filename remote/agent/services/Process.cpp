@@ -161,16 +161,19 @@ const std::vector<std::string> &Process::path()
     return m_path;
 }
 
-std::string Process::find(const std::string &name)
+std::string Process::find(const std::string &name, const std::vector<std::string> &folders)
 {
     if (name.find('/') != std::string::npos) {
         return executable(name) ? name : std::string{};
     }
-    const std::vector<std::string> &folders{path()};
-    const auto found{std::ranges::find_if(folders, [&name](const std::string &folder) {
-        return executable(folder + "/" + name);
-    })};
-    return found == folders.end() ? std::string{} : *found + "/" + name;
+    const auto in{[&name](const std::vector<std::string> &list) {
+        const auto found{std::ranges::find_if(list, [&name](const std::string &folder) {
+            return executable(folder + "/" + name);
+        })};
+        return found == list.end() ? std::string{} : *found + "/" + name;
+    }};
+    const std::string first{in(folders)};
+    return first.empty() ? in(path()) : first;
 }
 
 void Process::which(yyjson_val *params, Reply reply)
@@ -180,23 +183,38 @@ void Process::which(yyjson_val *params, Reply reply)
         reply.error(error::invalidParams, "names: a list of program names is expected.");
         return;
     }
-    yyjson_mut_doc *const doc{reply.doc()};
-    yyjson_mut_val *const found{yyjson_mut_obj(doc)};
+    const char *const home{std::getenv("HOME")};
+    std::vector<std::string> folders;
     std::size_t index{0U};
     std::size_t count{0U};
     yyjson_val *value{nullptr};
+    yyjson_arr_foreach(yyjson_obj_get(params, "folders"), index, count, value)
+    {
+        if (!yyjson_is_str(value)) {
+            continue;
+        }
+        const std::string folder{yyjson_get_str(value)};
+        folders.emplace_back(folder.starts_with("~/") && home != nullptr ? home + folder.substr(1) : folder);
+    }
+    yyjson_mut_doc *const doc{reply.doc()};
+    yyjson_mut_val *const found{yyjson_mut_obj(doc)};
     yyjson_arr_foreach(names, index, count, value)
     {
         if (!yyjson_is_str(value)) {
             continue;
         }
         const std::string name{yyjson_get_str(value)};
-        if (const std::string at{find(name)}; !at.empty()) {
+        if (const std::string at{find(name, folders)}; !at.empty()) {
             yyjson_mut_obj_add(found, yyjson_mut_strcpy(doc, name.c_str()), yyjson_mut_strcpy(doc, at.c_str()));
         }
     }
+    yyjson_mut_val *const searched{yyjson_mut_arr(doc)};
+    std::ranges::for_each(path(), [doc, searched](const std::string &folder) {
+        yyjson_mut_arr_add_strcpy(doc, searched, folder.c_str());
+    });
     yyjson_mut_val *const result{yyjson_mut_obj(doc)};
     yyjson_mut_obj_add_val(doc, result, "found", found);
+    yyjson_mut_obj_add_val(doc, result, "path", searched);
     reply.result(result);
 }
 

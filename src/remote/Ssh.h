@@ -41,6 +41,13 @@ arguments(const QString &destination, const QString &controlFolder, const QStrin
 // Runs the installed agent's bridge.
 [[nodiscard]] QString bridgeCommand(const QString &home, const QString &version);
 
+// Adds the public key arriving on stdin (one line) to ~/.ssh/authorized_keys,
+// unless it is there (folders and file the user's only).
+[[nodiscard]] QString keyInstallCommand();
+// ssh's arguments for checking that `destination` takes a key: no password
+// asked, no master connection reused.
+[[nodiscard]] QStringList keyCheckArguments(const QString &destination);
+
 struct Probe {
     // "linux", "darwin"…
     QString os;

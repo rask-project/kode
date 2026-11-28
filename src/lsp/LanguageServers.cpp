@@ -142,6 +142,20 @@ constexpr std::array serverGroups{
     ServerGroup{.languages = "TOML"_L1, .servers = toml, .install = "brew install taplo"_L1},
 };
 
+// The programs a group (or groups) looks for, each once.
+QStringList programNames(std::span<const ServerGroup> groups)
+{
+    QStringList names;
+    for (const ServerGroup &group : groups) {
+        std::ranges::for_each(group.servers, [&names](const Candidate &candidate) {
+            if (!names.contains(QString{candidate.program})) {
+                names.append(QString{candidate.program});
+            }
+        });
+    }
+    return names;
+}
+
 // C and the like: a header and its source.
 constexpr std::array headerSuffixes{"h"_L1, "hh"_L1, "hpp"_L1, "hxx"_L1, "h++"_L1};
 constexpr std::array sourceSuffixes{"c"_L1, "cc"_L1, "cpp"_L1, "cxx"_L1, "c++"_L1, "m"_L1, "mm"_L1};
@@ -373,7 +387,13 @@ LanguageServers::LanguageServers(QObject *parent) : QObject(parent)
     m_shellTimeout.start(shellTimeoutMs);
 }
 
-LanguageServers::~LanguageServers() = default;
+LanguageServers::~LanguageServers()
+{
+    // Killed as a member, the shell would end into readShellPath() over members already gone.
+    m_shell.disconnect(this);
+    m_shell.kill();
+    m_shell.waitForFinished();
+}
 
 void LanguageServers::readShellPath()
 {
@@ -424,6 +444,79 @@ void LanguageServers::setSearchFolders(const QStringList &folders)
     m_searchFolders = folders;
     emit settingsChanged();
     restart();
+}
+
+void LanguageServers::setHostFolders(const QVariantMap &folders)
+{
+    if (folders == m_hostFolders) {
+        return;
+    }
+    m_hostFolders = folders;
+    emit settingsChanged();
+    restart();
+}
+
+QStringList LanguageServers::foldersOn(const QString &destination) const
+{
+    return m_hostFolders.value(destination).toStringList();
+}
+
+void LanguageServers::detectOnHost(const QString &destination)
+{
+    remote::Host *const host{remote::Hosts::shared().host(destination)};
+    if (host == nullptr) {
+        return;
+    }
+    const QStringList names{programNames(serverGroups)};
+    m_flags |= DetectingOnHost;
+    m_hostServersDestination = destination;
+    m_hostServers.clear();
+    m_hostPath.clear();
+    emit hostServersChanged();
+    const QPointer<LanguageServers> self{this};
+    const QStringList folders{foldersOn(destination)};
+    host->whenOnline(this, [self, destination, names, folders](auto connection) {
+        if (self == nullptr) {
+            return;
+        }
+        if (!connection) {
+            self->hostServersFound(destination, {});
+            return;
+        }
+        connection->get().request(
+            u"process/which"_s,
+            {{u"names"_s, QJsonArray::fromStringList(names)}, {u"folders"_s, QJsonArray::fromStringList(folders)}},
+            [self, destination](const remote::Connection::Result &which) {
+                if (self != nullptr) {
+                    self->hostServersFound(destination, which ? which->toObject() : QJsonObject{});
+                }
+            }
+        );
+    });
+}
+
+void LanguageServers::hostServersFound(const QString &destination, const QJsonObject &result)
+{
+    if (destination != m_hostServersDestination) {
+        return;
+    }
+    m_flags &= ~DetectingOnHost;
+    const QJsonObject found{result.value(u"found"_s).toObject()};
+    m_hostServers.clear();
+    for (const ServerGroup &group : serverGroups) {
+        const QStringList names{programNames(std::span{&group, 1})};
+        const auto first{std::ranges::find_if(names, [&found](const QString &name) { return found.contains(name); })};
+        m_hostServers.append(QVariantMap{
+            {u"languages"_s, QString{group.languages}},
+            {u"path"_s, first == names.cend() ? QString{} : found.value(*first).toString()},
+            {u"servers"_s, names.join(u", "_s)},
+        });
+    }
+    m_hostPath.clear();
+    std::ranges::for_each(result.value(u"path"_s).toArray(), [this](const QJsonValue &folder) {
+        m_hostPath.append(folder.toString());
+    });
+    emit hostServersChanged();
 }
 
 void LanguageServers::setClangdThreads(qint32 threads)
@@ -897,14 +990,15 @@ void LanguageServers::bindRemote(Entry &entry)
     const QPointer<LanguageServers> self{this};
     const QPointer<const Document> pointer{document};
     const QString destination{host->destination()};
-    host->whenOnline(this, [self, pointer, names, path, destination](auto connection) {
+    const QStringList folders{foldersOn(destination)};
+    host->whenOnline(this, [self, pointer, names, path, destination, folders](auto connection) {
         if (!connection || pointer == nullptr) {
             return;
         }
         remote::Connection &link{connection->get()};
         link.request(
             u"process/which"_s,
-            {{u"names"_s, QJsonArray::fromStringList(names)}},
+            {{u"names"_s, QJsonArray::fromStringList(names)}, {u"folders"_s, QJsonArray::fromStringList(folders)}},
             [self, pointer, path, destination, &link](const remote::Connection::Result &which) {
                 if (self == nullptr || pointer == nullptr || !which) {
                     return;
