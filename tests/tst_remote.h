@@ -65,5 +65,21 @@ private slots:
     void reloadsARemoteChange();
     // A file that does not exist yet: empty, written (with its folders) when saved.
     void startsAMissingRemoteFile();
+
+    // watch over serve: a watched folder's new entry, a watched file
+    // changed in place and replaced by renaming, each told.
+    void tellsWatchedChanges();
+    // search/files: the folder's files, .git, build, node_modules, hidden
+    // ones and links to folders left out.
+    void listsFilesToFind();
+    // fs/create, fs/rename, fs/copy (a folder with what it holds),
+    // fs/remove, fs/trash (to ~/.Trash on macOS); a name taken refused.
+    void makesTheSidebarsOperations();
+    // FileTree over a host's folder: its entries; a new file and a rename
+    // shown at once and made there; a file made elsewhere shows (watched);
+    // Move to Trash.
+    void showsARemoteFolder();
+    // FileSearch over a host's folder.
+    void findsRemoteFiles();
     void cleanup();
 };

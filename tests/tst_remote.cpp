@@ -3,6 +3,8 @@
 #include "../remote/protocol/Frame.h"
 #include "../remote/protocol/Methods.h"
 #include "Document.h"
+#include "FileSearch.h"
+#include "FileTree.h"
 #include "TextDocument.h"
 #include "remote/Connection.h"
 #include "remote/Files.h"
@@ -878,6 +880,251 @@ void TestRemote::startsAMissingRemoteFile()
     QVERIFY(document.save());
     QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
     QCOMPARE(contentsOf(host.path(QStringLiteral("new/folder/notes.md"))), QByteArray{"# Notes\n"});
+}
+
+namespace
+{
+
+Connection::Result askWith(Connection &connection, const QString &method, const QJsonObject &params)
+{
+    std::optional<Connection::Result> answer;
+    connection.request(method, params, [&answer](const Connection::Result &result) { answer = result; });
+    return waitFor(answer).value_or(
+        std::unexpected{kode::remote::Error{.message = QStringLiteral("no answer"), .data = {}, .code = 0}}
+    );
+}
+
+void touchFile(const QString &path, const QByteArray &bytes)
+{
+    QDir{}.mkpath(QFileInfo{path}.path());
+    QFile file{path};
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(bytes);
+    }
+}
+
+// The paths told changed since `from`.
+QStringList toldPaths(const QSignalSpy &told, qsizetype from = 0)
+{
+    QStringList paths;
+    for (qsizetype i{from}; i < told.count(); ++i) {
+        if (told.at(i).at(0).toString() != QLatin1String("watch/changed")) {
+            continue;
+        }
+        const QJsonArray list(told.at(i).at(1).value<QJsonValue>().toObject().value(QStringLiteral("paths")).toArray());
+        std::ranges::for_each(list, [&paths](const QJsonValue &path) { paths.append(path.toString()); });
+    }
+    return paths;
+}
+
+} // namespace
+
+void TestRemote::tellsWatchedChanges()
+{
+    QTemporaryDir temporary;
+    // The real path: the agent reports what it watches.
+    const QString folder{QFileInfo{temporary.path()}.canonicalFilePath()};
+    const QString file{folder + QStringLiteral("/watched.txt")};
+    touchFile(file, "one\n");
+    const auto connection{serving()};
+    QSignalSpy told{connection.get(), &Connection::notified};
+    QVERIFY(askWith(*connection, QStringLiteral("watch/set"), {{QStringLiteral("paths"), QJsonArray{folder, file}}})
+                .has_value());
+    QVERIFY(!connection->agent()
+                 .value(QStringLiteral("capabilities"))
+                 .toObject()
+                 .value(QStringLiteral("watch"))
+                 .toArray()
+                 .isEmpty());
+
+    touchFile(folder + QStringLiteral("/new.txt"), "x");
+    QTRY_VERIFY_WITH_TIMEOUT(toldPaths(told).contains(folder), 5000);
+
+    qsizetype mark{told.count()};
+    QFile inPlace{file};
+    QVERIFY(inPlace.open(QIODevice::Append));
+    inPlace.write("two\n");
+    inPlace.close();
+    QTRY_VERIFY_WITH_TIMEOUT(toldPaths(told, mark).contains(file), 5000);
+
+    // Replaced by renaming (as editors save): still watched.
+    mark = told.count();
+    touchFile(folder + QStringLiteral("/.watched.tmp"), "three\n");
+    QVERIFY(::rename((folder + QStringLiteral("/.watched.tmp")).toUtf8().constData(), file.toUtf8().constData()) == 0);
+    QTRY_VERIFY_WITH_TIMEOUT(toldPaths(told, mark).contains(file), 5000);
+    mark = told.count();
+    QFile again{file};
+    QVERIFY(again.open(QIODevice::Append));
+    again.write("four\n");
+    again.close();
+    QTRY_VERIFY_WITH_TIMEOUT(toldPaths(told, mark).contains(file), 5000);
+
+    // No longer watched: not told.
+    QVERIFY(askWith(*connection, QStringLiteral("watch/set"), {{QStringLiteral("paths"), QJsonArray{}}}).has_value());
+    mark = told.count();
+    touchFile(folder + QStringLiteral("/later.txt"), "x");
+    QTest::qWait(300);
+    QVERIFY(toldPaths(told, mark).isEmpty());
+}
+
+void TestRemote::listsFilesToFind()
+{
+    QTemporaryDir folder;
+    for (const QString &name :
+         {QStringLiteral("src/main.cpp"),
+          QStringLiteral("src/deep/a.h"),
+          QStringLiteral("README.md"),
+          QStringLiteral(".git/config"),
+          QStringLiteral("build/out.o"),
+          QStringLiteral("cmake-build-debug/x"),
+          QStringLiteral("node_modules/m/index.js"),
+          QStringLiteral(".hidden")}) {
+        touchFile(folder.filePath(name), "x");
+    }
+    QVERIFY(QFile::link(folder.filePath(QStringLiteral("src")), folder.filePath(QStringLiteral("to-src"))));
+    QVERIFY(QFile::link(folder.filePath(QStringLiteral("README.md")), folder.filePath(QStringLiteral("readme-link"))));
+    const auto connection{serving()};
+    std::optional<QByteArray> listed;
+    Connection *const link{connection.get()};
+    // The channel's bytes follow the answer at once: taken in its handler.
+    connection->request(
+        QStringLiteral("search/files"),
+        {{QStringLiteral("path"), folder.path()}},
+        [link, &listed](const Connection::Result &result) {
+            QVERIFY(result.has_value());
+            link->receive(
+                static_cast<quint32>(result->toObject().value(QStringLiteral("channel")).toInteger()),
+                [&listed, bytes = QByteArray{}](QByteArrayView piece, kode::remote::ChannelEnd end) mutable {
+                    if (end == kode::remote::ChannelEnd::More) {
+                        bytes.append(piece);
+                    } else {
+                        listed = bytes;
+                    }
+                }
+            );
+        }
+    );
+    QTRY_VERIFY(listed.has_value());
+    QStringList files{QString::fromUtf8(*listed).split(u'\n', Qt::SkipEmptyParts)};
+    files.sort();
+    QCOMPARE(
+        files,
+        (QStringList{
+            QStringLiteral("README.md"),
+            QStringLiteral("readme-link"),
+            QStringLiteral("src/deep/a.h"),
+            QStringLiteral("src/main.cpp")
+        })
+    );
+}
+
+void TestRemote::makesTheSidebarsOperations()
+{
+    QTemporaryDir folder;
+    const QString home{folder.filePath(QStringLiteral("home"))};
+    QDir{}.mkpath(home);
+    auto connection{std::make_unique<Connection>()};
+    QProcessEnvironment environment{QProcessEnvironment::systemEnvironment()};
+    environment.insert(QStringLiteral("HOME"), home);
+    connection->setEnvironment(environment);
+    connection->start(agentPath, {QStringLiteral("serve")});
+    const QString file{folder.filePath(QStringLiteral("a.txt"))};
+    QVERIFY(askWith(*connection, QStringLiteral("fs/create"), {{QStringLiteral("path"), file}}).has_value());
+    QVERIFY(QFileInfo::exists(file));
+    const auto taken{askWith(*connection, QStringLiteral("fs/create"), {{QStringLiteral("path"), file}})};
+    QVERIFY(!taken.has_value());
+    QCOMPARE(taken.error().code, kode::remote::error::exists);
+    const QString sub{folder.filePath(QStringLiteral("sub"))};
+    QVERIFY(askWith(
+                *connection,
+                QStringLiteral("fs/create"),
+                {{QStringLiteral("path"), sub}, {QStringLiteral("folder"), true}}
+    ).has_value());
+    touchFile(sub + QStringLiteral("/inner/deep.txt"), "deep");
+    QVERIFY(askWith(
+                *connection,
+                QStringLiteral("fs/copy"),
+                {{QStringLiteral("from"), sub}, {QStringLiteral("to"), sub + QStringLiteral(" copy")}}
+    ).has_value());
+    QCOMPARE(contentsOf(sub + QStringLiteral(" copy/inner/deep.txt")), QByteArray{"deep"});
+    const auto renamedOver{
+        askWith(*connection, QStringLiteral("fs/rename"), {{QStringLiteral("from"), file}, {QStringLiteral("to"), sub}})
+    };
+    QVERIFY(!renamedOver.has_value());
+    QCOMPARE(renamedOver.error().code, kode::remote::error::exists);
+    QVERIFY(askWith(
+                *connection,
+                QStringLiteral("fs/rename"),
+                {{QStringLiteral("from"), file}, {QStringLiteral("to"), sub + QStringLiteral("/b.txt")}}
+    ).has_value());
+    QVERIFY(QFileInfo::exists(sub + QStringLiteral("/b.txt")));
+    QVERIFY(askWith(*connection, QStringLiteral("fs/remove"), {{QStringLiteral("path"), sub + QStringLiteral(" copy")}})
+                .has_value());
+    QVERIFY(!QFileInfo::exists(sub + QStringLiteral(" copy")));
+    // The Trash is on another disk than a temporary folder on some Macs: then it says so.
+    const auto trashed{askWith(*connection, QStringLiteral("fs/trash"), {{QStringLiteral("path"), sub}})};
+    if (trashed) {
+        QVERIFY(QFileInfo::exists(home + QStringLiteral("/.Trash/sub/b.txt")));
+        QVERIFY(!QFileInfo::exists(sub));
+    } else {
+        QVERIFY2(trashed.error().message.contains(QStringLiteral("another disk")), qPrintable(trashed.error().message));
+    }
+}
+
+void TestRemote::showsARemoteFolder()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("project/main.cpp"), "int main() {}\n");
+    host.write(QStringLiteral("project/src/a.h"), "#pragma once\n");
+    const QString root{host.path(QStringLiteral("project"))};
+    kode::FileTree tree;
+    tree.setFolder(host.url(QStringLiteral("project")));
+    QVERIFY(tree.remote());
+    QTRY_COMPARE_WITH_TIMEOUT(tree.rowCount(tree.rootIndex()), 2, 10000);
+    // Folders first.
+    QCOMPARE(tree.index(0, 0, tree.rootIndex()).data().toString(), QStringLiteral("src"));
+    QVERIFY(tree.index(0, 0, tree.rootIndex()).data(kode::FileTree::IsFolderRole).toBool());
+    QCOMPARE(tree.index(1, 0, tree.rootIndex()).data().toString(), QStringLiteral("main.cpp"));
+    QCOMPARE(
+        tree.index(1, 0, tree.rootIndex()).data(kode::FileTree::FileUrlRole).toUrl(),
+        host.url(QStringLiteral("project/main.cpp"))
+    );
+
+    const QUrl made{tree.createFile(host.url(QStringLiteral("project")))};
+    QCOMPARE(made.fileName(), QStringLiteral("untitled"));
+    QCOMPARE(tree.rowCount(tree.rootIndex()), 3);
+    QTRY_VERIFY_WITH_TIMEOUT(QFileInfo::exists(root + QStringLiteral("/untitled")), 10000);
+    QSignalSpy moved{&tree, &kode::FileTree::moved};
+    const QUrl renamed{tree.rename(made, QStringLiteral("notes.md"))};
+    QCOMPARE(renamed.fileName(), QStringLiteral("notes.md"));
+    QTRY_COMPARE_WITH_TIMEOUT(moved.count(), 1, 10000);
+    QVERIFY(QFileInfo::exists(root + QStringLiteral("/notes.md")));
+    QVERIFY(!QFileInfo::exists(root + QStringLiteral("/untitled")));
+
+    // Made elsewhere: the watched folder shows it.
+    host.write(QStringLiteral("project/later.txt"), "x");
+    QTRY_COMPARE_WITH_TIMEOUT(tree.rowCount(tree.rootIndex()), 4, 10000);
+
+    // A folder's entries, as it is expanded.
+    const QModelIndex src{tree.index(0, 0, tree.rootIndex())};
+    QVERIFY(tree.canFetchMore(src));
+    tree.fetchMore(src);
+    QTRY_COMPARE_WITH_TIMEOUT(tree.rowCount(src), 1, 10000);
+    QVERIFY(tree.indexOf(host.url(QStringLiteral("project/src/a.h"))).isValid());
+}
+
+void TestRemote::findsRemoteFiles()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("project/src/EditorView.cpp"), "x");
+    host.write(QStringLiteral("project/src/other.txt"), "x");
+    host.write(QStringLiteral("project/build/EditorView.o"), "x");
+    kode::FileSearch search;
+    search.setFolder(host.url(QStringLiteral("project")));
+    search.setQuery(QStringLiteral("ev"));
+    search.setActive(true);
+    QTRY_COMPARE_WITH_TIMEOUT(search.count(), 1, 10000);
+    QCOMPARE(search.fileAt(0), host.url(QStringLiteral("project/src/EditorView.cpp")));
 }
 
 QTEST_MAIN(TestRemote)

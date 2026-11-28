@@ -35,6 +35,8 @@ public:
 
     // Sends a JSON-RPC message to the session, if it is still there.
     void send(std::uint64_t session, std::string_view message);
+    // For services that wait on the system (watch).
+    [[nodiscard]] Hooks hooks();
 
 private:
     void open(Fd input, Fd output);

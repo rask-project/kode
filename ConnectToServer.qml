@@ -11,7 +11,7 @@ import Kode
 // File > Connect to Server…: a host from ~/.ssh/config, or typed as ssh
 // takes it, reached over SSH (Hosts); where it stands below, and once
 // online its files (RemoteFolder): a double click enters a folder or opens
-// a file in `window`.
+// a file in `window`; Open Folder makes the folder in view the window's.
 Popup {
     id: root
 
@@ -151,6 +151,14 @@ Popup {
                 text: connected ? qsTr("Disconnect") : qsTr("Connect")
                 highlighted: !root.online
                 onClicked: connected ? root.host.disconnectFromHost() : root.connectHost()
+            }
+            Button {
+                visible: root.online
+                text: qsTr("Open Folder")
+                onClicked: {
+                    root.window.app.openFolder(root.host.fileUrl(folderModel.folder), root.window);
+                    root.close();
+                }
             }
             Button {
                 visible: root.online

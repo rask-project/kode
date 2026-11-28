@@ -63,7 +63,12 @@ QImage FileIcons::requestImage(const QString &id, QSize *size, const QSize &requ
 {
     // Called from the image loading threads: a provider of its own each time.
     const QAbstractFileIconProvider provider;
-    const QIcon icon{provider.icon(QFileInfo{QLatin1Char('/') + QUrl::fromPercentEncoding(withoutVersion(id).toUtf8())})
+    const QStringView path{withoutVersion(id)};
+    // ":folder" and ":file" (no path has a bare ':'): an entry on a host, not on this Mac.
+    const QIcon icon{
+        path == u":folder" ? provider.icon(QAbstractFileIconProvider::Folder)
+        : path == u":file" ? provider.icon(QAbstractFileIconProvider::File)
+                           : provider.icon(QFileInfo{QLatin1Char('/') + QUrl::fromPercentEncoding(path.toUtf8())})
     };
     const QImage image{icon.pixmap(sideFor(requestedSize), 1.0).toImage()};
     if (size != nullptr) {

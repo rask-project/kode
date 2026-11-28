@@ -10,14 +10,17 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace kode::remote
 {
@@ -382,7 +385,323 @@ private:
     gid_t m_group{0};
 };
 
+std::optional<std::string> pathParam(yyjson_val *params, const char *key, Reply &reply)
+{
+    const std::optional<std::string_view> path{json::string(params, key)};
+    if (!path || !path->starts_with('/')) {
+        reply.error(error::invalidParams, std::string{key} + ": an absolute path is expected.");
+        return std::nullopt;
+    }
+    return std::string{*path};
+}
+
+bool exists(const std::string &path)
+{
+    struct stat info{};
+    return ::lstat(path.c_str(), &info) == 0;
+}
+
+void answerWithInfo(Reply &reply, const std::string &path)
+{
+    struct stat info{};
+    if (::lstat(path.c_str(), &info) != 0) {
+        failWithErrno(reply, "Cannot read " + path);
+        return;
+    }
+    yyjson_mut_val *const result{yyjson_mut_obj(reply.doc())};
+    yyjson_mut_obj_add_strcpy(reply.doc(), result, "path", path.c_str());
+    addInfo(reply.doc(), result, info);
+    reply.result(result);
+}
+
+bool copyBytes(const std::string &from, const std::string &to, mode_t mode)
+{
+    const Fd source{::open(from.c_str(), O_RDONLY | O_CLOEXEC)};
+    const Fd target{::open(to.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, mode)};
+    if (!source.valid() || !target.valid()) {
+        return false;
+    }
+    std::string chunk(std::size_t{64} * 1024U, '\0');
+    while (true) {
+        const ssize_t count{::read(source.get(), chunk.data(), chunk.size())};
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            return count == 0;
+        }
+        std::string_view bytes{chunk.data(), static_cast<std::size_t>(count)};
+        while (!bytes.empty()) {
+            const ssize_t written{::write(target.get(), bytes.data(), bytes.size())};
+            if (written < 0 && errno == EINTR) {
+                continue;
+            }
+            if (written <= 0) {
+                return false;
+            }
+            bytes.remove_prefix(static_cast<std::size_t>(written));
+        }
+    }
+}
+
+// One entry copied: a folder made, a link remade, a file's bytes and mode.
+bool copyEntry(const std::string &from, const std::string &to, const struct stat &info)
+{
+    if (S_ISDIR(info.st_mode)) {
+        return ::mkdir(to.c_str(), info.st_mode & 07777U) == 0;
+    }
+    if (S_ISLNK(info.st_mode)) {
+        std::array<char, PATH_MAX> target{};
+        const ssize_t length{::readlink(from.c_str(), target.data(), target.size() - 1U)};
+        return length >= 0 && ::symlink(target.data(), to.c_str()) == 0;
+    }
+    return copyBytes(from, to, info.st_mode & 07777U);
+}
+
+// `from` (a folder with all it holds) as `to`, walked without recursion.
+bool copyTree(const std::string &from, const std::string &to)
+{
+    std::vector<std::pair<std::string, std::string>> pending{{from, to}};
+    while (!pending.empty()) {
+        const auto [source, target]{pending.back()};
+        pending.pop_back();
+        struct stat info{};
+        if (::lstat(source.c_str(), &info) != 0 || !copyEntry(source, target, info)) {
+            return false;
+        }
+        if (!S_ISDIR(info.st_mode)) {
+            continue;
+        }
+        const Dir dir{::opendir(source.c_str())};
+        if (!dir) {
+            return false;
+        }
+        for (const dirent *entry{::readdir(dir.get())}; entry != nullptr; entry = ::readdir(dir.get())) {
+            const std::string_view name{static_cast<const char *>(entry->d_name)};
+            if (name != "." && name != "..") {
+                pending.emplace_back(source + "/" + std::string{name}, target + "/" + std::string{name});
+            }
+        }
+    }
+    return true;
+}
+
+// `path` and all it holds, deepest first, without recursion.
+bool removeTree(const std::string &path)
+{
+    std::vector<std::pair<std::string, bool>> pending{{path, false}};
+    while (!pending.empty()) {
+        auto [current, expanded]{pending.back()};
+        pending.pop_back();
+        struct stat info{};
+        if (::lstat(current.c_str(), &info) != 0) {
+            return false;
+        }
+        if (!S_ISDIR(info.st_mode)) {
+            if (::unlink(current.c_str()) != 0) {
+                return false;
+            }
+            continue;
+        }
+        if (expanded) {
+            if (::rmdir(current.c_str()) != 0) {
+                return false;
+            }
+            continue;
+        }
+        pending.emplace_back(current, true);
+        const Dir dir{::opendir(current.c_str())};
+        if (!dir) {
+            return false;
+        }
+        for (const dirent *entry{::readdir(dir.get())}; entry != nullptr; entry = ::readdir(dir.get())) {
+            const std::string_view name{static_cast<const char *>(entry->d_name)};
+            if (name != "." && name != "..") {
+                pending.emplace_back(current + "/" + std::string{name}, false);
+            }
+        }
+    }
+    return true;
+}
+
+// "name", then "name 2", "name 3"… until free in `folder` (the extension kept).
+std::string freeName(const std::string &folder, const std::string &name)
+{
+    const std::size_t dot{name.rfind('.')};
+    const std::string base{dot == std::string::npos || dot == 0U ? name : name.substr(0, dot)};
+    const std::string extension{dot == std::string::npos || dot == 0U ? std::string{} : name.substr(dot)};
+    const std::string prefix{folder + "/"};
+    std::string candidate{name};
+    for (std::int32_t number{2}; exists(prefix + candidate); ++number) {
+        candidate = base;
+        candidate.append(" ").append(std::to_string(number)).append(extension);
+    }
+    return candidate;
+}
+
+std::string percentEncoded(std::string_view path)
+{
+    constexpr std::string_view digits{"0123456789ABCDEF"};
+    std::string out;
+    std::ranges::for_each(path, [&out, digits](char c) {
+        const auto byte{static_cast<unsigned char>(c)};
+        const bool plain{
+            (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z') || (byte >= '0' && byte <= '9') ||
+            byte == '/' || byte == '-' || byte == '_' || byte == '.' || byte == '~'
+        };
+        if (plain) {
+            out.push_back(c);
+            return;
+        }
+        out.push_back('%');
+        out.push_back(digits[byte >> 4U]);
+        out.push_back(digits[byte & 0x0FU]);
+    });
+    return out;
+}
+
 } // namespace
+
+void Fs::create(yyjson_val *params, Reply reply)
+{
+    const std::optional<std::string> path{pathParam(params, "path", reply)};
+    if (!path) {
+        return;
+    }
+    const bool folder{yyjson_get_bool(yyjson_obj_get(params, "folder"))};
+    const bool made{
+        folder ? ::mkdir(path->c_str(), 0777) == 0
+               : Fd{::open(path->c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666)}.valid()
+    };
+    if (!made) {
+        if (errno == EEXIST) {
+            reply.error(error::exists, "The name is taken: " + *path);
+            return;
+        }
+        failWithErrno(reply, "Cannot create " + *path);
+        return;
+    }
+    answerWithInfo(reply, *path);
+}
+
+void Fs::rename(yyjson_val *params, Reply reply)
+{
+    const std::optional<std::string> from{pathParam(params, "from", reply)};
+    const std::optional<std::string> to{from ? pathParam(params, "to", reply) : std::nullopt};
+    if (!from || !to) {
+        return;
+    }
+    struct stat source{};
+    struct stat target{};
+    // A change of case only is the same entry on a case-insensitive disk.
+    const bool taken{
+        ::lstat(to->c_str(), &target) == 0 &&
+        (::lstat(from->c_str(), &source) != 0 || source.st_ino != target.st_ino || source.st_dev != target.st_dev)
+    };
+    if (taken) {
+        reply.error(error::exists, "The name is taken: " + *to);
+        return;
+    }
+    if (::rename(from->c_str(), to->c_str()) != 0) {
+        failWithErrno(reply, "Cannot move " + *from);
+        return;
+    }
+    answerWithInfo(reply, *to);
+}
+
+void Fs::copy(yyjson_val *params, Reply reply)
+{
+    const std::optional<std::string> from{pathParam(params, "from", reply)};
+    const std::optional<std::string> to{from ? pathParam(params, "to", reply) : std::nullopt};
+    if (!from || !to) {
+        return;
+    }
+    if (exists(*to)) {
+        reply.error(error::exists, "The name is taken: " + *to);
+        return;
+    }
+    if ((*to + "/").starts_with(*from + "/")) {
+        reply.error(error::invalidParams, *from + " cannot be copied into itself.");
+        return;
+    }
+    if (!copyTree(*from, *to)) {
+        failWithErrno(reply, "Cannot copy " + *from);
+        return;
+    }
+    answerWithInfo(reply, *to);
+}
+
+void Fs::remove(yyjson_val *params, Reply reply)
+{
+    const std::optional<std::string> path{pathParam(params, "path", reply)};
+    if (!path) {
+        return;
+    }
+    if (*path == "/" || !removeTree(*path)) {
+        failWithErrno(reply, "Cannot delete " + *path);
+        return;
+    }
+    reply.result(yyjson_mut_obj(reply.doc()));
+}
+
+void Fs::trash(yyjson_val *params, Reply reply)
+{
+    const std::optional<std::string> path{pathParam(params, "path", reply)};
+    if (!path) {
+        return;
+    }
+    const char *const home{std::getenv("HOME")};
+    if (home == nullptr) {
+        reply.error(error::failed, "No home folder for the Trash.");
+        return;
+    }
+    const std::string name{path->substr(path->rfind('/') + 1U)};
+#if defined(__APPLE__)
+    const std::string files{std::string{home} + "/.Trash"};
+    const std::string info;
+#else
+    const char *const data{std::getenv("XDG_DATA_HOME")};
+    const std::string trash{
+        (data != nullptr && *data != '\0' ? std::string{data} : std::string{home} + "/.local/share") + "/Trash"
+    };
+    const std::string files{trash + "/files"};
+    const std::string info{trash + "/info"};
+    ::mkdir(trash.c_str(), 0700);
+    ::mkdir(info.c_str(), 0700);
+#endif
+    ::mkdir(files.c_str(), 0700);
+    const std::string free{freeName(files, name)};
+    if (!info.empty()) {
+        // freedesktop.org's Trash: where it came from, and when.
+        const std::time_t now{std::time(nullptr)};
+        std::array<char, 32> date{};
+        std::tm local{};
+        ::localtime_r(&now, &local);
+        std::strftime(date.data(), date.size(), "%Y-%m-%dT%H:%M:%S", &local);
+        const std::string record{
+            "[Trash Info]\nPath=" + percentEncoded(*path) + "\nDeletionDate=" + date.data() + "\n"
+        };
+        const Fd file{::open((info + "/" + free + ".trashinfo").c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600)
+        };
+        if (!file.valid() || ::write(file.get(), record.data(), record.size()) != static_cast<ssize_t>(record.size())) {
+            failWithErrno(reply, "Cannot move " + *path + " to the Trash");
+            return;
+        }
+    }
+    if (::rename(path->c_str(), (files + "/" + free).c_str()) != 0) {
+        const int number{errno};
+        if (!info.empty()) {
+            ::unlink((info + "/" + free + ".trashinfo").c_str());
+        }
+        errno = number;
+        failWithErrno(
+            reply,
+            number == EXDEV ? "The Trash is on another disk than " + *path : "Cannot move " + *path + " to the Trash"
+        );
+        return;
+    }
+    reply.result(yyjson_mut_obj(reply.doc()));
+}
 
 void Fs::handle(
     std::uint64_t session,
@@ -401,6 +720,16 @@ void Fs::handle(
         read(params, std::move(reply), channels);
     } else if (method == "write") {
         write(params, std::move(reply), channels);
+    } else if (method == "create") {
+        create(params, std::move(reply));
+    } else if (method == "rename") {
+        rename(params, std::move(reply));
+    } else if (method == "copy") {
+        copy(params, std::move(reply));
+    } else if (method == "remove") {
+        remove(params, std::move(reply));
+    } else if (method == "trash") {
+        trash(params, std::move(reply));
     } else {
         reply.error(error::methodNotFound, "No such method.");
     }

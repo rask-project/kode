@@ -49,6 +49,33 @@ Document::Document(QObject *parent) : QObject(parent)
     connect(&m_pollTimer, &QTimer::timeout, this, &Document::checkRemote);
 }
 
+Document::~Document()
+{
+    watchRemote({});
+}
+
+void Document::watchRemote(const QUrl &fileUrl)
+{
+    if (m_watching == fileUrl) {
+        return;
+    }
+    if (remote::Host *const old{remote::Hosts::shared().forUrl(m_watching)}) {
+        old->unwatch(m_watching.path());
+    }
+    disconnect(m_hostChanged);
+    m_watching = fileUrl;
+    remote::Host *const host{remote::Hosts::shared().forUrl(fileUrl)};
+    if (host == nullptr) {
+        return;
+    }
+    host->watch(fileUrl.path());
+    m_hostChanged = connect(host, &remote::Host::changed, this, [this](const QString &path) {
+        if (path == m_fileUrl.path()) {
+            checkRemote();
+        }
+    });
+}
+
 QString Document::fileName() const
 {
     if (!m_fileUrl.isEmpty()) {
@@ -130,9 +157,17 @@ void Document::watch()
             m_watcher.removePaths(watched);
         }
         m_fileSize = -1;
-        m_pollTimer.start();
+        watchRemote(m_fileUrl);
+        // Asked now and then only where the agent cannot push changes.
+        const remote::Host *const host{remote::Hosts::shared().forUrl(m_fileUrl)};
+        if (host != nullptr && host->canWatch()) {
+            m_pollTimer.stop();
+        } else {
+            m_pollTimer.start();
+        }
         return;
     }
+    watchRemote({});
     m_pollTimer.stop();
     const QString path{m_fileUrl.toLocalFile()};
     const QFileInfo info{path};

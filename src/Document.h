@@ -49,6 +49,8 @@ class Document : public QObject
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
 public:
     explicit Document(QObject *parent = nullptr);
+    ~Document() override;
+    Q_DISABLE_COPY_MOVE(Document)
 
     [[nodiscard]] TextDocument *textDocument() noexcept { return &m_text; }
     [[nodiscard]] QUrl fileUrl() const { return m_fileUrl; }
@@ -128,6 +130,8 @@ private:
     bool saveRemote(const QUrl &fileUrl);
     void remoteSaved(const QUrl &fileUrl, const std::expected<remote::files::Version, remote::Error> &result);
     void checkRemote();
+    // The remote file watched on its host (pushed changes), if any.
+    void watchRemote(const QUrl &fileUrl);
     [[nodiscard]] std::expected<QByteArray, QString> encoded(const QString &name) const;
     void setLoading(bool loading);
     [[nodiscard]] std::expected<void, QString> write(const QUrl &fileUrl) const;
@@ -147,6 +151,8 @@ private:
     // A remote file: the version read or written here, and the last one seen there.
     remote::files::Version m_remote;
     remote::files::Version m_remoteSeen;
+    QUrl m_watching;
+    QMetaObject::Connection m_hostChanged;
     // The file's version last read or written here.
     QDateTime m_fileModified;
     qint64 m_fileSize{-1};

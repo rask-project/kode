@@ -26,7 +26,8 @@ Item {
     // EditorWindow.state()), else one split with a new document (none in a
     // window opened on a folder: the start page).
     function openWindow(state: var): EditorWindow {
-        const folder = state && OpenDocuments.isFolder(state.folder ?? "") ? state.folder : "";
+        // A host's folder cannot be checked from here: kept.
+        const folder = state && (OpenDocuments.isFolder(state.folder ?? "") || OpenDocuments.isRemote(state.folder ?? "")) ? state.folder : "";
         const window = windowComponent.createObject(app, {
             folder: folder,
             sidebarVisible: folder !== "" && (state.sidebar ?? true),

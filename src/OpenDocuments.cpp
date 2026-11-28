@@ -134,19 +134,34 @@ Document *OpenDocuments::open(const QUrl &file)
 
 bool OpenDocuments::isFolder(const QUrl &url)
 {
+    // A host's folder is named with a trailing slash (`kode ssh://box/src/`): there is no asking it here.
+    if (url.scheme() == QLatin1String("ssh")) {
+        return url.path().endsWith(u'/');
+    }
     return url.isLocalFile() && QFileInfo{url.toLocalFile()}.isDir();
+}
+
+bool OpenDocuments::isRemote(const QUrl &url)
+{
+    return url.scheme() == QLatin1String("ssh");
 }
 
 void OpenDocuments::fileMoved(const QUrl &from, const QUrl &to)
 {
-    const QString fromPath{from.toLocalFile()};
-    const QString toPath{to.toLocalFile()};
+    // By path on the same machine (this Mac, or one host): file:// and ssh:// alike.
+    const QString fromPath{from.path()};
     for (const Pointer &document : m_documents) {
-        const QString path{document->fileUrl().toLocalFile()};
+        const QUrl url{document->fileUrl()};
+        if (url.isEmpty() || url.scheme() != from.scheme() || url.authority() != from.authority()) {
+            continue;
+        }
+        const QString path{url.path()};
         if (path == fromPath) {
             document->followMove(to);
         } else if (path.startsWith(fromPath + QLatin1Char('/'))) {
-            document->followMove(QUrl::fromLocalFile(toPath + path.mid(fromPath.size())));
+            QUrl moved{to};
+            moved.setPath(to.path() + path.mid(fromPath.size()));
+            document->followMove(moved);
         }
     }
     emit documentsChanged();
@@ -154,6 +169,13 @@ void OpenDocuments::fileMoved(const QUrl &from, const QUrl &to)
 
 QUrl OpenDocuments::cleanFolder(const QUrl &folder)
 {
+    if (isRemote(folder)) {
+        QUrl clean{folder};
+        clean.setPath(
+            folder.path().size() > 1 && folder.path().endsWith(u'/') ? folder.path().chopped(1) : folder.path()
+        );
+        return clean;
+    }
     if (!folder.isLocalFile()) {
         return folder;
     }
@@ -166,7 +188,8 @@ void OpenDocuments::restore(const QStringList &files)
 {
     for (const QString &file : files) {
         const QUrl url{file};
-        if (url.isLocalFile() && QFileInfo::exists(url.toLocalFile())) {
+        // A remote file is asked for: it opens if it is there (see Document).
+        if ((url.isLocalFile() && QFileInfo::exists(url.toLocalFile())) || url.scheme() == QLatin1String("ssh")) {
             open(url);
         }
     }
@@ -244,11 +267,16 @@ Document *OpenDocuments::other(const Document *document) const
 
 QVariantList OpenDocuments::documentsIn(const QUrl &url) const
 {
-    const QString root{url.toLocalFile()};
+    // By path on the same machine (this Mac, or one host).
+    const QString root{url.path()};
     std::vector<Document *> found;
     for (const Pointer &document : m_documents) {
-        const QString path{document->fileUrl().toLocalFile()};
-        if (!root.isEmpty() && (path == root || path.startsWith(root + QLatin1Char('/')))) {
+        const QUrl file{document->fileUrl()};
+        if (root.isEmpty() || file.isEmpty() || file.scheme() != url.scheme() || file.authority() != url.authority()) {
+            continue;
+        }
+        const QString path{file.path()};
+        if (path == root || path.startsWith(root + QLatin1Char('/'))) {
             found.emplace_back(document.get());
         }
     }

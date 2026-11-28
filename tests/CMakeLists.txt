@@ -42,6 +42,8 @@ set(remote_sources
     ../src/remote/Host.cpp
     ../src/remote/Hosts.h
     ../src/remote/Hosts.cpp
+    ../src/remote/RemoteTree.h
+    ../src/remote/RemoteTree.cpp
     ../src/remote/Ssh.h
     ../src/remote/Ssh.cpp
 )
@@ -221,9 +223,11 @@ qt_add_executable(tst_filetree
     ../src/FileOperations.cpp
     ../src/FileKinds.h
     ../src/FileKinds.cpp
+    ${remote_sources}
 )
 target_include_directories(tst_filetree PRIVATE ../src)
-target_link_libraries(tst_filetree PRIVATE Qt6::Gui Qt6::Qml Qt6::Test)
+target_link_libraries(tst_filetree PRIVATE Qt6::Gui Qt6::Network Qt6::Qml Qt6::Test)
+target_compile_definitions(tst_filetree PRIVATE KODE_VERSION="${KODE_DISPLAY_VERSION}")
 add_test(NAME tst_filetree COMMAND tst_filetree)
 set_tests_properties(tst_filetree PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -263,6 +267,14 @@ qt_add_executable(tst_remote
     tst_remote.cpp
     ../src/Document.h
     ../src/Document.cpp
+    ../src/FileTree.h
+    ../src/FileTree.cpp
+    ../src/FileSearch.h
+    ../src/FileSearch.cpp
+    ../src/FileOperations.h
+    ../src/FileOperations.cpp
+    ../src/FileKinds.h
+    ../src/FileKinds.cpp
     ../src/TextCodec.h
     ../src/TextCodec.cpp
     ${editor_sources}

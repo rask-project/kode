@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QtQmlIntegration/qqmlintegration.h>
 
+#include <QHash>
 #include <QList>
 #include <QPointer>
 #include <QUrl>
@@ -86,6 +87,13 @@ public:
     // connection, or why it failed or was disconnected. Not called once
     // `context` is gone; while offline it waits for the retries.
     void whenOnline(const QObject *context, Ready ready);
+
+    // Paths watched there (counted: each watch() wants its unwatch()), sent
+    // again after each reconnection; changed() tells of each change.
+    void watch(const QString &path);
+    void unwatch(const QString &path);
+    // The agent pushes changes (else documents ask now and then).
+    [[nodiscard]] bool canWatch() const;
     // Online: the session's connection; else none.
     [[nodiscard]] Connection *connection() const noexcept;
 
@@ -96,6 +104,8 @@ public:
 
 signals:
     void stateChanged();
+    // A watched path changed: a folder's entries, a file's bytes, or the file replaced.
+    void changed(const QString &path);
 
 private:
     void probe();
@@ -124,8 +134,13 @@ private:
     };
     void tellWaiting();
 
+    void sendWatches();
+
     std::unique_ptr<Connection> m_connection;
     QList<Waiting> m_waiting;
+    QHash<QString, qint64> m_watched;
+    // Collects watch()/unwatch() into one watch/set.
+    QTimer m_watchTimer;
     qint64 m_backoff{1};
     // A State; whether it was online once (a loss is retried).
     quint64 m_state{0U};

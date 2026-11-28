@@ -109,7 +109,8 @@ Guidance for AI agents working in this repository.
   only while the tree has the focus); text, icon
   and row sizes from `Preferences.sidebarSize`;
 - `src/FileTree.{h,cpp}` — `FileTree`: a `QSortFilterProxyModel` over a
-  `QFileSystemModel` (folders read in its thread, changes on disk
+  `QFileSystemModel` (a `remote::RemoteTree` for an ssh:// folder: `remote`,
+  its operations made on the host after showing) (folders read in its thread, changes on disk
   followed): the name column, folders first, names by `QCollator`
   (numeric), hidden files on request; `rootIndex` for the view and the
   roles `iconSource`, `isFolder`, `fileUrl`, `parentFolder`; the folder is
@@ -277,7 +278,10 @@ Guidance for AI agents working in this repository.
     `Channel.h` (`Source`/`Sink`: a channel's bytes either way, by credit),
     `Sha256`, `services/` (`System`: `system/ping`; `Fs`: `fs/stat`,
     `fs/list`, `fs/read` on a channel, `fs/write` from one — atomic, checked
-    against the expected version, mode, owner and links kept), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
+    against the expected version, mode, owner and links kept —, `fs/create`,
+    `fs/rename`, `fs/copy`, `fs/remove`, `fs/trash`; `Watch`: `watch/set`,
+    `watch/changed` pushed, inotify/kqueue; `Search`: `search/files` on a
+    channel), `Hooks` (a service's way to the loop and to notifications), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
     else `/tmp/kode-<uid>`, refused unless the user's only —, the socket, a
     peer's uid), `Bridge` (stdio ↔ the daemon's socket, starting it). Commands:
     `serve` (one session on stdio: the tests), `daemon [--idle s]`, `bridge`.
@@ -293,7 +297,8 @@ Guidance for AI agents working in this repository.
   with credit; anything broken from the agent ends it), `Files`
   (`remote::files`: read, write with the expected version, stat, list),
   `RemoteFolder` (a host's folder as a list model, for Connect to Server's
-  picker), `Ssh` (ssh's arguments: ControlMaster in
+  picker), `RemoteTree` (a host's folder as a tree for `FileTree`: listed
+  as expanded, watched, operations shown at once), `Ssh` (ssh's arguments: ControlMaster in
   `~/.ssh/kode`, no forwarding; the probe, install and bridge commands for
   `sh -c`; `~/.ssh/config`'s hosts), `Host` (probe, install by SHA-256,
   bridge; states, retried with backoff once online; `whenOnline()`),

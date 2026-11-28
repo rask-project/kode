@@ -4,6 +4,8 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonObject>
 
 namespace kode::remote
 {
@@ -40,6 +42,48 @@ Host::Host(const QString &destination, Setup setup, QObject *parent)
     });
     m_retry.setSingleShot(true);
     connect(&m_retry, &QTimer::timeout, this, &Host::connectToHost);
+    m_watchTimer.setSingleShot(true);
+    m_watchTimer.setInterval(0);
+    connect(&m_watchTimer, &QTimer::timeout, this, &Host::sendWatches);
+}
+
+void Host::watch(const QString &path)
+{
+    if (m_watched[path]++ == 0) {
+        m_watchTimer.start();
+    }
+}
+
+void Host::unwatch(const QString &path)
+{
+    const auto found{m_watched.find(path)};
+    if (found == m_watched.end() || --found.value() > 0) {
+        return;
+    }
+    m_watched.erase(found);
+    m_watchTimer.start();
+}
+
+bool Host::canWatch() const
+{
+    return state() == State::Online && !m_connection->agent()
+                                            .value(QStringLiteral("capabilities"))
+                                            .toObject()
+                                            .value(QStringLiteral("watch"))
+                                            .toArray()
+                                            .isEmpty();
+}
+
+void Host::sendWatches()
+{
+    if (state() != State::Online) {
+        return;
+    }
+    m_connection->request(
+        QStringLiteral("watch/set"),
+        {{QStringLiteral("paths"), QJsonArray::fromStringList(m_watched.keys())}},
+        [](const Connection::Result &) {}
+    );
 }
 
 Host::~Host()
@@ -261,6 +305,13 @@ void Host::startBridge()
     m_connection = std::make_unique<Connection>();
     m_connection->setEnvironment(m_setup.environment);
     connect(m_connection.get(), &Connection::stateChanged, this, &Host::connectionChanged);
+    connect(m_connection.get(), &Connection::notified, this, [this](const QString &method, const QJsonValue &params) {
+        if (method != QLatin1String("watch/changed")) {
+            return;
+        }
+        const QJsonArray paths(params.toObject().value(QStringLiteral("paths")).toArray());
+        std::ranges::for_each(paths, [this](const QJsonValue &path) { emit changed(path.toString()); });
+    });
     m_connection->start(
         m_setup.ssh,
         ssh::arguments(m_destination, m_setup.controlFolder, ssh::bridgeCommand(m_home, m_setup.version))
@@ -274,6 +325,8 @@ void Host::connectionChanged()
         m_wasOnline = 1U;
         m_backoff = 1;
         setState(State::Online);
+        // A new session: what is watched is told again.
+        sendWatches();
         return;
     case Connection::State::Closed:
         fail(m_connection->errorString());

@@ -481,7 +481,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 | A1 — Protocol and agent skeleton | ✅ |
 | A2 — Bootstrap and connection | ✅ |
 | A3 — Remote documents | ✅ |
-| A4 — Remote folders | ⬜ |
+| A4 — Remote folders | ✅ |
 | A5 — Remote language servers | ⬜ |
 | A6 — Resilience and measurements | ⬜ |
 
@@ -609,14 +609,45 @@ ones only) and the sidebar's host state. Not done: a test of a connection
 dropped mid-save (the save fails with `saveFailed()`, the document stays
 modified — the path is the same as any error's).
 
-### A4 — Remote folders
+### A4 — Remote folders ✅
 
-The `watch` and `search` services; `RemoteFileModel` under `FileTree`
-(listed on expand, kept current by the watch), the file operations and
-Trash, Find File over `search/files`, icons by type, sessions per remote
-folder, the host's state in the sidebar's footer. Tests: a folder changed
-on disk while watched (create, rename, remove, a burst coalesced), the
-inotify limit's fallback (in the Linux CI job).
+Done. The agent: `watch` (`watch/set`: a session's whole set of paths, the
+folders it shows and the files it has open; `watch/changed {paths}`
+pushed — inotify on Linux, a file through its folder so a file replaced by
+renaming is still seen; kqueue on macOS, a replaced file opened again;
+`Hooks` give a service the loop and notifications), `search/files` (the
+folder's files on a channel, one relative path a line, walked without
+recursion as Kode takes them: .git, build, cmake-build-*, node_modules,
+hidden ones and links to folders left out, at most 200 000), and `fs`'s
+`fs/create`, `fs/rename` (a name taken refused, a change of case allowed),
+`fs/copy` (a folder with what it holds), `fs/remove` and `fs/trash` (the
+freedesktop Trash on Linux, with its `.trashinfo`; `~/.Trash` on macOS;
+another disk is said so). Kode: `Host::watch()`/`unwatch()` (counted, one
+`watch/set` per change, sent again after a reconnection; `changed()`);
+`RemoteTree` (a host's folder as a tree: listed as expanded, watched once
+listed, listed again when told, after a reconnection, and when showing
+hidden files changes; `insert()`/`remove()`/`rename()` show an operation at
+once); `FileTree` over it for an ssh:// folder (`remote`): the same roles
+and operations for the sidebar, made on the host after showing (names
+chosen from the folder's listing; a failure reported and the folder listed
+again; documents follow a rename or move once it is done), paste within
+the host, Copy Path the host's path, Reveal in Finder off, the system's
+folder and file icons (`image://fileicon/:folder`, `:file`) or a code
+file's; `FileSearch` (Find File) over `search/files`, scored here, "~" the
+host's home; `Document` watched on its host (polled only where the agent
+cannot watch); the sidebar's footer shows the host while it is not online;
+Connect to Server…'s Open Folder makes a host's folder the window's
+(sessions keyed by its URL, its documents reopened); `kode
+ssh://host/folder/` (a trailing slash) opens a folder; `OpenDocuments`'
+`fileMoved()`/`documentsIn()` compare by machine and path (local and
+remote alike). Tests (`tst_remote`): watched changes told (a new entry,
+a file changed in place and replaced by renaming), files listed to find,
+the sidebar's operations, a `FileTree` over a host's folder (entries,
+a new file and a rename made there, a file made elsewhere shown, a
+folder expanded), Find File over a host.
+
+Moved to A6: Open Recent for remote folders and files (`RecentDocuments`
+keeps local ones only); folders' `.gitignore` in Find File.
 
 ### A5 — Remote language servers
 

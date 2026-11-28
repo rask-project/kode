@@ -50,7 +50,7 @@ public:
     // Made with `setup` when it is new (tests: a stand-in ssh).
     [[nodiscard]] Host *host(const QString &destination, Setup setup);
     // The host of an ssh:// URL; none for another URL.
-    [[nodiscard]] Host *forUrl(const QUrl &url);
+    Q_INVOKABLE [[nodiscard]] kode::remote::Host *forUrl(const QUrl &url);
     // The hosts named in ~/.ssh/config.
     Q_INVOKABLE [[nodiscard]] static QStringList configuredHosts();
     Q_INVOKABLE void answer(qint32 id, bool accepted, const QString &value);

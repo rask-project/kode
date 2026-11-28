@@ -1,10 +1,13 @@
 #include "FileSearch.h"
 
+#include "remote/Hosts.h"
+
 #include "FileTree.h"
 
 #include <QDir>
 #include <QFileInfo>
 #include <QFuture>
+#include <QPointer>
 #include <QPromise>
 #include <QThreadPool>
 
@@ -198,7 +201,7 @@ QUrl FileSearch::fileAt(qint32 row) const
     if (row < 0 || row >= m_matches.size()) {
         return {};
     }
-    return QUrl::fromLocalFile(m_folder.toLocalFile() + u'/' + m_files.at(m_matches.at(row)));
+    return urlOf(pathOf(m_files.at(m_matches.at(row))));
 }
 
 void FileSearch::list()
@@ -207,6 +210,10 @@ void FileSearch::list()
     if (!listing()) {
         m_flags |= Listing;
         emit listingChanged();
+    }
+    if (remote()) {
+        listRemote(generation);
+        return;
     }
     QPromise<QStringList> promise;
     QFuture<QStringList> future{promise.future()};
@@ -218,15 +225,99 @@ void FileSearch::list()
             promise.finish();
         }
     );
-    future.then(this, [this, generation](QStringList files) {
+    future.then(this, [this, generation](QStringList files) { listed(generation, std::move(files)); });
+}
+
+void FileSearch::listed(quint64 generation, QStringList files)
+{
+    if (generation != m_generation) {
+        return;
+    }
+    m_files = std::move(files);
+    m_flags &= ~Listing;
+    emit listingChanged();
+    filter();
+}
+
+void FileSearch::listRemote(quint64 generation)
+{
+    remote::Host *const host{remote::Hosts::shared().forUrl(m_folder)};
+    if (host == nullptr) {
+        listed(generation, {});
+        return;
+    }
+    host->whenOnline(this, [this, generation](auto connection) {
         if (generation != m_generation) {
             return;
         }
-        m_files = std::move(files);
-        m_flags &= ~Listing;
-        emit listingChanged();
-        filter();
+        if (!connection) {
+            listed(generation, {});
+            return;
+        }
+        const QPointer<FileSearch> self{this};
+        const QPointer<remote::Connection> link{&connection->get()};
+        connection->get().request(
+            QStringLiteral("search/files"),
+            {{QStringLiteral("path"), m_folder.path()}, {QStringLiteral("showHidden"), showHidden()}},
+            [self, link, generation](const remote::Connection::Result &result) {
+                if (self != nullptr) {
+                    self->receiveFiles(generation, link, result);
+                }
+            }
+        );
     });
+}
+
+void FileSearch::receiveFiles(
+    quint64 generation,
+    const QPointer<remote::Connection> &link,
+    const remote::Connection::Result &result
+)
+{
+    const auto channel{
+        result ? static_cast<quint32>(result->toObject().value(QStringLiteral("channel")).toInteger()) : 0U
+    };
+    if (link == nullptr || channel == 0U) {
+        listed(generation, {});
+        return;
+    }
+    const QPointer<FileSearch> self{this};
+    // Taken now: the bytes follow the answer at once.
+    link->receive(
+        channel,
+        [self, generation, bytes = QByteArray{}](QByteArrayView piece, remote::ChannelEnd end) mutable {
+            if (end == remote::ChannelEnd::More) {
+                bytes.append(piece);
+                return;
+            }
+            if (self == nullptr) {
+                return;
+            }
+            QStringList files{QString::fromUtf8(bytes).split(u'\n', Qt::SkipEmptyParts)};
+            if (files.size() > mostFiles) {
+                files.resize(mostFiles);
+            }
+            self->listed(generation, std::move(files));
+        }
+    );
+}
+
+QString FileSearch::pathOf(const QString &relative) const
+{
+    if (remote()) {
+        return (m_folder.path() == QLatin1String("/") ? QString{} : m_folder.path()) + u'/' + relative;
+    }
+    return m_folder.toLocalFile() + u'/' + relative;
+}
+
+QUrl FileSearch::urlOf(const QString &path) const
+{
+    if (remote()) {
+        QUrl url{m_folder};
+        url.setPath(path);
+        return url;
+    }
+    return QUrl::fromLocalFile(path);
 }
 
 void FileSearch::filter()
@@ -273,7 +364,7 @@ QVariant FileSearch::data(const QModelIndex &index, qint32 role) const
         return {};
     }
     const QString &relative{m_files.at(m_matches.at(index.row()))};
-    const QString path{m_folder.toLocalFile() + u'/' + relative};
+    const QString path{pathOf(relative)};
     const QString name{relative.sliced(relative.lastIndexOf(u'/') + 1)};
     switch (role) {
     case FileNameRole:
@@ -291,8 +382,9 @@ QVariant FileSearch::data(const QModelIndex &index, qint32 role) const
         return marked;
     }
     case PathRole: {
-        // The home folder as given or resolved (/tmp is /private/tmp).
-        const QString home{QDir::homePath()};
+        // The home folder as given or resolved (/tmp is /private/tmp); a host's, its home there.
+        const remote::Host *const host{remote() ? remote::Hosts::shared().forUrl(m_folder) : nullptr};
+        const QString home{host != nullptr ? host->home() : QDir::homePath()};
         for (const QString &prefix : {home, QFileInfo{home}.canonicalFilePath()}) {
             if (!prefix.isEmpty() && path.startsWith(prefix + u'/')) {
                 return u"~"_s + path.sliced(prefix.size());
@@ -301,9 +393,12 @@ QVariant FileSearch::data(const QModelIndex &index, qint32 role) const
         return path;
     }
     case FileUrlRole:
-        return QUrl::fromLocalFile(path);
-    case IconSourceRole:
-        return FileTree::iconSource(path, false);
+        return urlOf(path);
+    case IconSourceRole: {
+        const QString icon{FileTree::iconSource(path, false)};
+        // Not on this Mac: a code file's icon, else the system's file icon.
+        return !remote() || icon.startsWith(u"image://codeicon/"_s) ? icon : u"image://fileicon/:file"_s;
+    }
     default:
         return {};
     }

@@ -43,6 +43,14 @@ private:
     std::string m_id;
 };
 
+// What a service that waits on the system gets from the agent.
+struct Hooks {
+    // `ready` whenever `fd` is readable (on the agent's loop).
+    std::function<void(int fd, std::function<void()> ready)> watch;
+    // A notification to a session: `method` with `params` (JSON text).
+    std::function<void(std::uint64_t session, std::string_view method, std::string_view params)> notify;
+};
+
 // One feature of the agent: its methods ("<name>/<method>"), what it offers
 // on this host, and what it keeps for each session.
 class Service

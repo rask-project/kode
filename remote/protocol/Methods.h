@@ -32,6 +32,8 @@ inline constexpr std::int32_t notFound{-32011};
 inline constexpr std::int32_t permission{-32012};
 // Any other failure of the system's (the message tells).
 inline constexpr std::int32_t failed{-32013};
+// fs: the name is taken.
+inline constexpr std::int32_t exists{-32014};
 } // namespace error
 
 } // namespace kode::remote

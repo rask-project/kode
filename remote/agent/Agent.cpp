@@ -362,6 +362,26 @@ void Agent::send(std::uint64_t session, std::string_view message)
     found->second->send(FrameType::Message, controlChannel, message);
 }
 
+Hooks Agent::hooks()
+{
+    return Hooks{
+        .watch =
+            [this](int fd, std::function<void()> ready) {
+                m_loop.watch(
+                    fd,
+                    [] { return static_cast<short>(POLLIN); },
+                    [ready = std::move(ready)](short) { ready(); }
+                );
+            },
+        .notify =
+            [this](std::uint64_t session, std::string_view method, std::string_view params) {
+                std::string message{R"({"jsonrpc":"2.0","method":")"};
+                message.append(method).append(R"(","params":)").append(params).append("}");
+                send(session, message);
+            },
+    };
+}
+
 Reply::Send Agent::sender(std::uint64_t key)
 {
     return [this, key](const std::string &message) { send(key, message); };
