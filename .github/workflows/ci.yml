@@ -48,6 +48,7 @@ jobs:
 
   macos:
     name: macOS (arm64)
+    needs: agents
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
@@ -68,14 +69,35 @@ jobs:
       - name: Install tools
         run: brew install ninja
 
+      # The Linux hosts' agents, bundled beside this Mac's.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kode-remote-linux-*
+          path: ${{ runner.temp }}/agents
+          merge-multiple: true
+      - run: chmod +x "$RUNNER_TEMP"/agents/*/kode-remote
+
       - name: Configure
         run: |
           cmake -S . -B build/ci -G Ninja \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
-            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_BUILD_TYPE=Release \
+            -DKODE_REMOTE_AGENTS_DIR="$RUNNER_TEMP/agents"
 
       - name: Build
         run: cmake --build build/ci
 
       - name: Test
         run: ctest --test-dir build/ci --output-on-failure
+
+      # The self-contained app, to try a branch's build (ad hoc signed).
+      - name: Package
+        run: |
+          cmake --build build/ci --target package-macos
+          codesign --verify --deep --strict build/ci/dist/Kode.app
+          ditto -c -k --sequesterRsrc --keepParent build/ci/dist/Kode.app "$RUNNER_TEMP/Kode.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kode-${{ github.sha }}
+          path: ${{ runner.temp }}/Kode.zip
+          if-no-files-found: error
