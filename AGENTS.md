@@ -248,6 +248,10 @@ Guidance for AI agents working in this repository.
     (the user's: a syntax, a command split as a shell would, a language
     id) come before the table; `custom` tells each one's program found.
     `findDefinition()` (`textDocument/definition`) and
+    A remote document's server runs on its host (`bindRemote()`: found with
+    `process/which`, its root by `.git`; a `LanguageServer` over a
+    `RemoteProcess`), its `file://` URIs turned into `ssh://` ones where
+    they come back (definitions, edits, Switch Header/Source).
     `switchHeaderSource()` (the file beside it, else clangd's
     `textDocument/switchSourceHeader`) answer with `locationsFound(ticket)`,
     `requestCompletion()` with `completionsFound(ticket)`,
@@ -281,7 +285,10 @@ Guidance for AI agents working in this repository.
     against the expected version, mode, owner and links kept —, `fs/create`,
     `fs/rename`, `fs/copy`, `fs/remove`, `fs/trash`; `Watch`: `watch/set`,
     `watch/changed` pushed, inotify/kqueue; `Search`: `search/files` on a
-    channel), `Hooks` (a service's way to the loop and to notifications), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
+    channel; `Process`: `process/which` on the login shell's PATH,
+    `process/spawn` with stdin/stdout on channels, `process/signal`,
+    `process/exited`), `Hooks` (a service's way to the loop, timers and
+    notifications), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
     else `/tmp/kode-<uid>`, refused unless the user's only —, the socket, a
     peer's uid), `Bridge` (stdio ↔ the daemon's socket, starting it). Commands:
     `serve` (one session on stdio: the tests), `daemon [--idle s]`, `bridge`.
@@ -298,7 +305,8 @@ Guidance for AI agents working in this repository.
   (`remote::files`: read, write with the expected version, stat, list),
   `RemoteFolder` (a host's folder as a list model, for Connect to Server's
   picker), `RemoteTree` (a host's folder as a tree for `FileTree`: listed
-  as expanded, watched, operations shown at once), `Ssh` (ssh's arguments: ControlMaster in
+  as expanded, watched, operations shown at once), `RemoteProcess` (a
+  program on a host, for `LanguageServer`), `Ssh` (ssh's arguments: ControlMaster in
   `~/.ssh/kode`, no forwarding; the probe, install and bridge commands for
   `sh -c`; `~/.ssh/config`'s hosts), `Host` (probe, install by SHA-256,
   bridge; states, retried with backoff once online; `whenOnline()`),
