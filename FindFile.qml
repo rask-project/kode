@@ -61,7 +61,8 @@ Popup {
             id: captured
 
             anchors.fill: parent
-            sourceItem: finder.behind
+            // Only while shown: a window destroyed with its content still captured crashes in Qt.
+            sourceItem: finder.visible ? finder.behind : null
             sourceRect: Qt.rect(finder.x, finder.y, finder.width, finder.height)
             visible: false
         }
