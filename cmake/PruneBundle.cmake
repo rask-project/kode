@@ -7,7 +7,8 @@
 #
 # - Quick Controls styles: QtQuick.Controls lists every style as an optional
 #   import, so the QML import scanner deploys all of them. Kode runs the
-#   macOS style, which falls back to Fusion and Basic; the others are unused.
+#   macOS style, which falls back to Fusion and Basic and takes its
+#   BusyIndicator from iOS's implementation; the others are unused.
 # - QtWidgets: only the widget style plugin (styles/libqmacstyle) needs it,
 #   and Kode has no widgets.
 # - tls, networkinformation: Kode's own code makes no network connections
@@ -15,7 +16,7 @@
 # - Sparkle.framework: its headers, and the XPC services only sandboxed apps
 #   need.
 
-set(unused_styles Material Universal Imagine FluentWinUI3 iOS)
+set(unused_styles Material Universal Imagine FluentWinUI3)
 
 set(contents "${APP_BUNDLE}/Contents")
 set(remove
@@ -26,14 +27,9 @@ set(remove
 )
 foreach(style IN LISTS unused_styles)
     string(TOLOWER "${style}" lower)
-    if(style STREQUAL "iOS")
-        set(framework "IOS")
-    else()
-        set(framework "${style}")
-    endif()
     list(APPEND remove
-        "${contents}/Frameworks/QtQuickControls2${framework}.framework"
-        "${contents}/Frameworks/QtQuickControls2${framework}StyleImpl.framework"
+        "${contents}/Frameworks/QtQuickControls2${style}.framework"
+        "${contents}/Frameworks/QtQuickControls2${style}StyleImpl.framework"
         "${contents}/PlugIns/libqtquickcontrols2${lower}styleplugin.dylib"
         "${contents}/PlugIns/libqtquickcontrols2${lower}styleimplplugin.dylib"
         "${contents}/Resources/qml/QtQuick/Controls/${style}"
