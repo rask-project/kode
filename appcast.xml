@@ -6,6 +6,17 @@
     <description>Kode releases</description>
     <language>en</language>
     <item>
+      <title>Kode 1.1.1</title>
+      <link>https://github.com/rask-project/kode/releases/tag/v1.1.1</link>
+      <sparkle:version>1.1.1.1000</sparkle:version>
+      <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <pubDate>Sat, 28 Nov 2026 02:33:24 GMT</pubDate>
+      <description sparkle:format="markdown"><![CDATA[Kode 1.1.0 did not open: its window needs a part of Qt the app bundle left out. 1.1.1 brings it back.
+]]></description>
+      <enclosure url="https://github.com/rask-project/kode/releases/download/v1.1.1/Kode-1.1.1-arm64.zip" length="42950938" type="application/octet-stream" sparkle:edSignature="yPMaQY6uK7aWH4kK7IVq7YyjLQIIve+vI439WqVZlcx8zNz3PkJN7aW8wVYR+h/gdrM+rk8OGM6zMjmjAvGBDQ=="/>
+    </item>
+    <item>
       <title>Kode 1.1.0</title>
       <link>https://github.com/rask-project/kode/releases/tag/v1.1.0</link>
       <sparkle:version>1.1.0.1000</sparkle:version>
