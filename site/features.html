@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Features
-description: Syntax highlighting, splits, multiple carets, code folding, find and replace, a file sidebar, encodings, large files and a native Mac look.
+description: Syntax highlighting, language servers, Find File, navigation, splits, multiple carets, code folding, find and replace, a file sidebar, encodings, large files and a native Mac look.
 permalink: /features/
 ---
 {%- assign icons = '/assets/icons/' | relative_url -%}
@@ -17,6 +17,8 @@ permalink: /features/
       <span class="lights" aria-hidden="true"><i></i><i></i><i></i></span>
       <ul>
         <li><a href="#syntax"><img src="{{ icons }}syntax.svg" alt="">Highlighting</a></li>
+        <li><a href="#language-servers"><img src="{{ icons }}languageservers.svg" alt="">Language Servers</a></li>
+        <li><a href="#navigation"><img src="{{ icons }}navigation.svg" alt="">Navigation</a></li>
         <li><a href="#editing"><img src="{{ icons }}editor.svg" alt="">Editing</a></li>
         <li><a href="#carets"><img src="{{ icons }}carets.svg" alt="">Multiple Carets</a></li>
         <li><a href="#folding"><img src="{{ icons }}folding.svg" alt="">Folding</a></li>
@@ -41,8 +43,39 @@ permalink: /features/
           <li><strong>Themes in pairs:</strong> Kode (Qt Creator's 2024 colors), Atom One, ayu, Breeze, GitHub, gruvbox and Solarized, each with a light and a dark version that follows the app's appearance.</li>
           <li><strong>Brackets and words:</strong> the bracket matching the one at the caret, and the word at the caret with its occurrences in view, are marked behind the text.</li>
           <li><strong>Indent guides</strong> show each level, the block at the caret in the accent color.</li>
+          <li><strong>Semantic colors</strong> from the language server: types, fields, locals, parameters and macros in C and C++, QML's types, ids and bindings, in Qt Creator's palette.</li>
+          <li><strong>A minimap</strong> beside the text (View ▸ Show Minimap): click a line to center it, drag to scroll.</li>
         </ul>
         {% include shot.html name="overview-light.png" w=1600 h=927 alt="Kode in light mode with the Kode Light theme: C++ and QML side by side" %}
+      </section>
+
+      <section class="settings-section" id="language-servers">
+        <header><img src="{{ icons }}languageservers.svg" alt=""><h2>Language Servers</h2></header>
+        <p>Kode talks to the language server of each file it opens (LSP), found on your shell's PATH: clangd for C, C++ and Objective-C, and servers for Python, Rust, Go, JavaScript and TypeScript, QML, Swift, Bash, Lua, Java, Kotlin, YAML, JSON, HTML, CSS, Markdown, CMake, Dockerfile, Terraform and TOML.</p>
+        <ul>
+          <li><strong>Problems as you type:</strong> a wave under each error or warning, its message where the pointer rests, and the counts in the status bar; a click there lists them and goes to one.</li>
+          <li><strong>Quick fixes:</strong> <kbd>⌥↩</kbd> shows the server's fixes and refactorings at the caret, as Qt Creator's Alt+Return; one undo step.</li>
+          <li><strong>Completion</strong> as a word starts, after <code>.</code> or <code>-&gt;</code>, or on <kbd>⌃Space</kbd>; keep typing to filter, <kbd>↩</kbd> or <kbd>Tab</kbd> to accept. Includes the server adds come in the same undo step.</li>
+          <li><strong>What the server is doing</strong> (starting, analyzing, indexing) shows in the sidebar's footer.</li>
+          <li><strong>Settings ▸ Language Servers:</strong> turn them off, add folders to look in, set clangd's threads, add your own server for any language, and see what was found — press and hold a missing one to copy its install command.</li>
+        </ul>
+        {% include shot.html name="quick-fix.gif" w=640 h=640 alt="A missing semicolon gets a wave and its message; Option-Return offers insert ';', Return applies it and the error goes" %}
+        {% include shot.html name="completion.png" w=940 h=936 alt="Completions for m_readings.la: last(), constLast(), removeLast() and takeLast(), each with its kind and type" %}
+        {% include shot.html name="settings-lsp.png" w=800 h=592 alt="Settings, Language Servers: the search path, custom servers, and each language's server found or its install command" %}
+      </section>
+
+      <section class="settings-section" id="navigation">
+        <header><img src="{{ icons }}navigation.svg" alt=""><h2>Navigation</h2></header>
+        <p>Getting around a project without the mouse, and back again.</p>
+        <ul>
+          <li><strong>Go to Definition:</strong> <kbd>F2</kbd> or <kbd>⌘</kbd>-click; holding <kbd>⌘</kbd> over a name shows it as a link. Several definitions open a menu. In the sidebar, <kbd>F2</kbd> still renames.</li>
+          <li><strong>Switch Header/Source:</strong> <kbd>F4</kbd>, as in Qt Creator — the file beside it, else the one clangd knows.</li>
+          <li><strong>Back and Forward through places,</strong> not only files: each split remembers where you edited, clicked on another line or jumped from, as Qt Creator does (<kbd>⌃⌘←</kbd> <kbd>⌃⌘→</kbd>, or the split's arrows).</li>
+          <li><strong>Find File:</strong> <kbd>⌘K</kbd>, or the magnifying glass in the sidebar, as Qt Creator's Locate: the folder's files whose name matches, the best first — names starting with what you typed, then holding it, then its letters at word starts — each with its path.</li>
+          <li><strong>Go to Line:</strong> <kbd>⌘L</kbd>, "line" or "line:column".</li>
+        </ul>
+        {% include shot.html name="navigation.gif" w=560 h=770 alt="Go to Line 75, Command over pressureSlope shows a link, Command-click opens its definition, then Reading.h; Back returns step by step and Forward goes again" %}
+        {% include shot.html name="find-file.png" w=1600 h=927 alt="Find File: fore typed, Forecast.h, Forecast.cpp and ForecastView.qml listed with their paths" %}
       </section>
 
       <section class="settings-section" id="editing">
@@ -50,6 +83,7 @@ permalink: /features/
         <p>The keys you expect from a Mac text view, and the ones you expect from a code editor.</p>
         <ul>
           <li><strong>Indentation:</strong> tabs or spaces and the width, detected when a file opens and changed from the status bar. <kbd>Tab</kbd> and <kbd>⇧Tab</kbd> or <kbd>⌘]</kbd> <kbd>⌘[</kbd> shift the selected lines.</li>
+          <li><strong>Brackets and quotes in pairs:</strong> typing an opening one adds its closing one, typing the closing one steps over it, and <kbd>⌫</kbd> in an empty pair takes both. <kbd>↩</kbd> after a <code>{</code> adds the <code>}</code> two lines down.</li>
           <li><strong>Auto-indent by the brackets,</strong> without knowing the language: <kbd>↩</kbd> between brackets puts the closing one on a line of its own, and a closing bracket lines up with its opening line. <kbd>⌃I</kbd> re-indents the selection, and Kode can re-indent on save.</li>
           <li><strong>Comments</strong> by the language's own markers: <kbd>⌘/</kbd> toggles line comments, <kbd>⌥⌘/</kbd> a block comment.</li>
           <li><strong>Select Block:</strong> <kbd>⌘U</kbd> selects the block around the selection, a larger one each time; <kbd>⇧⌘U</kbd> steps back.</li>
@@ -194,7 +228,11 @@ permalink: /features/
           <div class="form-row"><span><kbd>⌃⌘←</kbd> <kbd>⌃⌘→</kbd></span><span>Back / forward</span></div>
           <div class="form-row"><span><kbd>⌃⌘S</kbd></span><span>Show or hide the sidebar</span></div>
           <div class="form-row"><span><kbd>⌘F</kbd> <kbd>⌘R</kbd> <kbd>⌘G</kbd> <kbd>⌘E</kbd></span><span>Find / replace / next / use selection</span></div>
+          <div class="form-row"><span><kbd>⌘K</kbd></span><span>Find file</span></div>
           <div class="form-row"><span><kbd>⌘L</kbd></span><span>Go to line</span></div>
+          <div class="form-row"><span><kbd>F2</kbd> <kbd>⌘</kbd>-click</span><span>Go to definition</span></div>
+          <div class="form-row"><span><kbd>F4</kbd></span><span>Switch header/source</span></div>
+          <div class="form-row"><span><kbd>⌥↩</kbd> <kbd>⌃Space</kbd></span><span>Quick fix / completions</span></div>
           <div class="form-row"><span><kbd>⌃D</kbd> <kbd>⌥↑</kbd> <kbd>⌥↓</kbd></span><span>Add a caret</span></div>
           <div class="form-row"><span><kbd>⌘U</kbd> <kbd>⇧⌘U</kbd></span><span>Select block / step back</span></div>
           <div class="form-row"><span><kbd>⌘/</kbd> <kbd>⌥⌘/</kbd></span><span>Line / block comment</span></div>

@@ -27,6 +27,13 @@ modules.
   [KSyntaxHighlighting](https://invent.kde.org/frameworks/syntax-highlighting),
   detected by name and shebang, in themes that come as a light and a dark
   pair (Kode, Atom One, ayu, Breeze, GitHub, gruvbox, Solarized).
+- **Language servers** (clangd, qmlls, pyright, rust-analyzer, gopls and
+  more, found on your shell's PATH): problems as you type, quick fixes
+  (<kbd>⌥↩</kbd>), completion, Go to Definition (<kbd>F2</kbd>,
+  <kbd>⌘</kbd>-click), Switch Header/Source (<kbd>F4</kbd>) and semantic
+  colors in Qt Creator's palette.
+- **Find File** (<kbd>⌘K</kbd>), as Qt Creator's Locate, and **Back and
+  Forward through places**: where you edited, clicked or jumped from.
 - **Splits, not tabs**, as in Qt Creator: split side by side or top and
   bottom, show the same document in two splits, go back and forward through
   what a split showed, and switch documents with <kbd>⌃Tab</kbd>.
@@ -48,6 +55,28 @@ modules.
   `kode file`, even a file that doesn't exist yet.
 - **Native look**: a translucent, blurred window, the system's accent and
   selection colors, SF Symbols, and light or dark.
+
+### Language servers
+
+Kode starts the language server of each file it opens. A wave marks each
+problem, its message shows where the pointer rests, and <kbd>⌥↩</kbd> offers
+the server's fixes, applied in one undo step. Completion comes as you type
+or on <kbd>⌃Space</kbd>.
+
+![A missing semicolon gets a wave; Option-Return inserts it](docs/images/quick-fix.gif)
+
+![Completions for m_readings.la](docs/images/completion.png)
+
+### Navigation
+
+<kbd>F2</kbd> or <kbd>⌘</kbd>-click goes to a definition, <kbd>F4</kbd>
+between a header and its source, and each split's Back and Forward
+(<kbd>⌃⌘←</kbd> <kbd>⌃⌘→</kbd>) go through the places it went through.
+<kbd>⌘K</kbd> finds a file of the folder by name.
+
+![Go to Definition with Command-click, then Back and Forward](docs/images/navigation.gif)
+
+![Find File listing the files that match "fore"](docs/images/find-file.png)
 
 ### Multiple carets
 
@@ -118,8 +147,12 @@ so does the theme's version.
 - **Editor**: the font, the theme, wrapping, invisibles, indent guides,
   indentation for new documents and re-indenting on save.
 - **Files**: hidden files, the sidebar's size and syncing it with the editor.
+- **Language Servers**: on or off, where to look for them, clangd's threads,
+  your own servers, and each language's server found or how to install it.
 
 ![The Appearance, Editor and Files sections of Settings](docs/images/settings.png)
+
+![Settings, Language Servers](docs/images/settings-lsp.png)
 
 ## Keyboard
 
@@ -132,7 +165,10 @@ so does the theme's version.
 | <kbd>⌃⌘←</kbd> / <kbd>⌃⌘→</kbd> | Back / forward |
 | <kbd>⌃⌘S</kbd> | Show or hide the sidebar |
 | <kbd>⌘F</kbd> / <kbd>⌘R</kbd> / <kbd>⌘G</kbd> / <kbd>⌘E</kbd> | Find / replace / next match / use selection |
+| <kbd>⌘K</kbd> | Find file |
 | <kbd>⌘L</kbd> | Go to line |
+| <kbd>F2</kbd> / <kbd>⌘</kbd>-click, <kbd>F4</kbd> | Go to definition, switch header/source |
+| <kbd>⌥↩</kbd> / <kbd>⌃Space</kbd> | Quick fix / completions |
 | <kbd>⌃D</kbd>, <kbd>⌥↑</kbd> / <kbd>⌥↓</kbd> | Add a caret |
 | <kbd>⌘U</kbd> / <kbd>⇧⌘U</kbd> | Select block / step back |
 | <kbd>⌘/</kbd> / <kbd>⌥⌘/</kbd> | Line / block comment |

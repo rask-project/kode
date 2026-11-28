@@ -98,7 +98,12 @@ In the 1560×880 window, line *N* of the left split is at y ≈ 372 + (*N* −
 | `multiple-carets.gif` | ⌃D on `readings` four times, `samples` typed, Escape | Above; `key z command` undoes it |
 | `code-folding.gif` | ⌥⌘← on the `for` loop, ⌥⌘→, then the gutter marker of `pressureSlope` twice | Caret on line 25; markers at 358,462 |
 | `select-block.gif` | Light: ⌘U four times from line 28, ⇧⌘U twice | Recorded after `overview-light` |
-| `search.png` | ⌘F `sum`, ↩ once: 5 of 14, the matches marked | — |
+| `search.png` | ⌘F `sum` from line 23: 1 of 14, the matches marked | Caret clicked at 383,372 |
+| `find-file.png` | ⌘K, `fore` typed: `Forecast.h`, `Forecast.cpp`, `ForecastView.qml` with their paths | Click the editor first |
+| `completion.png` | `m_readings.la` typed on a new line after line 74: the list under the caret | Cropped to the left 940×936 px; Escape, `key z command` three times |
+| `quick-fix.gif` | The `;` of line 28 deleted, the pointer on the wave (its message), ⌥↩, ↓, ↩ | `record quickfix 19 250 340 640 640`; `gif … 1 17.5 640` |
+| `navigation.gif` | ⌘L 75, ⌘ held over `pressureSlope`, ⌘-click, ⌘-click on `Reading`, Back ×3, Forward | `record navigation 26 250 90 640 880`; `gif … 1 24.5 560`; Back at 332,115 |
+| `settings-lsp.png` | Settings ▸ Language Servers, scrolled to Custom servers and Servers | `shot NAME 40` |
 | `document-switcher.png` | ⌃Tab over `fetch_readings.py`, seven documents listed | `open` `Forecast.h`, `main.cpp`, `stations.json`, `fetch_readings.py`; hold Control with `osascript -e 'tell application "System Events"' -e 'key down control' -e 'key code 48' -e 'delay 3' -e 'key up control' -e 'end tell' &`, `shot` after 1.6 s |
 | `sidebar.png` | The right-click menu on `Forecast.h` | `rclick 160 309`, cropped to the left 1500×1380 px |
 | `settings.png` | Settings' Appearance, Editor and Files sections side by side | ⌘,; the editor window `place`d out of the way; `shot NAME 40` per section, each scaled to 800 px, `hstack` |

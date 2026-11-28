@@ -31,6 +31,16 @@ body_class: home
       <h3>Highlighting for 300+ languages</h3>
       <p>KDE's KSyntaxHighlighting, detected by name and shebang, with themes that follow light and dark: Kode, Atom One, ayu, GitHub, gruvbox, Solarized…</p>
     </a>
+    <a class="feature-card glass-card" href="{{ '/features/#language-servers' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}languageservers.svg" alt="">
+      <h3>Language servers</h3>
+      <p>Problems as you type, quick fixes, completion, Go to Definition and semantic colors, from clangd, qmlls and the servers of 20 languages.</p>
+    </a>
+    <a class="feature-card glass-card" href="{{ '/features/#navigation' | relative_url }}">
+      <img class="app-icon" src="{{ icons }}navigation.svg" alt="">
+      <h3>Find a file, jump back</h3>
+      <p><kbd>⌘K</kbd> finds a file of the folder by name; Back and Forward go through the places you edited and jumped from.</p>
+    </a>
     <a class="feature-card glass-card" href="{{ '/features/#splits' | relative_url }}">
       <img class="app-icon" src="{{ icons }}splits.svg" alt="">
       <h3>Splits, not tabs</h3>
@@ -75,6 +85,33 @@ body_class: home
 </section>
 
 <section class="container">
+  <div class="showcase">
+    <div class="showcase-text">
+      <p class="eyebrow">Language servers</p>
+      <h2>Problems as you type. Fixed in a keystroke.</h2>
+      <p>Kode starts the language server of each file it opens — clangd for C and C++, qmlls for QML, and servers for Python, Rust, Go, TypeScript and more — found on your shell's PATH.</p>
+      <ul>
+        <li><strong>A wave under each problem,</strong> its message where the pointer rests, the counts in the status bar.</li>
+        <li><strong><kbd>⌥↩</kbd> quick fixes,</strong> as Qt Creator's Alt+Return, in one undo step.</li>
+        <li><strong>Completion</strong> as you type, and <strong>semantic colors</strong> for types, fields, locals and QML bindings, in Qt Creator's palette.</li>
+      </ul>
+    </div>
+    {% include shot.html name="quick-fix.gif" w=640 h=640 alt="A missing semicolon gets a wave and its message; Option-Return offers insert ';', Return applies it and the error goes" %}
+  </div>
+
+  <div class="showcase is-flipped">
+    <div class="showcase-text">
+      <p class="eyebrow">Navigation</p>
+      <h2>Jump to a definition. Come back.</h2>
+      <p><kbd>F2</kbd> or <kbd>⌘</kbd>-click goes to where a name is defined, in this file or another; <kbd>F4</kbd> switches between a header and its source. Each split remembers the places it went through, as Qt Creator does.</p>
+      <ul>
+        <li><strong>Back and Forward</strong> (<kbd>⌃⌘←</kbd> <kbd>⌃⌘→</kbd>, or the split's arrows) through where you edited, clicked or jumped from.</li>
+        <li><strong><kbd>⌘K</kbd> Find File:</strong> the folder's files by name, the best match first.</li>
+      </ul>
+    </div>
+    {% include shot.html name="navigation.gif" w=560 h=770 alt="Go to Line 75, Command over pressureSlope shows a link, Command-click opens its definition, then Reading.h; Back returns step by step and Forward goes again" %}
+  </div>
+
   <div class="showcase">
     <div class="showcase-text">
       <p class="eyebrow">Multiple carets</p>
