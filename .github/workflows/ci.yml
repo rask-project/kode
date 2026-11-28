@@ -63,6 +63,8 @@ jobs:
           host: mac
           target: desktop
           arch: clang_64
+          # The WebP plugin, as the release: macOS's BusyIndicator is an animated .webp.
+          modules: qtimageformats
           aqtversion: ${{ env.AQT_VERSION }}
           cache: true
 
