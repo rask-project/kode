@@ -303,6 +303,8 @@ Item {
         onFinished: button => {
             if (button === 0 && changedAlert.document)
                 changedAlert.document.reload();
+            else if (changedAlert.document)
+                changedAlert.document.keepMine();
             changedAlert.document = null;
         }
     }

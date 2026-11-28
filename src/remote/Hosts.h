@@ -3,12 +3,15 @@
 #include "Host.h"
 
 #include <QHash>
+#include <QJSEngine>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
 #include <QPointer>
+#include <QQmlEngine>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 #include <QtQmlIntegration/qqmlintegration.h>
 
 namespace kode::remote
@@ -34,12 +37,20 @@ public:
     };
     Q_ENUM(Prompt)
 
+    // The app's (QML's singleton too); others only in tests.
     explicit Hosts(QObject *parent = nullptr);
     ~Hosts() override;
     Q_DISABLE_COPY_MOVE(Hosts)
 
+    [[nodiscard]] static Hosts &shared();
+    [[nodiscard]] static Hosts *create(QQmlEngine *qmlEngine, QJSEngine *jsEngine);
+
     // The host `destination` names, made on first use.
     Q_INVOKABLE kode::remote::Host *host(const QString &destination);
+    // Made with `setup` when it is new (tests: a stand-in ssh).
+    [[nodiscard]] Host *host(const QString &destination, Setup setup);
+    // The host of an ssh:// URL; none for another URL.
+    [[nodiscard]] Host *forUrl(const QUrl &url);
     // The hosts named in ~/.ssh/config.
     Q_INVOKABLE [[nodiscard]] static QStringList configuredHosts();
     Q_INVOKABLE void answer(qint32 id, bool accepted, const QString &value);

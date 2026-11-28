@@ -26,6 +26,9 @@ ApplicationWindow {
     // Documents left to review before `reviewDone` runs (see review()).
     property list<Document> reviewQueue: []
     property var reviewDone: null
+    // The save that runs `afterSaving` once it is done (a remote one answers later).
+    property Document savingDocument: null
+    property var afterSaving: null
     // The folder the sidebar shows; none for a window of files alone.
     property url folder
     property bool sidebarVisible: false
@@ -66,9 +69,15 @@ ApplicationWindow {
         }
         if (document.fileUrl.toString() === "") {
             root.saveAs(document, then);
-        } else if (document.save() && then) {
-            then();
+            return;
         }
+        root.startSaving(document, then);
+        document.save();
+    }
+
+    function startSaving(document: Document, then) {
+        root.savingDocument = then ? document : null;
+        root.afterSaving = then;
     }
 
     function saveAs(document: Document, then) {
@@ -293,6 +302,25 @@ ApplicationWindow {
 
     ConnectToServer {
         id: connectToServer
+
+        window: root
+    }
+
+    Connections {
+        target: root.savingDocument
+
+        function onSaved() {
+            const then = root.afterSaving;
+            root.savingDocument = null;
+            root.afterSaving = null;
+            then();
+        }
+
+        function onSaveFailed() {
+            root.savingDocument = null;
+            root.afterSaving = null;
+            root.cancelReview();
+        }
     }
 
     FileDialog {
@@ -310,11 +338,15 @@ ApplicationWindow {
             const document = saveDialog.document;
             saveDialog.then = null;
             saveDialog.document = null;
-            if (document && document.saveAs(selectedFile)) {
-                RecentDocuments.add(selectedFile);
+            if (!document)
+                return;
+            const file = selectedFile;
+            root.startSaving(document, () => {
+                RecentDocuments.add(file);
                 if (then)
                     then();
-            }
+            });
+            document.saveAs(file);
         }
         onRejected: {
             saveDialog.then = null;

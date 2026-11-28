@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Channel.h"
 #include "Json.h"
 
 #include <cstdint>
@@ -31,6 +32,8 @@ public:
     [[nodiscard]] yyjson_mut_doc *doc() const noexcept { return m_doc.get(); }
     void result(yyjson_mut_val *value);
     void error(std::int32_t code, std::string_view message);
+    // With `data` (built in doc()) for the client to act on.
+    void error(std::int32_t code, std::string_view message, yyjson_mut_val *data);
 
 private:
     void finish(yyjson_mut_val *root);
@@ -56,7 +59,13 @@ public:
     [[nodiscard]] virtual std::vector<std::string_view> capabilities() const = 0;
     // `method` without the service's prefix; one it does not have answers
     // with error::methodNotFound.
-    virtual void handle(std::uint64_t session, std::string_view method, yyjson_val *params, Reply reply) = 0;
+    virtual void handle(
+        std::uint64_t session,
+        std::string_view method,
+        yyjson_val *params,
+        Reply reply,
+        const Channels &channels
+    ) = 0;
     // What the session owned goes.
     virtual void sessionClosed(std::uint64_t session) { static_cast<void>(session); }
 };

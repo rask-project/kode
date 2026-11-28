@@ -1,9 +1,11 @@
 #include "Connection.h"
 
+#include "../../remote/agent/Channel.h"
 #include "../../remote/protocol/Methods.h"
 
 #include <QJsonDocument>
 #include <QStringView>
+#include <QtEndian>
 
 namespace kode::remote
 {
@@ -87,11 +89,15 @@ void Connection::finish(const QString &message)
     m_error = message;
     setState(State::Closed);
     m_process.kill();
+    m_outgoing.clear();
+    const QHash<quint32, Incoming> incoming{std::exchange(m_incoming, {})};
+    std::ranges::for_each(incoming, [](const Incoming &in) { in.receiver({}, ChannelEnd::Failed); });
     // Each handler may make new requests: they fail at once.
     const QHash<qint64, Handler> pending{std::exchange(m_pending, {})};
     const Error gone{
         .message = message.isEmpty() ? tr("The connection was closed.") : message,
-        .code = error::disconnected
+        .data = {},
+        .code = error::disconnected,
     };
     std::ranges::for_each(pending, [&gone](const Handler &handler) { handler(std::unexpected{gone}); });
 }
@@ -108,7 +114,7 @@ void Connection::setState(State state)
 void Connection::request(const QString &method, const QJsonObject &params, Handler handler)
 {
     if (state() == State::Closed || state() == State::Idle) {
-        handler(std::unexpected{Error{.message = tr("Not connected."), .code = error::disconnected}});
+        handler(std::unexpected{Error{.message = tr("Not connected."), .data = {}, .code = error::disconnected}});
         return;
     }
     const qint64 id{m_nextId++};
@@ -135,15 +141,104 @@ void Connection::notify(const QString &method, const QJsonObject &params)
 
 void Connection::send(const QJsonObject &message)
 {
-    const QByteArray json{QJsonDocument{message}.toJson(QJsonDocument::Compact)};
+    writeFrame(FrameType::Message, controlChannel, QJsonDocument{message}.toJson(QJsonDocument::Compact));
+}
+
+void Connection::writeFrame(FrameType type, quint32 channel, QByteArrayView payload)
+{
     std::string frame;
-    appendFrame(
-        frame,
-        FrameType::Message,
-        controlChannel,
-        std::string_view{json.constData(), static_cast<std::size_t>(json.size())}
-    );
+    appendFrame(frame, type, channel, std::string_view{payload.data(), static_cast<std::size_t>(payload.size())});
     m_process.write(frame.data(), static_cast<qint64>(frame.size()));
+}
+
+void Connection::receive(quint32 channel, Receiver receiver)
+{
+    if (state() == State::Closed) {
+        receiver({}, ChannelEnd::Failed);
+        return;
+    }
+    m_incoming.insert(channel, Incoming{.receiver = std::move(receiver), .window = static_cast<qint64>(initialCredit)});
+}
+
+void Connection::send(quint32 channel, QByteArray bytes)
+{
+    if (state() == State::Closed) {
+        return;
+    }
+    m_outgoing.insert(
+        channel,
+        Outgoing{.bytes = std::move(bytes), .sent = 0, .credit = static_cast<qint64>(initialCredit)}
+    );
+    pump(channel);
+}
+
+void Connection::pump(quint32 channel)
+{
+    const auto out{m_outgoing.find(channel)};
+    if (out == m_outgoing.end()) {
+        return;
+    }
+    while (out->credit > 0 && out->sent < out->bytes.size()) {
+        const qint64 size{std::min({out->credit, static_cast<qint64>(maxDataSize), out->bytes.size() - out->sent})};
+        writeFrame(FrameType::Data, channel, QByteArrayView{out->bytes}.sliced(out->sent, size));
+        out->sent += size;
+        out->credit -= size;
+    }
+    if (out->sent == out->bytes.size()) {
+        writeFrame(FrameType::Eof, channel, {});
+        m_outgoing.erase(out);
+    }
+}
+
+bool Connection::handleChannel(const Frame &frame)
+{
+    const quint32 channel{frame.channel};
+    switch (frame.type()) {
+    case FrameType::Data: {
+        const auto in{m_incoming.find(channel)};
+        if (in == m_incoming.end()) {
+            writeFrame(FrameType::Reset, channel, {});
+            return true;
+        }
+        const auto size{static_cast<qint64>(frame.payload.size())};
+        if (size > in->window) {
+            return false;
+        }
+        // Out while it runs: it may close the connection.
+        Incoming taken{std::move(*in)};
+        m_incoming.erase(in);
+        taken.receiver(QByteArrayView{frame.payload.data(), size}, ChannelEnd::More);
+        if (state() == State::Closed) {
+            return true;
+        }
+        m_incoming.insert(channel, std::move(taken));
+        const quint32 credit{qToBigEndian(static_cast<quint32>(size))};
+        writeFrame(FrameType::Credit, channel, QByteArrayView{reinterpret_cast<const char *>(&credit), sizeof(credit)});
+        return true;
+    }
+    case FrameType::Eof:
+    case FrameType::Reset: {
+        m_outgoing.remove(channel);
+        const auto in{m_incoming.find(channel)};
+        if (in != m_incoming.end()) {
+            const Receiver receiver{std::move(in->receiver)};
+            m_incoming.erase(in);
+            receiver({}, frame.type() == FrameType::Eof ? ChannelEnd::Complete : ChannelEnd::Failed);
+        }
+        return true;
+    }
+    case FrameType::Credit: {
+        const auto out{m_outgoing.find(channel)};
+        if (out != m_outgoing.end()) {
+            out->credit += qFromBigEndian<quint32>(frame.payload.data());
+            pump(channel);
+        }
+        return true;
+    }
+    case FrameType::Message:
+        return false;
+    }
+    return false;
 }
 
 void Connection::readFrames()
@@ -169,16 +264,13 @@ void Connection::handle(const Frame &frame)
         handleMessage(QByteArrayView{frame.payload.data(), static_cast<qsizetype>(frame.payload.size())});
         return;
     case FrameType::Reset:
-        return;
     case FrameType::Data:
     case FrameType::Eof:
-    case FrameType::Credit: {
-        // No channel is open yet.
-        std::string reset;
-        appendFrame(reset, FrameType::Reset, frame.channel, {});
-        m_process.write(reset.data(), static_cast<qint64>(reset.size()));
+    case FrameType::Credit:
+        if (!handleChannel(frame)) {
+            finish(tr("The host's agent broke the protocol."));
+        }
         return;
-    }
     }
 }
 
@@ -218,6 +310,7 @@ void Connection::handleMessage(QByteArrayView payload)
         const QJsonObject object{failure.toObject()};
         handler(std::unexpected{Error{
             .message = object.value(QStringLiteral("message")).toString(),
+            .data = object.value(QStringLiteral("data")),
             .code = object.value(QStringLiteral("code")).toInteger(),
         }});
         return;

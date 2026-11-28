@@ -174,6 +174,8 @@ void Agent::close(std::uint64_t key)
     }
     m_loop.unwatch(found->second->inputFd());
     m_loop.unwatch(found->second->outputFd());
+    // While the session is still found: what the sinks answer goes nowhere.
+    found->second->resetChannels();
     std::ranges::for_each(m_services, [key](const std::unique_ptr<Service> &service) { service->sessionClosed(key); });
     m_sessions.erase(found);
     sessionsChanged();
@@ -214,15 +216,140 @@ void Agent::receive(std::uint64_t key)
         }
         handle(*session->second, frame);
     }
+    if (const auto session{m_sessions.find(key)}; session != m_sessions.end()) {
+        pump(*session->second);
+    }
     flush(key);
 }
 
 void Agent::flush(std::uint64_t key)
 {
     const auto found{m_sessions.find(key)};
-    if (found != m_sessions.end() && !found->second->flush()) {
-        close(key);
+    if (found == m_sessions.end()) {
+        return;
     }
+    if (!found->second->flush()) {
+        close(key);
+        return;
+    }
+    // Room again: the channels go on.
+    pump(*found->second);
+}
+
+void Agent::pump(Session &session)
+{
+    // Keeps a session's output short: channel 0 is not held back behind a channel's data.
+    constexpr std::size_t outputLimit{std::size_t{1024} * 1024U};
+    auto &outgoing{session.outgoing()};
+    for (auto channel{outgoing.begin()}; channel != outgoing.end();) {
+        Session::Outgoing &out{channel->second};
+        bool ended{false};
+        while (out.credit > 0U && session.pendingOutput() < outputLimit) {
+            std::expected<std::optional<std::string>, std::string> piece{
+                out.source->next(std::min(out.credit, maxDataSize))
+            };
+            const std::optional<std::string> bytes{piece ? std::move(*piece) : std::nullopt};
+            if (!bytes.has_value()) {
+                session.send(piece ? FrameType::Eof : FrameType::Reset, channel->first, {});
+                ended = true;
+                break;
+            }
+            out.credit -= bytes->size();
+            session.send(FrameType::Data, channel->first, *bytes);
+        }
+        channel = ended ? outgoing.erase(channel) : std::next(channel);
+    }
+}
+
+Channels Agent::channels(std::uint64_t key)
+{
+    return Channels{
+        .open = [this, key](std::unique_ptr<Source> source) -> std::uint32_t {
+            const auto found{m_sessions.find(key)};
+            if (found == m_sessions.end()) {
+                return 0U;
+            }
+            const std::uint32_t id{found->second->nextChannel()};
+            found->second->outgoing().emplace(
+                id,
+                Session::Outgoing{.source = std::move(source), .credit = initialCredit}
+            );
+            return id;
+        },
+        .accept =
+            [this, key](std::uint32_t id, std::unique_ptr<Sink> sink) {
+                const auto found{m_sessions.find(key)};
+                // The client's channels are odd.
+                if (found == m_sessions.end() || id % 2U == 0U || found->second->incoming().contains(id)) {
+                    return false;
+                }
+                found->second->incoming().emplace(
+                    id,
+                    Session::Incoming{.sink = std::move(sink), .window = initialCredit}
+                );
+                return true;
+            },
+    };
+}
+
+bool Agent::handleChannel(Session &session, const Frame &frame)
+{
+    auto &incoming{session.incoming()};
+    const auto in{incoming.find(frame.channel)};
+    switch (frame.type()) {
+    case FrameType::Data: {
+        if (in == incoming.end()) {
+            session.send(FrameType::Reset, frame.channel, {});
+            return true;
+        }
+        if (frame.payload.size() > in->second.window) {
+            return false;
+        }
+        if (!in->second.sink->write(frame.payload)) {
+            incoming.erase(in);
+            session.send(FrameType::Reset, frame.channel, {});
+            return true;
+        }
+        // Written: the client may send as much again.
+        std::string credit;
+        const auto size{static_cast<std::uint32_t>(frame.payload.size())};
+        credit.push_back(static_cast<char>(size >> 24U));
+        credit.push_back(static_cast<char>((size >> 16U) & 0xFFU));
+        credit.push_back(static_cast<char>((size >> 8U) & 0xFFU));
+        credit.push_back(static_cast<char>(size & 0xFFU));
+        session.send(FrameType::Credit, frame.channel, credit);
+        return true;
+    }
+    case FrameType::Eof:
+        if (in != incoming.end()) {
+            const std::unique_ptr<Sink> sink{std::move(in->second.sink)};
+            incoming.erase(in);
+            sink->end();
+        }
+        return true;
+    case FrameType::Reset:
+        if (in != incoming.end()) {
+            const std::unique_ptr<Sink> sink{std::move(in->second.sink)};
+            incoming.erase(in);
+            sink->reset();
+        }
+        session.outgoing().erase(frame.channel);
+        return true;
+    case FrameType::Credit: {
+        const auto out{session.outgoing().find(frame.channel)};
+        if (out == session.outgoing().end()) {
+            return true;
+        }
+        const auto byte{[&frame](std::size_t index) {
+            return static_cast<std::uint32_t>(static_cast<unsigned char>(frame.payload[index]));
+        }};
+        out->second.credit += (byte(0) << 24U) | (byte(1) << 16U) | (byte(2) << 8U) | byte(3);
+        return true;
+    }
+    case FrameType::Message:
+        return false;
+    }
+    return false;
 }
 
 void Agent::send(std::uint64_t session, std::string_view message)
@@ -251,12 +378,12 @@ void Agent::handle(Session &session, const Frame &frame)
         handleMessage(session, frame.payload);
         return;
     case FrameType::Reset:
-        return;
     case FrameType::Data:
     case FrameType::Eof:
     case FrameType::Credit:
-        // No channel is open yet: whatever it was, it is gone.
-        session.send(FrameType::Reset, frame.channel, {});
+        if (!handleChannel(session, frame)) {
+            close(session.key());
+        }
         return;
     }
 }
@@ -297,7 +424,7 @@ void Agent::handleMessage(Session &session, std::string_view payload)
         reply.error(error::methodNotFound, "No such method.");
         return;
     }
-    (*service)->handle(session.key(), method->substr(slash + 1), params, std::move(reply));
+    (*service)->handle(session.key(), method->substr(slash + 1), params, std::move(reply), channels(session.key()));
 }
 
 void Agent::initialize(Session &session, yyjson_val *params, Reply reply)

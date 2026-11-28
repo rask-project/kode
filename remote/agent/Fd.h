@@ -2,12 +2,14 @@
 
 #include <unistd.h>
 
+#include <cstdint>
 #include <utility>
 
 namespace kode::remote
 {
 
-// An owned file descriptor, closed when it goes.
+// An owned file descriptor, closed when it goes. Kept in 64 bits: beside
+// the 8-byte members it sits with, no padding.
 class Fd
 {
 public:
@@ -26,18 +28,18 @@ public:
     }
     ~Fd() { reset(); }
 
-    [[nodiscard]] int get() const noexcept { return m_fd; }
+    [[nodiscard]] int get() const noexcept { return static_cast<int>(m_fd); }
     [[nodiscard]] bool valid() const noexcept { return m_fd >= 0; }
     void reset() noexcept
     {
         if (m_fd >= 0) {
-            ::close(m_fd);
+            ::close(static_cast<int>(m_fd));
             m_fd = -1;
         }
     }
 
 private:
-    int m_fd{-1};
+    std::int64_t m_fd{-1};
 };
 
 } // namespace kode::remote

@@ -39,5 +39,31 @@ private slots:
     void answersAskpass();
     void refusesAskpassWithAWrongToken();
     void tellsPromptKinds();
+
+    // fs over serve: written (folders made) and read back, hashes alike.
+    void writesAndReadsFiles();
+    // Past the channels' first credit, both ways.
+    void movesLargeFiles();
+    // A file changed since it was read: refused, its version now sent, the file kept.
+    void refusesAConflictingWrite();
+    // Touched but not changed: the bytes' hash tells it is the same.
+    void writesATouchedFile();
+    void keepsTheModeAndWritesThroughLinks();
+    void writesInPlaceInAReadOnlyFolder();
+    void listsAFolder();
+    void reportsAMissingFile();
+
+    // Document with an ssh:// file, through a stand-in ssh and the agent.
+    void opensAndSavesARemoteDocument();
+    void keepsARemoteDocumentsEncoding();
+    // Changed on the host since it was read: the save is refused and told;
+    // Keep Mine, then it saves.
+    void refusesAConflictingSave();
+    // An edit made while a save is on its way stays modified.
+    void keepsEditsMadeDuringASave();
+    // Changed on the host while unmodified here: read again (polling).
+    void reloadsARemoteChange();
+    // A file that does not exist yet: empty, written (with its folders) when saved.
+    void startsAMissingRemoteFile();
     void cleanup();
 };

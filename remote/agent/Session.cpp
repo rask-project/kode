@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 
@@ -39,6 +40,13 @@ std::optional<std::vector<Frame>> Session::read()
 void Session::send(FrameType type, std::uint32_t channel, std::string_view payload)
 {
     appendFrame(m_pending, type, channel, payload);
+}
+
+void Session::resetChannels()
+{
+    std::map<std::uint32_t, Incoming> incoming{std::exchange(m_incoming, {})};
+    std::ranges::for_each(incoming, [](auto &entry) { entry.second.sink->reset(); });
+    m_outgoing.clear();
 }
 
 bool Session::flush()

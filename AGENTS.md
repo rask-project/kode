@@ -273,8 +273,11 @@ Guidance for AI agents working in this repository.
     `Session` (one client's frames, non-blocking), `Agent` (sessions,
     services, the handshake: protocol version, a random session id,
     platform, capabilities), `Service`/`Reply` (a feature's methods,
-    `<name>/<method>`; a reply answered now or later), `services/` (`System`:
-    `system/ping`), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
+    `<name>/<method>`; a reply answered now or later, with an error's data),
+    `Channel.h` (`Source`/`Sink`: a channel's bytes either way, by credit),
+    `Sha256`, `services/` (`System`: `system/ping`; `Fs`: `fs/stat`,
+    `fs/list`, `fs/read` on a channel, `fs/write` from one — atomic, checked
+    against the expected version, mode, owner and links kept), `Runtime` (the runtime folder — `$XDG_RUNTIME_DIR/kode`,
     else `/tmp/kode-<uid>`, refused unless the user's only —, the socket, a
     peer's uid), `Bridge` (stdio ↔ the daemon's socket, starting it). Commands:
     `serve` (one session on stdio: the tests), `daemon [--idle s]`, `bridge`.
@@ -286,12 +289,16 @@ Guidance for AI agents working in this repository.
     agents with `tools/build-remote.sh` in Alpine (static, musl), checked by
     `tools/remote-smoke.py`; `.github/workflows/remote-agents.yml`.
 - `src/remote/` — Kode's side: `Connection` (the process reaching the
-  agent, JSON-RPC over its frames, requests by id with handlers; anything
-  broken from the agent ends it), `Ssh` (ssh's arguments: ControlMaster in
+  agent, JSON-RPC over its frames, requests by id with handlers, channels
+  with credit; anything broken from the agent ends it), `Files`
+  (`remote::files`: read, write with the expected version, stat, list),
+  `RemoteFolder` (a host's folder as a list model, for Connect to Server's
+  picker), `Ssh` (ssh's arguments: ControlMaster in
   `~/.ssh/kode`, no forwarding; the probe, install and bridge commands for
   `sh -c`; `~/.ssh/config`'s hosts), `Host` (probe, install by SHA-256,
-  bridge; states, retried with backoff once online), `Hosts` (QML
-  singleton: a `Host` per destination, the askpass socket and its prompts,
+  bridge; states, retried with backoff once online; `whenOnline()`),
+  `Hosts` (QML singleton, `shared()` for C++: a `Host` per destination or
+  ssh:// URL, the askpass socket and its prompts,
   one at a time). `ConnectToServer.qml` — File > Connect to Server… (⇧⌘K).
   `Kode.app` bundles the agents in `Contents/Resources/remote/<os>-<arch>`
   (this Mac's, and those in `KODE_REMOTE_AGENTS_DIR`).
@@ -308,7 +315,12 @@ Guidance for AI agents working in this repository.
   the file and its folder (a file replaced by renaming comes back there)
   reloads a change made elsewhere when nothing is unsaved (keeping the
   caret), else emits `changedOnDisk()`; its own saves are told apart by the
-  modification time and size.
+  modification time and size. Every save ends with `saved()` or
+  `saveFailed()` (QML waits for it). An `ssh://` file is on a host
+  (`docs/REMOTE.md`): read and written through its agent
+  (`remote::files`), always asynchronously, the save checked there against
+  the version read (a conflict: `changedOnDisk()`, then `keepMine()`), the
+  host asked every 5 s whether it changed.
 - `src/TextCodec.{h,cpp}` — detecting, decoding and encoding a file's
   bytes: Qt for UTF-8/16 and Latin-1 (no ICU in this Qt), CoreFoundation
   (`CFStringCreateWithBytes`/`CFStringGetBytes`) for the rest. Each

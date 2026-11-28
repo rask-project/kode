@@ -44,6 +44,11 @@ void Reply::result(yyjson_mut_val *value)
 
 void Reply::error(std::int32_t code, std::string_view message)
 {
+    error(code, message, nullptr);
+}
+
+void Reply::error(std::int32_t code, std::string_view message, yyjson_mut_val *data)
+{
     if (m_id.empty() || !m_doc) {
         return;
     }
@@ -51,6 +56,9 @@ void Reply::error(std::int32_t code, std::string_view message)
     yyjson_mut_val *const failure{yyjson_mut_obj(doc)};
     yyjson_mut_obj_add_int(doc, failure, "code", code);
     yyjson_mut_obj_add_strncpy(doc, failure, "message", message.data(), message.size());
+    if (data != nullptr) {
+        yyjson_mut_obj_add_val(doc, failure, "data", data);
+    }
     yyjson_mut_val *const root{yyjson_mut_obj(doc)};
     yyjson_mut_obj_add_val(doc, root, "error", failure);
     finish(root);

@@ -25,6 +25,7 @@ add_executable(kode-remote
     agent/Agent.cpp
     agent/Bridge.h
     agent/Bridge.cpp
+    agent/Channel.h
     agent/EventLoop.h
     agent/EventLoop.cpp
     agent/Fd.h
@@ -36,6 +37,10 @@ add_executable(kode-remote
     agent/Service.cpp
     agent/Session.h
     agent/Session.cpp
+    agent/Sha256.h
+    agent/Sha256.cpp
+    agent/services/Fs.h
+    agent/services/Fs.cpp
     agent/services/System.h
     agent/services/System.cpp
     agent/main.cpp

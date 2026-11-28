@@ -1,9 +1,12 @@
 #pragma once
 
 #include "../protocol/Frame.h"
+#include "Channel.h"
 #include "Fd.h"
 
 #include <cstdint>
+#include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -34,13 +37,35 @@ public:
     void send(FrameType type, std::uint32_t channel, std::string_view payload);
     // False when the client is gone.
     [[nodiscard]] bool flush();
+    [[nodiscard]] std::size_t pendingOutput() const noexcept { return m_pending.size() - m_written; }
+
+    struct Outgoing {
+        std::unique_ptr<Source> source;
+        // What the client still accepts.
+        std::size_t credit{initialCredit};
+    };
+    struct Incoming {
+        std::unique_ptr<Sink> sink;
+        // What the client may still send before it is granted more.
+        std::size_t window{initialCredit};
+    };
+    [[nodiscard]] std::map<std::uint32_t, Outgoing> &outgoing() noexcept { return m_outgoing; }
+    [[nodiscard]] std::map<std::uint32_t, Incoming> &incoming() noexcept { return m_incoming; }
+    // An id for a channel of the agent's (even).
+    [[nodiscard]] std::uint32_t nextChannel() noexcept { return static_cast<std::uint32_t>(m_nextChannel += 2U); }
+    // The session ends: every sink is told, then dropped with the sources.
+    void resetChannels();
 
 private:
     FrameReader m_reader;
+    std::map<std::uint32_t, Outgoing> m_outgoing;
+    std::map<std::uint32_t, Incoming> m_incoming;
     std::string m_pending;
     std::string m_id;
     std::size_t m_written{0U};
     std::uint64_t m_key{0U};
+    // The last channel id of the agent's (even, as a word: no padding).
+    std::uint64_t m_nextChannel{0U};
     Fd m_input;
     Fd m_output;
 };

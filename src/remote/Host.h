@@ -9,6 +9,12 @@
 #include <QTimer>
 #include <QtQmlIntegration/qqmlintegration.h>
 
+#include <QList>
+#include <QPointer>
+#include <QUrl>
+
+#include <expected>
+#include <functional>
 #include <memory>
 
 namespace kode::remote
@@ -47,6 +53,8 @@ class Host : public QObject
     Q_PROPERTY(QString user READ user NOTIFY stateChanged)
     // Where it stands, in a sentence for the UI.
     Q_PROPERTY(QString status READ status NOTIFY stateChanged)
+    // The user's home there, once online.
+    Q_PROPERTY(QString home READ home NOTIFY stateChanged)
 public:
     enum class State : quint8 {
         Disconnected,
@@ -69,6 +77,15 @@ public:
     [[nodiscard]] QString platform() const;
     [[nodiscard]] QString user() const;
     [[nodiscard]] QString status() const;
+    [[nodiscard]] QString home() const { return m_home; }
+    // The ssh:// URL of `path` there.
+    Q_INVOKABLE [[nodiscard]] QUrl fileUrl(const QString &path) const;
+
+    using Ready = std::function<void(std::expected<std::reference_wrapper<Connection>, QString> connection)>;
+    // `ready` once online (connecting first when it is not): with the
+    // connection, or why it failed or was disconnected. Not called once
+    // `context` is gone; while offline it waits for the retries.
+    void whenOnline(const QObject *context, Ready ready);
     // Online: the session's connection; else none.
     [[nodiscard]] Connection *connection() const noexcept;
 
@@ -101,7 +118,14 @@ private:
     QString m_home;
     QProcess m_ssh;
     QTimer m_retry;
+    struct Waiting {
+        QPointer<const QObject> context;
+        Ready ready;
+    };
+    void tellWaiting();
+
     std::unique_ptr<Connection> m_connection;
+    QList<Waiting> m_waiting;
     qint64 m_backoff{1};
     // A State; whether it was online once (a loss is retried).
     quint64 m_state{0U};

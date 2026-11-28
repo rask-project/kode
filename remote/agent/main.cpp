@@ -1,5 +1,6 @@
 #include "Agent.h"
 #include "Bridge.h"
+#include "services/Fs.h"
 #include "services/System.h"
 
 #include <chrono>
@@ -21,6 +22,7 @@ int usage()
 void addServices(kode::remote::Agent &agent)
 {
     agent.addService(std::make_unique<kode::remote::System>());
+    agent.addService(std::make_unique<kode::remote::Fs>());
 }
 
 } // namespace

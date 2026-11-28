@@ -29,6 +29,23 @@ set(editor_sources
     ../src/editor/WrapIndex.cpp
 )
 
+# Kode's side of remote folders (Document reaches hosts through it).
+set(remote_sources
+    ../remote/protocol/Frame.h
+    ../remote/protocol/Frame.cpp
+    ../remote/protocol/Methods.h
+    ../src/remote/Connection.h
+    ../src/remote/Connection.cpp
+    ../src/remote/Files.h
+    ../src/remote/Files.cpp
+    ../src/remote/Host.h
+    ../src/remote/Host.cpp
+    ../src/remote/Hosts.h
+    ../src/remote/Hosts.cpp
+    ../src/remote/Ssh.h
+    ../src/remote/Ssh.cpp
+)
+
 set(lsp_sources
     ../src/lsp/LanguageServer.h
     ../src/lsp/LanguageServer.cpp
@@ -48,9 +65,11 @@ qt_add_executable(tst_document
     ../src/TextCodec.h
     ../src/TextCodec.cpp
     ${editor_sources}
+    ${remote_sources}
 )
 target_include_directories(tst_document PRIVATE ../src ../src/editor)
-target_link_libraries(tst_document PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_link_libraries(tst_document PRIVATE Qt6::Network Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_compile_definitions(tst_document PRIVATE KODE_VERSION="${KODE_DISPLAY_VERSION}")
 add_test(NAME tst_document COMMAND tst_document)
 set_tests_properties(tst_document PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
@@ -170,9 +189,11 @@ qt_add_executable(tst_splits
     ../src/TextCodec.cpp
     ${editor_sources}
     ${lsp_sources}
+    ${remote_sources}
 )
 target_include_directories(tst_splits PRIVATE ../src ../src/editor ../src/lsp)
-target_link_libraries(tst_splits PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation" "-framework Foundation" "-framework UniformTypeIdentifiers")
+target_link_libraries(tst_splits PRIVATE Qt6::Network Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation" "-framework Foundation" "-framework UniformTypeIdentifiers")
+target_compile_definitions(tst_splits PRIVATE KODE_VERSION="${KODE_DISPLAY_VERSION}")
 set_source_files_properties(../src/FileTypes.mm TARGET_DIRECTORY tst_splits PROPERTIES COMPILE_OPTIONS -fobjc-arc)
 add_test(NAME tst_splits COMMAND tst_splits)
 set_tests_properties(tst_splits PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
@@ -229,29 +250,26 @@ qt_add_executable(tst_lsp
     ../src/TextCodec.cpp
     ${editor_sources}
     ${lsp_sources}
+    ${remote_sources}
 )
 target_include_directories(tst_lsp PRIVATE ../src ../src/lsp ../src/editor)
-target_link_libraries(tst_lsp PRIVATE Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_link_libraries(tst_lsp PRIVATE Qt6::Network Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
+target_compile_definitions(tst_lsp PRIVATE KODE_VERSION="${KODE_DISPLAY_VERSION}")
 add_test(NAME tst_lsp COMMAND tst_lsp)
 set_tests_properties(tst_lsp PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 qt_add_executable(tst_remote
     tst_remote.h
     tst_remote.cpp
-    ../remote/protocol/Frame.h
-    ../remote/protocol/Frame.cpp
-    ../remote/protocol/Methods.h
-    ../src/remote/Connection.h
-    ../src/remote/Connection.cpp
-    ../src/remote/Host.h
-    ../src/remote/Host.cpp
-    ../src/remote/Hosts.h
-    ../src/remote/Hosts.cpp
-    ../src/remote/Ssh.h
-    ../src/remote/Ssh.cpp
+    ../src/Document.h
+    ../src/Document.cpp
+    ../src/TextCodec.h
+    ../src/TextCodec.cpp
+    ${editor_sources}
+    ${remote_sources}
 )
-target_include_directories(tst_remote PRIVATE ../src)
-target_link_libraries(tst_remote PRIVATE Qt6::Network Qt6::Qml Qt6::Test)
+target_include_directories(tst_remote PRIVATE ../src ../src/editor)
+target_link_libraries(tst_remote PRIVATE Qt6::Network Qt6::Quick Qt6::Test KF6::SyntaxHighlighting "-framework CoreFoundation")
 target_compile_definitions(tst_remote PRIVATE
     KODE_VERSION="${KODE_DISPLAY_VERSION}"
     KODE_REMOTE_AGENT="$<TARGET_FILE:kode-remote>"
@@ -259,3 +277,4 @@ target_compile_definitions(tst_remote PRIVATE
 )
 add_dependencies(tst_remote kode-remote kode-askpass)
 add_test(NAME tst_remote COMMAND tst_remote)
+set_tests_properties(tst_remote PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

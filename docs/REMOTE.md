@@ -480,7 +480,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 | A0 — The seam | folded into A3–A5 |
 | A1 — Protocol and agent skeleton | ✅ |
 | A2 — Bootstrap and connection | ✅ |
-| A3 — Remote documents | ⬜ |
+| A3 — Remote documents | ✅ |
 | A4 — Remote folders | ⬜ |
 | A5 — Remote language servers | ⬜ |
 | A6 — Resilience and measurements | ⬜ |
@@ -561,15 +561,53 @@ runs the same commands). A dev build reinstalls a changed agent of the
 same version, but a daemon of that version already running keeps serving
 until it goes idle (releases have a version each).
 
-### A3 — Remote documents
+### A3 — Remote documents ✅
 
-The `fs` service (stat, list, read, write with `expect`, atomic, keeping
-modes and links), `RemoteFileSystem`, documents opened and saved on a host,
-the conflict alert, the offline rules, a remote folder picker (a QML sheet
-over `fs/list`: `NSOpenPanel` cannot browse a host), `ssh://` from the
-`kode` command and Open Recent. Tests over pipes: every encoding round trip,
-a conflict (the file changed between read and save), a symlink, a read-only
-folder, the connection dropped mid-save.
+Done. The agent: channels with credit (`Channel.h`: a `Source` the agent
+reads as the client's credit allows, a `Sink` for what the client sends;
+CREDIT granted back as each piece is written; a session's output kept
+under 1 MB so channel 0 is never held behind data), SHA-256 of its own
+(`Sha256`), and the `fs` service: `fs/stat` (several paths; links with
+their target and its type), `fs/list` (at most 50 000 entries), `fs/read`
+(the bytes on a channel of the agent's, reset when the file changed while
+read) and `fs/write` (the bytes on the client's channel: a temporary file
+beside the target, `fsync`, the version checked — same size and time, or
+same size and SHA-256 —, mode and owner kept, renamed over it; through a
+link to what it names; in place where the folder takes no new file;
+folders made on request; a conflict answers `error::conflict` with the
+version now). Kode: `Connection`'s channels (`receive()`, `openChannel()`,
+`send()`), `remote::files` (`read`, `write`, `stat`, `list`; the version
+and the SHA-256 of the bytes read or written), `Hosts::shared()` (the QML
+singleton's instance, for C++), `Host::whenOnline()` (connecting first;
+waiting through retries), `ssh::destinationOf()`/`fileUrl()` (an
+`ssh://[user@]host[:port]/path` URL and its destination). `Document`: an
+ssh:// file read through the agent and decoded off the GUI thread (a NUL
+in its first 8000 bytes: not text), saved through it with the version
+read as `expect`; every save now ends with `saved()` or `saveFailed()`
+(at once for a local file), so `EditorWindow.qml`'s save and review wait
+for it; a save on its way keeps later edits modified
+(`TextDocument::beginSave()`/`finishSave()`); a conflict emits
+`changedOnDisk()`, whose Keep Mine (`keepMine()`) makes the next save
+replace the host's version; the host asked every 5 s whether the file
+changed (reloaded when unmodified); a file not there yet opens empty and is
+written with its folders; saving while the host is not connected refuses,
+the changes kept. Connect to Server… lists the host's files once online
+(`RemoteFolder`, a model over `fs/list`: folders first, hidden ones left
+out, from the home); a double click enters a folder or opens a file in the
+window. `kode ssh://host/path` opens it. Tests (`tst_remote`, over
+`serve` and through the stand-in ssh): files written and read back (hashes
+alike, no temporary left), 5 MB both ways (past the first credit), a
+conflicting write refused with its version, a touched file with the same
+bytes written, the mode kept and a link written through, a read-only
+folder written in place, a folder listed, a missing file; a remote
+`Document` opened and saved, its encoding and CRLF kept, a conflict and
+Keep Mine, an edit during a save kept modified, a change on the host
+reloaded, a missing file started and saved.
+
+Moved to A4: Open Recent for remote files (`RecentDocuments` keeps local
+ones only) and the sidebar's host state. Not done: a test of a connection
+dropped mid-save (the save fails with `saveFailed()`, the document stays
+modified — the path is the same as any error's).
 
 ### A4 — Remote folders
 

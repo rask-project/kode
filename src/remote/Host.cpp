@@ -97,6 +97,43 @@ void Host::setState(State state)
     }
     m_state = static_cast<quint64>(state);
     emit stateChanged();
+    tellWaiting();
+}
+
+QUrl Host::fileUrl(const QString &path) const
+{
+    return ssh::fileUrl(m_destination, path);
+}
+
+void Host::whenOnline(const QObject *context, Ready ready)
+{
+    m_waiting.emplace_back(Waiting{.context = context, .ready = std::move(ready)});
+    if (state() == State::Online) {
+        tellWaiting();
+        return;
+    }
+    connectToHost();
+}
+
+void Host::tellWaiting()
+{
+    const bool online{state() == State::Online};
+    if (!online && state() != State::Failed && state() != State::Disconnected) {
+        return;
+    }
+    // Each may ask again: they wait for the next time.
+    const QList<Waiting> waiting{std::exchange(m_waiting, {})};
+    for (const Waiting &waiter : waiting) {
+        if (waiter.context == nullptr) {
+            continue;
+        }
+        if (online) {
+            waiter.ready(std::ref(*m_connection));
+        } else {
+            waiter.ready(std::unexpected{m_error.isEmpty() ? tr("Not connected to “%1”.").arg(m_destination) : m_error}
+            );
+        }
+    }
 }
 
 void Host::connectToHost()

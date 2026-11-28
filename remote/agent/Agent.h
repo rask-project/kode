@@ -42,6 +42,11 @@ private:
     void receive(std::uint64_t key);
     void flush(std::uint64_t key);
     void handle(Session &session, const Frame &frame);
+    // Data, Eof, Credit and Reset frames; false when the client broke the protocol.
+    [[nodiscard]] bool handleChannel(Session &session, const Frame &frame);
+    // Feeds the session's channels as their credit and its output allow.
+    void pump(Session &session);
+    [[nodiscard]] Channels channels(std::uint64_t key);
     void handleMessage(Session &session, std::string_view payload);
     void initialize(Session &session, yyjson_val *params, Reply reply);
     void accept();

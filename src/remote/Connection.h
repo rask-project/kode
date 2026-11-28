@@ -20,8 +20,18 @@ namespace kode::remote
 
 struct Error {
     QString message;
+    // What the agent adds (fs: a conflict's current version).
+    QJsonValue data;
     // JSON-RPC's code (error:: in Methods.h).
     qint64 code{0};
+};
+
+// How a channel's bytes arrive: pieces, then its end.
+enum class ChannelEnd : quint8 {
+    More,
+    Complete,
+    // Reset by the agent, or the connection closed.
+    Failed,
 };
 
 // Kode's end of a kode-remote session: the process that reaches the agent
@@ -42,6 +52,8 @@ public:
 
     using Result = std::expected<QJsonValue, Error>;
     using Handler = std::function<void(const Result &result)>;
+    // Called with each piece (More), then once with the end.
+    using Receiver = std::function<void(QByteArrayView piece, ChannelEnd end)>;
 
     explicit Connection(QObject *parent = nullptr);
     ~Connection() override;
@@ -61,6 +73,14 @@ public:
     void request(const QString &method, const QJsonObject &params, Handler handler);
     void notify(const QString &method, const QJsonObject &params);
 
+    // The agent's channel `channel` (named in an answer) goes to `receiver`;
+    // what it takes is granted back as credit.
+    void receive(quint32 channel, Receiver receiver);
+    // A new channel of Kode's, for the request that names it.
+    [[nodiscard]] quint32 openChannel() noexcept { return static_cast<quint32>(m_nextChannel += 2U); }
+    // `bytes` on Kode's `channel` as the agent's credit allows, then its end.
+    void send(quint32 channel, QByteArray bytes);
+
 signals:
     void stateChanged();
     void notified(const QString &method, const QJsonValue &params);
@@ -69,6 +89,10 @@ private:
     void send(const QJsonObject &message);
     void readFrames();
     void handle(const Frame &frame);
+    // False when the agent broke the protocol.
+    [[nodiscard]] bool handleChannel(const Frame &frame);
+    void pump(quint32 channel);
+    void writeFrame(FrameType type, quint32 channel, QByteArrayView payload);
     void handleMessage(QByteArrayView payload);
     void initialized(const Result &result);
     // Ends the connection with `message` (empty when asked to).
@@ -77,12 +101,28 @@ private:
 
     QProcess m_process;
     FrameReader m_reader;
+    struct Incoming {
+        Receiver receiver;
+        // What the agent may still send.
+        qint64 window{0};
+    };
+    struct Outgoing {
+        QByteArray bytes;
+        qint64 sent{0};
+        // What the agent still accepts.
+        qint64 credit{0};
+    };
+
     QHash<qint64, Handler> m_pending;
+    QHash<quint32, Incoming> m_incoming;
+    QHash<quint32, Outgoing> m_outgoing;
     QJsonObject m_agent;
     QString m_error;
     // What the process wrote to stderr: ssh's messages (bounded).
     QByteArray m_stderr;
     qint64 m_nextId{1};
+    // The last channel id of Kode's (odd).
+    quint64 m_nextChannel{static_cast<quint64>(-1)};
     // A State (a whole word: no padding).
     quint64 m_state{0U};
 };

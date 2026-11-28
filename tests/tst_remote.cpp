@@ -2,7 +2,10 @@
 
 #include "../remote/protocol/Frame.h"
 #include "../remote/protocol/Methods.h"
+#include "Document.h"
+#include "TextDocument.h"
 #include "remote/Connection.h"
+#include "remote/Files.h"
 #include "remote/Host.h"
 #include "remote/Hosts.h"
 #include "remote/Ssh.h"
@@ -108,7 +111,7 @@ Connection::Result ask(Connection &connection, const QString &method)
     std::optional<Connection::Result> answer;
     connection.request(method, {}, [&answer](const Connection::Result &result) { answer = result; });
     if (!QTest::qWaitFor([&answer] { return answer.has_value(); })) {
-        return std::unexpected{kode::remote::Error{.message = QStringLiteral("no answer"), .code = 0}};
+        return std::unexpected{kode::remote::Error{.message = QStringLiteral("no answer"), .data = {}, .code = 0}};
     }
     return *answer;
 }
@@ -518,4 +521,363 @@ void TestRemote::tellsPromptKinds()
     }));
 }
 
-QTEST_GUILESS_MAIN(TestRemote)
+namespace
+{
+
+namespace files = kode::remote::files;
+
+// An agent over stdio, online.
+std::unique_ptr<Connection> serving()
+{
+    auto connection{std::make_unique<Connection>()};
+    connection->start(agentPath, {QStringLiteral("serve")});
+    return connection;
+}
+
+template <typename T> std::optional<T> waitFor(std::optional<T> &answer)
+{
+    static_cast<void>(QTest::qWaitFor([&answer] { return answer.has_value(); }, 10000));
+    return answer;
+}
+
+std::expected<files::Version, kode::remote::Error> writeFile(
+    Connection &connection,
+    const QString &path,
+    const QByteArray &bytes,
+    const std::optional<files::Version> &expect = {}
+)
+{
+    std::optional<std::expected<files::Version, kode::remote::Error>> answer;
+    files::write(
+        connection,
+        path,
+        bytes,
+        expect,
+        true,
+        [&answer](std::expected<files::Version, kode::remote::Error> result) { answer = std::move(result); }
+    );
+    return waitFor(answer).value_or(
+        std::unexpected{kode::remote::Error{.message = QStringLiteral("no answer"), .data = {}, .code = 0}}
+    );
+}
+
+std::expected<files::Read, kode::remote::Error> readFile(Connection &connection, const QString &path)
+{
+    std::optional<std::expected<files::Read, kode::remote::Error>> answer;
+    files::read(connection, path, [&answer](std::expected<files::Read, kode::remote::Error> result) {
+        answer = std::move(result);
+    });
+    return waitFor(answer).value_or(
+        std::unexpected{kode::remote::Error{.message = QStringLiteral("no answer"), .data = {}, .code = 0}}
+    );
+}
+
+QByteArray contentsOf(const QString &path)
+{
+    QFile file{path};
+    return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{};
+}
+
+} // namespace
+
+void TestRemote::writesAndReadsFiles()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    const QString path{folder.filePath(QStringLiteral("new/folders/notes.txt"))};
+    const QByteArray bytes{"one\ntwo\n"};
+    const auto written{writeFile(*connection, path, bytes)};
+    QVERIFY2(written.has_value(), qPrintable(written ? QString{} : written.error().message));
+    QCOMPARE(contentsOf(path), bytes);
+    QCOMPARE(written->size, bytes.size());
+    const auto read{readFile(*connection, path)};
+    QVERIFY(read.has_value());
+    QCOMPARE(read->bytes, bytes);
+    QCOMPARE(read->version.hash, written->hash);
+    QVERIFY(read->version.sameAs(*written));
+    // No temporary file left beside it.
+    QCOMPARE(
+        QDir{QFileInfo{path}.path()}.entryList(QDir::Files | QDir::Hidden),
+        QStringList{QStringLiteral("notes.txt")}
+    );
+}
+
+void TestRemote::movesLargeFiles()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    QByteArray bytes(5 * 1024 * 1024 + 123, Qt::Uninitialized);
+    QRandomGenerator::global()->generate(bytes.begin(), bytes.end());
+    const QString path{folder.filePath(QStringLiteral("large.bin"))};
+    QVERIFY(writeFile(*connection, path, bytes).has_value());
+    QCOMPARE(contentsOf(path), bytes);
+    const auto read{readFile(*connection, path)};
+    QVERIFY(read.has_value());
+    QCOMPARE(read->bytes.size(), bytes.size());
+    QVERIFY(read->bytes == bytes);
+}
+
+void TestRemote::refusesAConflictingWrite()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    const QString path{folder.filePath(QStringLiteral("a.txt"))};
+    const auto first{writeFile(*connection, path, "first\n")};
+    QVERIFY(first.has_value());
+    QFile other{path};
+    QVERIFY(other.open(QIODevice::Append));
+    other.write("from elsewhere\n");
+    other.close();
+    const auto second{writeFile(*connection, path, "mine\n", *first)};
+    QVERIFY(!second.has_value());
+    QCOMPARE(second.error().code, kode::remote::error::conflict);
+    QCOMPARE(files::versionOf(second.error().data.toObject()).size, qint64{21});
+    QCOMPARE(contentsOf(path), QByteArray{"first\nfrom elsewhere\n"});
+    QCOMPARE(QDir{folder.path()}.entryList(QDir::Files | QDir::Hidden), QStringList{QStringLiteral("a.txt")});
+}
+
+void TestRemote::writesATouchedFile()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    const QString path{folder.filePath(QStringLiteral("a.txt"))};
+    const auto first{writeFile(*connection, path, "same\n")};
+    QVERIFY(first.has_value());
+    QFile file{path};
+    QVERIFY(file.open(QIODevice::ReadWrite));
+    QVERIFY(file.setFileTime(QDateTime::currentDateTime().addSecs(-3600), QFileDevice::FileModificationTime));
+    file.close();
+    QVERIFY(writeFile(*connection, path, "changed\n", *first).has_value());
+    QCOMPARE(contentsOf(path), QByteArray{"changed\n"});
+}
+
+void TestRemote::keepsTheModeAndWritesThroughLinks()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    const QString path{folder.filePath(QStringLiteral("real.txt"))};
+    const QString link{folder.filePath(QStringLiteral("link.txt"))};
+    QVERIFY(writeFile(*connection, path, "a\n").has_value());
+    QVERIFY(QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup));
+    QVERIFY(QFile::link(path, link));
+    QVERIFY(writeFile(*connection, link, "b\n").has_value());
+    QVERIFY(QFileInfo{link}.isSymLink());
+    QCOMPARE(contentsOf(path), QByteArray{"b\n"});
+    QCOMPARE(
+        QFile::permissions(path) &
+            (QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther | QFile::WriteGroup),
+        QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup
+    );
+}
+
+void TestRemote::writesInPlaceInAReadOnlyFolder()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    const QString sub{folder.filePath(QStringLiteral("locked"))};
+    const QString path{sub + QStringLiteral("/a.txt")};
+    QVERIFY(writeFile(*connection, path, "before\n").has_value());
+    QVERIFY(::chmod(sub.toUtf8().constData(), 0555) == 0);
+    const auto written{writeFile(*connection, path, "after\n")};
+    QVERIFY2(written.has_value(), qPrintable(written ? QString{} : written.error().message));
+    QCOMPARE(contentsOf(path), QByteArray{"after\n"});
+    // A new file there is refused.
+    const auto refused{writeFile(*connection, sub + QStringLiteral("/b.txt"), "x")};
+    QVERIFY(!refused.has_value());
+    QCOMPARE(refused.error().code, kode::remote::error::permission);
+    QVERIFY(::chmod(sub.toUtf8().constData(), 0755) == 0);
+}
+
+void TestRemote::listsAFolder()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    QVERIFY(writeFile(*connection, folder.filePath(QStringLiteral("sub/x.txt")), "x").has_value());
+    QVERIFY(writeFile(*connection, folder.filePath(QStringLiteral("file.txt")), "12345").has_value());
+    QVERIFY(QFile::link(folder.filePath(QStringLiteral("sub")), folder.filePath(QStringLiteral("to-sub"))));
+    std::optional<std::expected<QList<files::Entry>, kode::remote::Error>> answer;
+    files::list(*connection, folder.path(), [&answer](std::expected<QList<files::Entry>, kode::remote::Error> result) {
+        answer = std::move(result);
+    });
+    const auto listed{waitFor(answer)};
+    QVERIFY(listed.has_value() && listed->has_value());
+    QList<files::Entry> entries{**listed};
+    std::ranges::sort(entries, {}, &files::Entry::name);
+    QCOMPARE(entries.size(), 3);
+    QCOMPARE(entries[0].name, QStringLiteral("file.txt"));
+    QCOMPARE(entries[0].version.size, qint64{5});
+    QVERIFY(!entries[0].isFolder());
+    QCOMPARE(entries[1].name, QStringLiteral("sub"));
+    QVERIFY(entries[1].isFolder());
+    QCOMPARE(entries[2].type, QStringLiteral("link"));
+    QVERIFY(entries[2].isFolder());
+}
+
+void TestRemote::reportsAMissingFile()
+{
+    QTemporaryDir folder;
+    const auto connection{serving()};
+    const auto read{readFile(*connection, folder.filePath(QStringLiteral("nothing.txt")))};
+    QVERIFY(!read.has_value());
+    QCOMPARE(read.error().code, kode::remote::error::notFound);
+    std::optional<std::expected<QList<files::Entry>, kode::remote::Error>> answer;
+    files::stat(*connection, {folder.filePath(QStringLiteral("nothing.txt"))}, [&answer](auto result) {
+        answer = std::move(result);
+    });
+    const auto stat{waitFor(answer)};
+    QVERIFY(stat.has_value() && stat->has_value());
+    QCOMPARE((*stat)->first().type, QStringLiteral("missing"));
+}
+
+namespace
+{
+
+// A host named for one test, its ssh a stand-in running here.
+struct RemoteHost {
+    QTemporaryDir folder;
+    QString destination;
+
+    RemoteHost()
+    {
+        static qint32 count{0};
+        destination = QStringLiteral("box%1").arg(++count);
+        static_cast<void>(
+            Hosts::shared().host(destination, setupIn(folder, writeScript(folder, QStringLiteral("ssh"), fakeSsh)))
+        );
+    }
+    RemoteHost(const RemoteHost &) = delete;
+    RemoteHost &operator=(const RemoteHost &) = delete;
+    RemoteHost(RemoteHost &&) = delete;
+    RemoteHost &operator=(RemoteHost &&) = delete;
+    ~RemoteHost()
+    {
+        Hosts::shared().host(destination)->disconnectFromHost();
+        stopDaemons(folder);
+    }
+
+    [[nodiscard]] QString path(const QString &name) const { return folder.filePath(QStringLiteral("files/") + name); }
+    [[nodiscard]] QUrl url(const QString &name) const { return kode::remote::ssh::fileUrl(destination, path(name)); }
+    void write(const QString &name, const QByteArray &bytes) const
+    {
+        QDir{}.mkpath(QFileInfo{path(name)}.path());
+        QFile file{path(name)};
+        if (file.open(QIODevice::WriteOnly)) {
+            file.write(bytes);
+        }
+    }
+};
+
+void typeAtStart(kode::Document &document, const QString &text)
+{
+    document.textDocument()->replace(0, 0, text, false, {});
+}
+
+} // namespace
+
+void TestRemote::opensAndSavesARemoteDocument()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("hello.txt"), "hello\n");
+    kode::Document document;
+    QVERIFY(document.load(host.url(QStringLiteral("hello.txt"))));
+    QVERIFY(document.loading());
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    QCOMPARE(document.textDocument()->text(), QStringLiteral("hello\n"));
+    QCOMPARE(document.fileName(), QStringLiteral("hello.txt"));
+    QCOMPARE(document.textDocument()->syntax(), QString{});
+    typeAtStart(document, QStringLiteral("well, "));
+    QVERIFY(document.modified());
+    QSignalSpy saved{&document, &kode::Document::saved};
+    QVERIFY(document.save());
+    QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
+    QVERIFY(!document.modified());
+    QCOMPARE(contentsOf(host.path(QStringLiteral("hello.txt"))), QByteArray{"well, hello\n"});
+}
+
+void TestRemote::keepsARemoteDocumentsEncoding()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("latin.txt"), "caf\xe9\r\n");
+    kode::Document document;
+    QVERIFY(document.load(host.url(QStringLiteral("latin.txt"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    QCOMPARE(document.textDocument()->text(), QStringLiteral("caf\u00e9\n"));
+    QVERIFY(document.crlf());
+    typeAtStart(document, QStringLiteral("un "));
+    QSignalSpy saved{&document, &kode::Document::saved};
+    QVERIFY(document.save());
+    QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
+    QCOMPARE(contentsOf(host.path(QStringLiteral("latin.txt"))), QByteArray{"un caf\xe9\r\n"});
+}
+
+void TestRemote::refusesAConflictingSave()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("a.txt"), "first\n");
+    kode::Document document;
+    QVERIFY(document.load(host.url(QStringLiteral("a.txt"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    host.write(QStringLiteral("a.txt"), "theirs, longer\n");
+    typeAtStart(document, QStringLiteral("mine "));
+    QSignalSpy changed{&document, &kode::Document::changedOnDisk};
+    QSignalSpy failed{&document, &kode::Document::saveFailed};
+    QSignalSpy saved{&document, &kode::Document::saved};
+    QVERIFY(document.save());
+    QTRY_COMPARE_WITH_TIMEOUT(failed.count(), 1, 10000);
+    QVERIFY(changed.count() >= 1);
+    QVERIFY(document.modified());
+    QCOMPARE(contentsOf(host.path(QStringLiteral("a.txt"))), QByteArray{"theirs, longer\n"});
+    document.keepMine();
+    QVERIFY(document.save());
+    QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
+    QCOMPARE(contentsOf(host.path(QStringLiteral("a.txt"))), QByteArray{"mine first\n"});
+}
+
+void TestRemote::keepsEditsMadeDuringASave()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("a.txt"), "text\n");
+    kode::Document document;
+    QVERIFY(document.load(host.url(QStringLiteral("a.txt"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    typeAtStart(document, QStringLiteral("1"));
+    QSignalSpy saved{&document, &kode::Document::saved};
+    QVERIFY(document.save());
+    typeAtStart(document, QStringLiteral("2"));
+    QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
+    QCOMPARE(contentsOf(host.path(QStringLiteral("a.txt"))), QByteArray{"1text\n"});
+    QVERIFY(document.modified());
+    document.textDocument()->undo();
+    QVERIFY(!document.modified());
+}
+
+void TestRemote::reloadsARemoteChange()
+{
+    const RemoteHost host;
+    host.write(QStringLiteral("a.txt"), "before\n");
+    kode::Document document;
+    QVERIFY(document.load(host.url(QStringLiteral("a.txt"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    host.write(QStringLiteral("a.txt"), "after, from elsewhere\n");
+    QTRY_COMPARE_WITH_TIMEOUT(document.textDocument()->text(), QStringLiteral("after, from elsewhere\n"), 15000);
+    QVERIFY(!document.modified());
+}
+
+void TestRemote::startsAMissingRemoteFile()
+{
+    const RemoteHost host;
+    kode::Document document;
+    QSignalSpy failed{&document, &kode::Document::loadFailed};
+    QVERIFY(document.load(host.url(QStringLiteral("new/folder/notes.md"))));
+    QTRY_VERIFY_WITH_TIMEOUT(!document.loading(), 10000);
+    QCOMPARE(failed.count(), 0);
+    QVERIFY(document.textDocument()->text().isEmpty());
+    QCOMPARE(document.textDocument()->syntax(), QStringLiteral("Markdown"));
+    typeAtStart(document, QStringLiteral("# Notes\n"));
+    QSignalSpy saved{&document, &kode::Document::saved};
+    QVERIFY(document.save());
+    QTRY_COMPARE_WITH_TIMEOUT(saved.count(), 1, 10000);
+    QCOMPARE(contentsOf(host.path(QStringLiteral("new/folder/notes.md"))), QByteArray{"# Notes\n"});
+}
+
+QTEST_MAIN(TestRemote)

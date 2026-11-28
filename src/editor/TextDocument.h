@@ -161,6 +161,10 @@ public:
     void closeMerge() noexcept { m_flags &= ~MergeOpen; }
     // The text now matches the file: no longer modified.
     Q_INVOKABLE void markSaved();
+    // A save that finishes later (to a host): the text as it is now is what
+    // is written; edits meanwhile stay modified once finishSave() marks it.
+    void beginSave() noexcept;
+    void finishSave();
     // Picks the syntax for a file named `fileName` (or by its shebang).
     Q_INVOKABLE void detectSyntax(const QString &fileName);
     // The highlighting theme (see Syntaxes.themes).
@@ -227,6 +231,8 @@ private:
     qsizetype m_undoIndex{0};
     // The undo index of the saved text; -1 when no longer reachable.
     qsizetype m_cleanIndex{0};
+    // The undo index of the text being saved (beginSave()), else -1.
+    qsizetype m_savingIndex{-1};
     qsizetype m_indentWidth{4};
     qsizetype m_defaultIndentWidth{4};
     quint64 m_flags{0U};

@@ -55,6 +55,20 @@ Hosts::~Hosts()
     m_askpass.close();
 }
 
+Hosts &Hosts::shared()
+{
+    static Hosts instance;
+    return instance;
+}
+
+Hosts *Hosts::create(QQmlEngine * /*qmlEngine*/, QJSEngine * /*jsEngine*/)
+{
+    Hosts &hosts{shared()};
+    // A function-local static: the engine must not delete it.
+    QJSEngine::setObjectOwnership(&hosts, QJSEngine::CppOwnership);
+    return &hosts;
+}
+
 void Hosts::listen()
 {
     QByteArray random(tokenBytes, Qt::Uninitialized);
@@ -186,13 +200,24 @@ Setup Hosts::setup(const QString &destination) const
 Host *Hosts::host(const QString &destination)
 {
     const QString name{destination.trimmed()};
-    if (const QPointer<Host> known{m_hosts.value(name)}; known != nullptr) {
+    return host(name, setup(name));
+}
+
+Host *Hosts::host(const QString &destination, Setup setup)
+{
+    if (const QPointer<Host> known{m_hosts.value(destination)}; known != nullptr) {
         return known;
     }
     // A child: QML sees it as C++'s.
-    auto *const made{std::make_unique<Host>(name, setup(name), this).release()};
-    m_hosts.insert(name, made);
+    auto *const made{std::make_unique<Host>(destination, std::move(setup), this).release()};
+    m_hosts.insert(destination, made);
     return made;
+}
+
+Host *Hosts::forUrl(const QUrl &url)
+{
+    const QString destination{ssh::destinationOf(url)};
+    return destination.isEmpty() ? nullptr : host(destination);
 }
 
 QStringList Hosts::configuredHosts()

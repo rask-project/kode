@@ -58,9 +58,29 @@ QStringList expand(const QString &pattern)
 
 } // namespace
 
+QString destinationOf(const QUrl &url)
+{
+    if (url.scheme() != QLatin1String("ssh") || url.host().isEmpty()) {
+        return {};
+    }
+    const QString user{url.userName().isEmpty() ? QString{} : url.userName() + u'@'};
+    if (url.port() > 0) {
+        return QStringLiteral("ssh://") + user + url.host() + u':' + QString::number(url.port());
+    }
+    return user + url.host();
+}
+
+QUrl fileUrl(const QString &destination, const QString &path)
+{
+    QUrl url{destination.startsWith(QLatin1String("ssh://")) ? destination : QStringLiteral("ssh://") + destination};
+    url.setPath(path);
+    return url;
+}
+
 bool validDestination(const QString &destination)
 {
-    static const QRegularExpression allowed{QStringLiteral(R"(^[A-Za-z0-9_.@%+\[\]:-]+$)")};
+    // A host, user@host, or ssh://[user@]host[:port].
+    static const QRegularExpression allowed{QStringLiteral(R"(^(ssh://)?[A-Za-z0-9_.@%+\[\]:-]+$)")};
     return !destination.isEmpty() && !destination.startsWith(QLatin1Char('-')) && allowed.match(destination).hasMatch();
 }
 

@@ -26,6 +26,12 @@ inline constexpr std::int32_t internalError{-32603};
 inline constexpr std::int32_t notInitialized{-32002};
 // Kode's own: the connection went away before the answer came.
 inline constexpr std::int32_t disconnected{-32000};
+// fs: the file is not the version the client expected (data: what it is now).
+inline constexpr std::int32_t conflict{-32010};
+inline constexpr std::int32_t notFound{-32011};
+inline constexpr std::int32_t permission{-32012};
+// Any other failure of the system's (the message tells).
+inline constexpr std::int32_t failed{-32013};
 } // namespace error
 
 } // namespace kode::remote

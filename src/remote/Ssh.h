@@ -3,6 +3,7 @@
 #include <QByteArrayView>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 
 #include <optional>
 
@@ -12,9 +13,15 @@ namespace kode::remote::ssh
 {
 
 // A destination as ~/.ssh/config or the user names it ("box", "me@box",
-// "me@box:2222" is not one: ssh takes the port with -p). Refused when it
-// could be read as an option or holds spaces or control characters.
+// "ssh://me@box:2222"). Refused when it could be read as an option or holds
+// spaces or control characters.
 [[nodiscard]] bool validDestination(const QString &destination);
+
+// The destination an ssh:// URL names ("me@box", "box"; with a port, the
+// URL form ssh takes: "ssh://me@box:2222"); empty for any other URL.
+[[nodiscard]] QString destinationOf(const QUrl &url);
+// The ssh:// URL of `path` on `destination`.
+[[nodiscard]] QUrl fileUrl(const QString &destination, const QString &path);
 
 // ssh's arguments for `remoteCommand` on `destination`: one master
 // connection per host (ControlMaster in `controlFolder`), no forwarding of
