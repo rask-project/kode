@@ -6,6 +6,17 @@
     <description>Kode releases</description>
     <language>en</language>
     <item>
+      <title>Kode 1.1.2</title>
+      <link>https://github.com/rask-project/kode/releases/tag/v1.1.2</link>
+      <sparkle:version>1.1.2.1000</sparkle:version>
+      <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <pubDate>Sat, 28 Nov 2026 12:08:29 GMT</pubDate>
+      <description sparkle:format="markdown"><![CDATA[The spinner in the sidebar's footer shows again while a language server is busy: the app bundle now carries Qt's WebP image plugin it is drawn from.
+]]></description>
+      <enclosure url="https://github.com/rask-project/kode/releases/download/v1.1.2/Kode-1.1.2-arm64.zip" length="44451809" type="application/octet-stream" sparkle:edSignature="qv3WIwmmsm6RJs1Phq9ehZRjS6lga6rIkx46PA1xboDKIq5HOT9ZQtEWuF20yGJkVb4Y33iN+gf8pJEZXdxpCA=="/>
+    </item>
+    <item>
       <title>Kode 1.1.1</title>
       <link>https://github.com/rask-project/kode/releases/tag/v1.1.1</link>
       <sparkle:version>1.1.1.1000</sparkle:version>
