@@ -1095,6 +1095,10 @@ void TestRemote::showsARemoteFolder()
     QCOMPARE(tree.index(0, 0, tree.rootIndex()).data().toString(), QStringLiteral("src"));
     QVERIFY(tree.index(0, 0, tree.rootIndex()).data(kode::FileTree::IsFolderRole).toBool());
     QCOMPARE(tree.index(1, 0, tree.rootIndex()).data().toString(), QStringLiteral("main.cpp"));
+    // The roles the sidebar's delegate requires, by name.
+    const qint32 fileNameRole{tree.roleNames().key(QByteArrayLiteral("fileName"), -1)};
+    QVERIFY(fileNameRole >= 0);
+    QCOMPARE(tree.index(1, 0, tree.rootIndex()).data(fileNameRole).toString(), QStringLiteral("main.cpp"));
     QCOMPARE(
         tree.index(1, 0, tree.rootIndex()).data(kode::FileTree::FileUrlRole).toUrl(),
         host.url(QStringLiteral("project/main.cpp"))

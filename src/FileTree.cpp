@@ -364,6 +364,8 @@ QVariant FileTree::data(const QModelIndex &index, qint32 role) const
     }
     case IsFolderRole:
         return isFolderAt(mapToSource(index));
+    case QFileSystemModel::FileNameRole:
+        return nameAt(mapToSource(index));
     case FileUrlRole:
         return urlAt(mapToSource(index));
     default:
@@ -489,6 +491,8 @@ QUrl FileTree::remoteCopy(const QUrl &url, const QString &folder, bool move)
 QHash<qint32, QByteArray> FileTree::roleNames() const
 {
     QHash<qint32, QByteArray> names{QSortFilterProxyModel::roleNames()};
+    // Its own, not the source's: a host's tree has no QFileSystemModel roles.
+    names.insert(QFileSystemModel::FileNameRole, QByteArrayLiteral("fileName"));
     names.insert(IconSourceRole, QByteArrayLiteral("iconSource"));
     names.insert(IsFolderRole, QByteArrayLiteral("isFolder"));
     names.insert(FileUrlRole, QByteArrayLiteral("fileUrl"));
