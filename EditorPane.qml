@@ -237,10 +237,17 @@ Item {
 
         popupType: Popup.Native
 
-        MenuItem {
-            text: qsTr("No Quick Fixes")
-            enabled: false
-            visible: fixesMenu.titles.length === 0
+        // A native menu does not follow a change of `visible`: the item is made only when there are none.
+        Instantiator {
+            model: fixesMenu.titles.length === 0 ? 1 : 0
+
+            delegate: MenuItem {
+                text: qsTr("No Quick Fixes")
+                enabled: false
+            }
+
+            onObjectAdded: (index, object) => fixesMenu.insertItem(0, object)
+            onObjectRemoved: (index, object) => fixesMenu.removeItem(object)
         }
 
         Instantiator {
@@ -254,7 +261,7 @@ Item {
                 onTriggered: OpenDocuments.applyCodeAction(fixesMenu.ticket, index)
             }
 
-            onObjectAdded: (index, object) => fixesMenu.insertItem(index + 1, object)
+            onObjectAdded: (index, object) => fixesMenu.insertItem(index, object)
             onObjectRemoved: (index, object) => fixesMenu.removeItem(object)
         }
     }

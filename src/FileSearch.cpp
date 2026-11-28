@@ -291,8 +291,14 @@ QVariant FileSearch::data(const QModelIndex &index, qint32 role) const
         return marked;
     }
     case PathRole: {
+        // The home folder as given or resolved (/tmp is /private/tmp).
         const QString home{QDir::homePath()};
-        return path.startsWith(home + u'/') ? u"~"_s + path.sliced(home.size()) : path;
+        for (const QString &prefix : {home, QFileInfo{home}.canonicalFilePath()}) {
+            if (!prefix.isEmpty() && path.startsWith(prefix + u'/')) {
+                return u"~"_s + path.sliced(prefix.size());
+            }
+        }
+        return path;
     }
     case FileUrlRole:
         return QUrl::fromLocalFile(path);
