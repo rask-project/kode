@@ -533,6 +533,8 @@ folder (the project's own types found), its tokens refined by their text.
 
 - **Plugin support**: a way to extend Kode from outside its core. Markdown
   with preview is built as a plugin, not in the core.
+- **Remote folders over SSH**: documents, the sidebar, Find File and the
+  language servers on another machine; the plan is `docs/REMOTE.md`.
 - Compare mode (diff), Quick Look and Spotlight integration,
   AppleScript/Shortcuts support.
 
