@@ -10,6 +10,25 @@ env:
   AQT_VERSION: "==3.3.*"
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: version
+        # As CMakeLists.txt: the last tag, without its "v".
+        run: echo "version=$(git describe --tags --abbrev=0 | sed 's/^v//')" >> "$GITHUB_OUTPUT"
+
+  agents:
+    needs: version
+    uses: ./.github/workflows/remote-agents.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+
   format:
     name: Check formatting
     runs-on: macos-26

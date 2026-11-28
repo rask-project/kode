@@ -479,7 +479,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 |---|---|
 | A0 — The seam | folded into A3–A5 |
 | A1 — Protocol and agent skeleton | ✅ |
-| A2 — Bootstrap and connection | ⬜ |
+| A2 — Bootstrap and connection | ✅ |
 | A3 — Remote documents | ⬜ |
 | A4 — Remote folders | ⬜ |
 | A5 — Remote language servers | ⬜ |
@@ -522,20 +522,44 @@ reading files), data channels and their credit (A3, `fs/read`), fuzzing
 the reader (A2, with the CI job). Not testable here: a peer of another
 uid (needs a second user).
 
-### A2 — Bootstrap and connection
+### A2 — Bootstrap and connection ✅
 
-`ssh` with `ControlMaster` and the forwardings off, the askpass helper
-(its socket and token) and its native prompt; one
-probe command (`uname -sm`, `$HOME`, whether
-`~/.cache/kode/remote/<version>/kode-remote` exists with the right hash,
-checked before every start);
-upload when missing (`cat > tmp && chmod +x && mv` over the same
-connection, the hash checked); old versions removed. Connection states and
-reconnecting with backoff. File > Connect to Server…: hosts from
-`~/.ssh/config` (its `Host` entries without wildcards) or typed. CI builds
-the Linux agents and the release bundles them. Tests: the state machine
-against a bridge that hangs or dies; the upload against a local `sshd` when
-present (macOS Remote Login).
+Done: `kode::remote::ssh` (`src/remote/Ssh`: the destination checked — no
+option, space or control character —, ssh's arguments with
+`ControlMaster` in `~/.ssh/kode` (short: a control socket's path must fit
+in 104 bytes), `ServerAlive`, the forwardings and `PermitLocalCommand` off;
+the probe, install and bridge commands for `sh -c`, whatever the login
+shell; `~/.ssh/config`'s hosts, its Includes read in place); `Host` (the
+probe — system, architecture, home, the installed agent's SHA-256 —, the
+agent installed when missing or changed: folders `0700`, other versions
+removed, its hash checked after; the bridge; states Disconnected,
+Connecting, Installing, Online, Offline, Failed; a loss once online retried
+with backoff, 1 to 30 s, `reconnectNow()`; authentication, host keys and
+unknown names fail without retrying); `Hosts` (QML singleton: one `Host`
+per destination; `kode-askpass` — `remote/askpass` — asks it through a
+socket in `$TMPDIR` with a random token, compared in constant time; one
+prompt at a time: a secure field for passwords, passphrases and codes, a
+question for an unknown host key). Rask.Dialogs gained `TextPrompt` (an
+`NSAlert` with a text field, secure on request). File > Connect to
+Server… (⇧⌘K): a host from `~/.ssh/config` or typed, its status, Connect
+and Disconnect. `Kode.app` bundles `kode-askpass` (`Contents/MacOS`) and
+the agents (`Contents/Resources/remote/<os>-<arch>`: this Mac's, and
+`KODE_REMOTE_AGENTS_DIR`'s). CI (`remote-agents.yml`, called by CI and by
+the release): the Linux agents in Alpine containers (static, x86_64 and
+arm64, each checked by `tools/remote-smoke.py`'s handshake) and two
+minutes of fuzzing the frame reader (libFuzzer, ASan, UBSan); the release
+bundles them. `remote/` also builds as a project of its own (no Qt).
+Tests (`tst_remote`), with a stand-in ssh running the commands here: the
+agent installed (`0700`) and then found by its hash, a changed one
+installed again, no agent for the platform, a permanent error not retried,
+a lost daemon (offline, retried, online again with a new session); the
+askpass answered, cancelled, a wrong token refused, the prompt kinds; the
+destinations, quoting, the probe's parsing, the config's hosts.
+
+Not done here: a test against a real `sshd` (none on this Mac; the stand-in
+runs the same commands). A dev build reinstalls a changed agent of the
+same version, but a daemon of that version already running keeps serving
+until it goes idle (releases have a version each).
 
 ### A3 — Remote documents
 
@@ -591,8 +615,6 @@ port forwarding.
 
 ## 10. Open decisions
 
-- The shortcut for Connect to Server… (the Finder's ⌘K is Kode's Find
-  File).
 - A remote binary file: refused, or copied to a temporary folder and handed
   to the system's app.
 - Whether an SFTP back end is ever needed for hosts the agent cannot run on.

@@ -242,6 +242,46 @@ Item {
         id: aboutQtDialog
     }
 
+    // ssh's prompts while connecting to a host (kode-askpass), one at a time.
+    TextPrompt {
+        id: sshPrompt
+
+        property int promptId: -1
+
+        window: app.lastActiveWindow
+        informativeText: qsTr("Kode is connecting to this host over SSH.")
+        onFinished: (button, value) => Hosts.answer(sshPrompt.promptId, button === 0, value)
+    }
+
+    Alert {
+        id: sshQuestion
+
+        property int promptId: -1
+
+        window: app.lastActiveWindow
+        style: Alert.Warning
+        buttons: [qsTr("Connect"), qsTr("Cancel")]
+        onFinished: button => Hosts.answer(sshQuestion.promptId, button === 0, "yes")
+    }
+
+    Connections {
+        target: Hosts
+
+        function onPromptRequested(id: int, host: string, text: string, kind: int) {
+            if (kind === Hosts.Confirm) {
+                sshQuestion.promptId = id;
+                sshQuestion.text = qsTr("Connect to “%1”?").arg(host);
+                sshQuestion.informativeText = text.trim();
+                sshQuestion.open();
+                return;
+            }
+            sshPrompt.promptId = id;
+            sshPrompt.text = text.trim();
+            sshPrompt.secure = kind === Hosts.Secret;
+            sshPrompt.open();
+        }
+    }
+
     Alert {
         id: errorAlert
 

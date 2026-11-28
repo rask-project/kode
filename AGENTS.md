@@ -32,7 +32,7 @@ Guidance for AI agents working in this repository.
   `Rask.Platform` (`Appearance`, `SystemColors`), `Rask.Controls`
   (`SearchBar`, `FilledTextField` for ⌘L's field, `HelpTag` for tooltips, `OverlayScrollBar` for the editor's
   and the sidebar's scroll bars, the Settings controls), `Rask.Dialogs`
-  (`Alert`, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
+  (`Alert`, `TextPrompt` for ssh's prompts, `AboutDialog`, `AboutQtDialog`) and `Rask.Application`
   (`QuitGuard`, `FileOpenHandler` with the "Open in Kode" Service,
   `RecentDocuments`, `DefaultApplication`, `CommandLineTool`) and
   `Rask.Updater` (Sparkle: "Check for Updates…" in the app menu, started
@@ -278,9 +278,23 @@ Guidance for AI agents working in this repository.
     else `/tmp/kode-<uid>`, refused unless the user's only —, the socket, a
     peer's uid), `Bridge` (stdio ↔ the daemon's socket, starting it). Commands:
     `serve` (one session on stdio: the tests), `daemon [--idle s]`, `bridge`.
+  - `askpass/` — `kode-askpass`, ssh's `SSH_ASKPASS` (bundled in
+    `Contents/MacOS`): asks the running Kode through `KODE_ASKPASS_SOCKET`
+    with `KODE_ASKPASS_TOKEN`, prints the answer.
+  - `fuzz/` — `fuzz-frames` (libFuzzer, `KODE_REMOTE_FUZZ`, in CI).
+  - Also a project of its own (`cmake -S remote`): CI builds the Linux
+    agents with `tools/build-remote.sh` in Alpine (static, musl), checked by
+    `tools/remote-smoke.py`; `.github/workflows/remote-agents.yml`.
 - `src/remote/` — Kode's side: `Connection` (the process reaching the
   agent, JSON-RPC over its frames, requests by id with handlers; anything
-  broken from the agent ends it).
+  broken from the agent ends it), `Ssh` (ssh's arguments: ControlMaster in
+  `~/.ssh/kode`, no forwarding; the probe, install and bridge commands for
+  `sh -c`; `~/.ssh/config`'s hosts), `Host` (probe, install by SHA-256,
+  bridge; states, retried with backoff once online), `Hosts` (QML
+  singleton: a `Host` per destination, the askpass socket and its prompts,
+  one at a time). `ConnectToServer.qml` — File > Connect to Server… (⇧⌘K).
+  `Kode.app` bundles the agents in `Contents/Resources/remote/<os>-<arch>`
+  (this Mac's, and those in `KODE_REMOTE_AGENTS_DIR`).
 - `src/Session.{h,cpp}` — `Session` (QML singleton): each folder's state,
   in QSettings `session/folders` (JSON by canonical folder URL:
   `OpenDocuments::cleanFolder()` resolves links, as the Finder does).
@@ -536,7 +550,8 @@ Guidance for AI agents working in this repository.
   images and a local preview) and `screenshots/` (`docshot.sh`, which drives
   an isolated copy of the app over a demo project, `demo/aurora`, to take the
   README and site images; kept out of `format-code.sh`).
-- `.github/workflows/` — `ci.yml` (formatting, Release build, tests),
+- `.github/workflows/` — `ci.yml` (formatting, Release build, tests, the
+  Linux agents and fuzzing through `remote-agents.yml`),
   `release.yml` (a `v*` tag: tests, `package-macos`, the ad-hoc-signed
   `.dmg`/`.zip` on a GitHub Release, notes from `docs/releases/<tag>.md`,
   then the Sparkle appcast on the `appcast` branch, signed with the

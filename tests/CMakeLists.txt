@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Test)
+find_package(Qt6 REQUIRED COMPONENTS Network Qml Test)
 
 # The sources under test are compiled into each test: the app is an
 # executable, not a library.
@@ -243,12 +243,19 @@ qt_add_executable(tst_remote
     ../remote/protocol/Methods.h
     ../src/remote/Connection.h
     ../src/remote/Connection.cpp
+    ../src/remote/Host.h
+    ../src/remote/Host.cpp
+    ../src/remote/Hosts.h
+    ../src/remote/Hosts.cpp
+    ../src/remote/Ssh.h
+    ../src/remote/Ssh.cpp
 )
 target_include_directories(tst_remote PRIVATE ../src)
-target_link_libraries(tst_remote PRIVATE Qt6::Core Qt6::Test)
+target_link_libraries(tst_remote PRIVATE Qt6::Network Qt6::Qml Qt6::Test)
 target_compile_definitions(tst_remote PRIVATE
     KODE_VERSION="${KODE_DISPLAY_VERSION}"
     KODE_REMOTE_AGENT="$<TARGET_FILE:kode-remote>"
+    KODE_ASKPASS="$<TARGET_FILE:kode-askpass>"
 )
-add_dependencies(tst_remote kode-remote)
+add_dependencies(tst_remote kode-remote kode-askpass)
 add_test(NAME tst_remote COMMAND tst_remote)

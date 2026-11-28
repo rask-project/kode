@@ -26,8 +26,14 @@ env:
   AQT_VERSION: "==3.3.*"
 
 jobs:
+  agents:
+    uses: ./.github/workflows/remote-agents.yml
+    with:
+      version: ${{ github.ref_name }}
+
   release:
     name: Build and publish (macOS arm64)
+    needs: agents
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
@@ -50,12 +56,21 @@ jobs:
       - name: Install tools
         run: brew install ninja
 
+      # The Linux hosts' agents, bundled beside this Mac's (KODE_REMOTE_AGENTS_DIR).
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kode-remote-linux-*
+          path: ${{ runner.temp }}/agents
+          merge-multiple: true
+      - run: chmod +x "$RUNNER_TEMP"/agents/*/kode-remote
+
       - name: Configure
         run: |
           cmake -S . -B build/release -G Ninja \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES=arm64
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DKODE_REMOTE_AGENTS_DIR="$RUNNER_TEMP/agents"
 
       - name: Build
         run: cmake --build build/release

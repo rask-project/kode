@@ -291,6 +291,10 @@ ApplicationWindow {
         onAccepted: root.app.openFiles([selectedFolder], root)
     }
 
+    ConnectToServer {
+        id: connectToServer
+    }
+
     FileDialog {
         id: saveDialog
 
@@ -377,6 +381,13 @@ ApplicationWindow {
                     text: qsTr("Open Folder…")
                     shortcut: "Ctrl+Shift+O"
                     onTriggered: folderDialog.open()
+                }
+            }
+            MenuItem {
+                action: Action {
+                    text: qsTr("Connect to Server…")
+                    shortcut: "Ctrl+Shift+K"
+                    onTriggered: connectToServer.open()
                 }
             }
             Menu {

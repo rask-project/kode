@@ -8,6 +8,7 @@
 #include <QJsonValue>
 #include <QObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QString>
 #include <QStringList>
 
@@ -46,6 +47,8 @@ public:
     ~Connection() override;
     Q_DISABLE_COPY_MOVE(Connection)
 
+    // Before start(): the process's environment (ssh's askpass).
+    void setEnvironment(const QProcessEnvironment &environment) { m_process.setProcessEnvironment(environment); }
     void start(const QString &program, const QStringList &arguments);
     // Pending requests fail with error::disconnected.
     void close();
