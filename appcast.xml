@@ -6,6 +6,83 @@
     <description>Kode releases</description>
     <language>en</language>
     <item>
+      <title>Kode 1.1.0</title>
+      <link>https://github.com/rask-project/kode/releases/tag/v1.1.0</link>
+      <sparkle:version>1.1.0.1000</sparkle:version>
+      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.4</sparkle:minimumSystemVersion>
+      <pubDate>Sat, 28 Nov 2026 02:15:42 GMT</pubDate>
+      <description sparkle:format="markdown"><![CDATA[Language servers, a minimap, Find File and navigation through places.
+
+## Language servers
+
+Kode talks to the language server of each language (LSP), found on your
+shell's PATH: clangd for C, C++ and Objective-C, and servers for Python,
+Rust, Go, JavaScript/TypeScript, QML, Swift, Bash, Lua, Java, Kotlin, YAML,
+JSON, HTML, CSS, Markdown, CMake, Dockerfile, Terraform and TOML.
+
+- **Problems as you type.** A wave under each error or warning, its message
+  where the pointer rests, and the counts in the status bar; a click there
+  lists them and goes to one. clangd gets your build folder's compilation
+  database.
+- **Quick fixes (⌥↩).** The server's fixes and refactorings at the caret,
+  as Qt Creator's Alt+Return; one undo step.
+- **Go to Definition (F2, ⌘-click).** ⌘ over a name shows it as a link.
+  **Switch Header/Source (F4)**, as in Qt Creator.
+- **Completion.** As a word starts, after "." or "->", or on ⌃Space; keep
+  typing to filter, Return or Tab to accept. Includes the server adds come
+  in the same undo step.
+- **Semantic highlighting.** Types, fields, locals, parameters and macros
+  in C and C++, and QML's types, ids and bindings, in Qt Creator's colors.
+- **What the server is doing** (starting, analyzing, indexing) shows in the
+  sidebar's footer.
+- **Settings ▸ Language Servers.** Turn them off, add folders to look in,
+  set clangd's threads (one by default), add your own server for any
+  language, and see what was found — or press and hold a missing one to
+  copy its install command.
+
+## Navigation
+
+- **Find File (⌘K)**, as Qt Creator's Locate: a field in the middle of the
+  window and the folder's files whose name matches, best first, each with
+  its path. Also from the magnifying glass in the sidebar.
+- **Back and Forward go through places**, not only files: where you edited,
+  clicked on another line or jumped from (a definition, Go to Line), as in
+  Qt Creator.
+
+## Editing
+
+- **Brackets and quotes come in pairs.** Typing the closing one steps over
+  it, Backspace in an empty pair takes both, and Return after "{" adds the
+  "}" two lines down with the line between indented.
+- **A minimap** beside the text (View ▸ Show Minimap): click a line to
+  center it, drag to scroll.
+- **Re-indent on save re-indents only the lines edited** since the last
+  save; Edit ▸ Re-Indent (⌃I) still re-indents the selection.
+
+## Large files
+
+- **Large files open in the background.** From 2 MB on, the file is read and
+  decoded off the main thread: the window says "Opening…" and stays
+  responsive.
+- **A jump far down a large file is colored at once**, from a guess until
+  the highlighting from the top gets there.
+- **Opening takes less memory**: opening 100 MB peaks at 495 MB instead of
+  782 MB.
+
+## Changes
+
+- **Text fields in macOS's filled style** in the find bar, Go to Line and
+  Settings.
+- **The find bar has more room**, and its match count is a badge on the Find
+  field's corner.
+- **Settings pages scroll** when taller than the window.
+- **Open, Open Folder and Save As start in your home folder** instead of
+  the root of the disk.
+]]></description>
+      <enclosure url="https://github.com/rask-project/kode/releases/download/v1.1.0/Kode-1.1.0-arm64.zip" length="41186111" type="application/octet-stream" sparkle:edSignature="a2W++s891tTUUURRfh1ENRJ5m4KeXM82aT4iziaONBl8jcpGxgjGQ4glZrk3yPN3CyuX1SpejEzYSsuep9enDA=="/>
+    </item>
+    <item>
       <title>Kode 1.0.3</title>
       <link>https://github.com/rask-project/kode/releases/tag/v1.0.3</link>
       <sparkle:version>1.0.3.1000</sparkle:version>
